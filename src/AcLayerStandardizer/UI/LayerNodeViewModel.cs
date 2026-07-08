@@ -4,6 +4,14 @@ namespace AcLayerStandardizer.UI;
 
 public class LayerNodeViewModel : ObservableObject
 {
+    private static readonly Dictionary<ConnectionMatchSource, string> SourceColors = new()
+    {
+        [ConnectionMatchSource.ExactName] = "#00e676",
+        [ConnectionMatchSource.Memory] = "#448aff",
+        [ConnectionMatchSource.Heuristic] = "#ffd740",
+        [ConnectionMatchSource.Manual] = "#7c4dff",
+    };
+
     public string Name { get; }
     public bool IsSource { get; }
 
@@ -12,6 +20,18 @@ public class LayerNodeViewModel : ObservableObject
     {
         get => _isMapped;
         set => SetProperty(ref _isMapped, value);
+    }
+
+    private string _connectorColor = "#aaa";
+    public string ConnectorColor
+    {
+        get => _connectorColor;
+        set => SetProperty(ref _connectorColor, value);
+    }
+
+    public void SetConnectorColor(ConnectionMatchSource source)
+    {
+        ConnectorColor = SourceColors.TryGetValue(source, out var c) ? c : "#7c4dff";
     }
 
     private Point _location;

@@ -37,7 +37,8 @@ public class LayerEditorViewModel
     public LayerEditorViewModel(
         List<string> sourceLayers,
         List<string> standardLayers,
-        Dictionary<string, string>? existingMappings = null)
+        Dictionary<string, string>? memoryMappings = null,
+        List<Matching.MatchResult>? heuristicResults = null)
     {
         var sourceModels = new List<LayerNodeViewModel>();
         var standardModels = new List<LayerNodeViewModel>();
@@ -61,14 +62,40 @@ public class LayerEditorViewModel
         var sourceMap = sourceModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
         var standardMap = standardModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
 
-        if (existingMappings != null)
+        // Tier 1: exact name matches — solid green
+        foreach (var src in sourceModels)
         {
-            foreach (var kvp in existingMappings)
+            if (standardMap.TryGetValue(src.Name, out var tgt))
+            {
+                Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.ExactName));
+            }
+        }
+
+        // Tier 2: memory-sourced mappings — blue (skip if already exact-matched)
+        if (memoryMappings != null)
+        {
+            foreach (var kvp in memoryMappings)
             {
                 if (sourceMap.TryGetValue(kvp.Key, out var src)
                     && standardMap.TryGetValue(kvp.Value, out var tgt))
                 {
-                    Connections.Add(new LayerConnectionViewModel(src, tgt));
+                    if (Connections.Any(c => c.Source == src)) continue;
+                    Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.Memory));
+                }
+            }
+        }
+
+        // Tier 3: heuristic matches — dashed yellow (skip if already connected)
+        if (heuristicResults != null)
+        {
+            foreach (var result in heuristicResults)
+            {
+                if (sourceMap.TryGetValue(result.SourceLayer, out var src)
+                    && result.TargetLayer is not null
+                    && standardMap.TryGetValue(result.TargetLayer, out var tgt))
+                {
+                    if (Connections.Any(c => c.Source == src)) continue;
+                    Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.Heuristic));
                 }
             }
         }
@@ -142,7 +169,7 @@ public class PendingConnectionViewModel
                 _editor.Connections.Remove(old);
             }
 
-            _editor.Connections.Add(new LayerConnectionViewModel(_pendingSource, target));
+            _editor.Connections.Add(new LayerConnectionViewModel(_pendingSource, target, ConnectionMatchSource.Manual));
             _pendingSource = null;
         });
     }

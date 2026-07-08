@@ -13,6 +13,10 @@
         <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Dark.xaml" />
       </ResourceDictionary.MergedDictionaries>
 
+      <local:BooleanToVisibilityConverter x:Key="BoolToVis" />
+      <local:InverseBooleanToVisibilityConverter x:Key="InvBoolToVis" />
+      <local:ColorStringToBrushConverter x:Key="ColorStringToBrush" />
+
       <!-- Layer node style: base dark, slate-blue when mapped -->
       <Style TargetType="nodify:StateNode">
         <Setter Property="Background" Value="#424242" />
@@ -28,28 +32,29 @@
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="4">
+                        CornerRadius="4"
+                        ClipToBounds="True">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center" />
                 </Border>
-                <!-- Connector port on right edge -->
+                <!-- Source connector: right edge, source nodes only -->
                 <Ellipse x:Name="SourceConnector"
                          Width="8" Height="8"
-                         Fill="#aaa" Stroke="#555" StrokeThickness="0.5"
+                         Fill="{Binding ConnectorColor, Converter={StaticResource ColorStringToBrush}}"
+                         Stroke="#555" StrokeThickness="0.5"
                          HorizontalAlignment="Right" VerticalAlignment="Center"
-                         Margin="0,0,0,0" />
-                <!-- Connector port on left edge -->
+                         Margin="0,0,-4,0"
+                         Visibility="{Binding IsSource, Converter={StaticResource BoolToVis}}" />
+                <!-- Target connector: left edge, standard nodes only -->
                 <Ellipse x:Name="TargetConnector"
                          Width="8" Height="8"
-                         Fill="#aaa" Stroke="#555" StrokeThickness="0.5"
+                         Fill="{Binding ConnectorColor, Converter={StaticResource ColorStringToBrush}}"
+                         Stroke="#555" StrokeThickness="0.5"
                          HorizontalAlignment="Left" VerticalAlignment="Center"
-                         Margin="0,0,0,0" />
+                         Margin="-4,0,0,0"
+                         Visibility="{Binding IsSource, Converter={StaticResource InvBoolToVis}}" />
               </Grid>
               <ControlTemplate.Triggers>
-                <DataTrigger Binding="{Binding IsMapped}" Value="True">
-                  <Setter TargetName="SourceConnector" Property="Fill" Value="#4a6b8a" />
-                  <Setter TargetName="TargetConnector" Property="Fill" Value="#4a6b8a" />
-                </DataTrigger>
               </ControlTemplate.Triggers>
             </ControlTemplate>
           </Setter.Value>
@@ -65,12 +70,51 @@
         </Style.Triggers>
       </Style>
 
-      <!-- Connection lines: dashed bezier -->
+      <!-- Connection lines: color-coded by match source, glowing on connect -->
       <Style TargetType="nodify:Connection">
-        <Setter Property="Stroke" Value="#7c8db5" />
         <Setter Property="StrokeThickness" Value="2" />
-        <Setter Property="StrokeDashArray" Value="4,3" />
+        <Setter Property="Effect">
+          <Setter.Value>
+            <DropShadowEffect BlurRadius="0" Opacity="0" Color="Transparent" ShadowDepth="0" />
+          </Setter.Value>
+        </Setter>
         <Style.Triggers>
+          <DataTrigger Binding="{Binding MatchSource}" Value="ExactName">
+            <Setter Property="Stroke" Value="#00e676" />
+            <Setter Property="StrokeDashArray" Value="0" />
+            <Setter Property="Effect">
+              <Setter.Value>
+                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#00e676" ShadowDepth="0" />
+              </Setter.Value>
+            </Setter>
+          </DataTrigger>
+          <DataTrigger Binding="{Binding MatchSource}" Value="Memory">
+            <Setter Property="Stroke" Value="#448aff" />
+            <Setter Property="StrokeDashArray" Value="4,3" />
+            <Setter Property="Effect">
+              <Setter.Value>
+                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#448aff" ShadowDepth="0" />
+              </Setter.Value>
+            </Setter>
+          </DataTrigger>
+          <DataTrigger Binding="{Binding MatchSource}" Value="Heuristic">
+            <Setter Property="Stroke" Value="#ffd740" />
+            <Setter Property="StrokeDashArray" Value="4,3" />
+            <Setter Property="Effect">
+              <Setter.Value>
+                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#ffd740" ShadowDepth="0" />
+              </Setter.Value>
+            </Setter>
+          </DataTrigger>
+          <DataTrigger Binding="{Binding MatchSource}" Value="Manual">
+            <Setter Property="Stroke" Value="#7c4dff" />
+            <Setter Property="StrokeDashArray" Value="0" />
+            <Setter Property="Effect">
+              <Setter.Value>
+                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#7c4dff" ShadowDepth="0" />
+              </Setter.Value>
+            </Setter>
+          </DataTrigger>
           <Trigger Property="IsMouseOver" Value="True">
             <Setter Property="Stroke" Value="#ef5350" />
             <Setter Property="StrokeDashArray" Value="0" />
@@ -132,19 +176,12 @@
 
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="Auto" />
       <RowDefinition Height="*" />
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!-- Title bar -->
-    <Border Grid.Row="0" Background="#2d2d2d" Padding="16,8">
-      <TextBlock Text="Layer Standardizer: Layer Mapping Editor"
-                 Foreground="White" FontSize="16" FontWeight="SemiBold" />
-    </Border>
-
     <!-- Nodify editor area -->
-    <Grid Grid.Row="1" Background="#1e1e1e">
+    <Grid Grid.Row="0" Background="#1e1e1e">
       <Rectangle Fill="{StaticResource GridBrush}" Opacity="0.12" IsHitTestVisible="False" />
 
       <nodify:NodifyEditor x:Name="Editor"
@@ -164,6 +201,7 @@
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="Transparent" />
           </Style>
         </nodify:NodifyEditor.ItemContainerStyle>
 
@@ -207,7 +245,7 @@
     </Grid>
 
     <!-- Status bar + action buttons -->
-    <Border Grid.Row="2" Background="#2d2d2d" Padding="12,10">
+    <Border Grid.Row="1" Background="#2d2d2d" Padding="12,10">
       <Grid>
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />

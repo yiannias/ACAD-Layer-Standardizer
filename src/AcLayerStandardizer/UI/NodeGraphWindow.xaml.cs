@@ -17,6 +17,7 @@ public partial class NodeGraphWindow : Window
 {
     private readonly LayerEditorViewModel _viewModel;
     private bool _hasChanges;
+    private bool _initializing = true;
 
     public IReadOnlyDictionary<string, string> ResultMappings => _viewModel.CurrentMappings;
     public MappingEditorAction ResultAction { get; private set; }
@@ -24,20 +25,23 @@ public partial class NodeGraphWindow : Window
     public NodeGraphWindow(
         List<string> sourceLayers,
         List<string> standardLayers,
-        Dictionary<string, string> existingMappings)
+        Dictionary<string, string>? memoryMappings,
+        List<Matching.MatchResult>? heuristicResults = null)
     {
         InitializeComponent();
 
-        _viewModel = new LayerEditorViewModel(sourceLayers, standardLayers, existingMappings);
+        _viewModel = new LayerEditorViewModel(sourceLayers, standardLayers, memoryMappings, heuristicResults);
         DataContext = _viewModel;
 
         Closing += OnWindowClosing;
 
         _viewModel.Connections.CollectionChanged += (_, _) =>
         {
-            _hasChanges = true;
+            if (!_initializing) _hasChanges = true;
             UpdateStatus();
         };
+
+        _initializing = false;
 
         SourceInitialized += (_, _) => EnableDarkTitleBar();
     }
@@ -79,7 +83,7 @@ public partial class NodeGraphWindow : Window
             return;
         }
         ResultAction = MappingEditorAction.ApplyAndSave;
-        _hasChanges = true;
+        _hasChanges = false;
         DialogResult = true;
         Close();
     }
@@ -101,7 +105,7 @@ public partial class NodeGraphWindow : Window
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (_hasChanges)
+        if (_hasChanges && DialogResult is null)
         {
             var result = MessageBox.Show(
                 "Discard unsaved changes?", "Layer Mapping Editor",
@@ -112,6 +116,7 @@ public partial class NodeGraphWindow : Window
                 return;
             }
         }
-        DialogResult = false;
+        if (DialogResult is null)
+            DialogResult = false;
     }
 }

@@ -6,6 +6,7 @@ using Autodesk.AutoCAD.DatabaseServices;
 using Autodesk.AutoCAD.EditorInput;
 using AcLayerStandardizer.Core;
 using AcLayerStandardizer.Data;
+using AcLayerStandardizer.Matching;
 using AcLayerStandardizer.UI;
 
 namespace AcLayerStandardizer.Commands;
@@ -52,8 +53,7 @@ public static class MappingsCommand
         var store = new MemoryStore(memPath);
         var memory = store.Load();
 
-        var existingMappings = new Dictionary<string, string>(
-            memory.Mappings, StringComparer.OrdinalIgnoreCase);
+        var configThreshold = config.HeuristicThreshold;
 
         var sortedSource = activeLayers.OrderBy(n => n).ToList();
         var sortedStandard = standardLayers.Keys
@@ -61,13 +61,25 @@ public static class MappingsCommand
             .ThenBy(n => n)
             .ToList();
 
+        // Run heuristic matching for all source layers not already in memory
+        var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
+        var heuristicResults = new List<MatchResult>();
+        foreach (var layer in sortedSource)
+        {
+            if (memory.Mappings.ContainsKey(layer)) continue;
+            var result = heuristicMatcher.TryMatch(layer);
+            if (result is not null)
+                heuristicResults.Add(result);
+        }
+
         NodeGraphWindow dialog;
         try
         {
             dialog = new NodeGraphWindow(
                 sortedSource,
                 sortedStandard,
-                existingMappings);
+                memory.Mappings,
+                heuristicResults);
         }
         catch (System.Exception ex)
         {
