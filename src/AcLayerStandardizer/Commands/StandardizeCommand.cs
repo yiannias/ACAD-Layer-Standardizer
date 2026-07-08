@@ -16,20 +16,135 @@ public static class StandardizeCommand
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
         var ed = doc.Editor;
+
+        var ctx = SetupPipeline(ed);
+        if (ctx is null) return;
+
+        var results = ctx.Engine.ClassifyAll(ctx.ActiveLayerNames);
+        PrintResults(ed, results, ctx.StandardLayers);
+
+        var newMappings = results
+            .Where(r => r.Source == MatchSource.Heuristic && r.TargetLayer is not null)
+            .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
+
+        SaveNewMappings(newMappings, ctx.Memory, ctx.Store, ed);
+
+        ed.WriteMessage("\nAcLayerStandardizer: Analysis complete.");
+    }
+
+    [CommandMethod("ACLAYERSTD", "ApplyStandardization", CommandFlags.Modal)]
+    public static void ApplyStandardization()
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        var ed = doc.Editor;
+
+        var ctx = SetupPipeline(ed);
+        if (ctx is null) return;
+
+        var results = ctx.Engine.ClassifyAll(ctx.ActiveLayerNames);
+        PrintResults(ed, results, ctx.StandardLayers);
+
+        var toApply = results
+            .Where(r => r.TargetLayer is not null && r.SourceLayer != r.TargetLayer)
+            .ToList();
+
+        if (toApply.Count == 0)
+        {
+            ed.WriteMessage("\nNo layers need standardization.");
+            return;
+        }
+
+        var kwOpts = new PromptKeywordOptions(
+            $"\nApply {toApply.Count} layer changes?", "Yes No");
+        kwOpts.Keywords.Default = "No";
+        var pr = ed.GetKeywords(kwOpts);
+        if (pr.Status != PromptStatus.OK || pr.StringResult != "Yes")
+        {
+            ed.WriteMessage("\nCancelled.");
+            return;
+        }
+
+        var renamed = 0;
+        var syncedProps = 0;
         var db = doc.Database;
 
+        using (var tr = doc.TransactionManager.StartTransaction())
+        {
+            var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+
+            foreach (var result in toApply)
+            {
+                var sourceId = GetLayerId(lt, tr, result.SourceLayer);
+                if (sourceId is null) continue;
+
+                ObjectId targetId;
+
+                if (lt.Has(result.TargetLayer!))
+                {
+                    targetId = lt[result.TargetLayer!];
+                    TransferEntities(db, tr, sourceId.Value, targetId);
+                    var sourceLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
+                    sourceLtr.Erase(true);
+                }
+                else
+                {
+                    var sourceLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
+                    sourceLtr.Name = result.TargetLayer!;
+                    targetId = sourceId.Value;
+                }
+
+                if (ctx.StandardLayers.TryGetValue(result.TargetLayer!, out var props))
+                {
+                    var ltr = (LayerTableRecord)tr.GetObject(targetId, OpenMode.ForWrite);
+                    ltr.Color = props.Color;
+                    ltr.LinetypeObjectId = GetLinetypeId(db, tr, props.Linetype);
+                    ltr.LineWeight = props.LineWeight;
+                    ltr.IsPlottable = props.IsPlottable;
+                    if (!string.IsNullOrEmpty(props.Description))
+                        ltr.Description = props.Description;
+                    syncedProps++;
+                }
+
+                renamed++;
+            }
+
+            tr.Commit();
+        }
+
+        ed.WriteMessage($"\n  Renamed/merged: {renamed}");
+        ed.WriteMessage($"\n  Properties synced: {syncedProps}");
+
+        var newMappings = results
+            .Where(r => r.Source == MatchSource.Heuristic && r.TargetLayer is not null)
+            .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
+
+        SaveNewMappings(newMappings, ctx.Memory, ctx.Store, ed);
+
+        ed.WriteMessage($"\nAcLayerStandardizer: Standardization complete.");
+    }
+
+    private sealed record PipelineContext(
+        Editor Editor,
+        IReadOnlyDictionary<string, LayerProperties> StandardLayers,
+        List<string> ActiveLayerNames,
+        MemoryStore Store,
+        Data.TranslationMemory Memory,
+        MatchingEngine Engine);
+
+    private static PipelineContext? SetupPipeline(Editor ed)
+    {
         var config = PluginConfig.Load();
 
         if (string.IsNullOrEmpty(config.TemplateDwgPath))
         {
             ed.WriteMessage("\nNo template DWG configured. Run STD_SetTemplate first.");
-            return;
+            return null;
         }
 
         if (!File.Exists(config.TemplateDwgPath))
         {
             ed.WriteMessage($"\nTemplate DWG not found: {config.TemplateDwgPath}");
-            return;
+            return null;
         }
 
         var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
@@ -46,13 +161,13 @@ public static class StandardizeCommand
         catch (System.Exception ex)
         {
             ed.WriteMessage($"\nError reading template DWG: {ex.Message}");
-            return;
+            return null;
         }
 
         ed.WriteMessage($"\n  Found {standardLayers.Count} standard layers.");
 
         ed.WriteMessage("\n  Reading active drawing layers...");
-        var activeLayerNames = GetActiveLayerNames(db);
+        var activeLayerNames = GetActiveLayerNames(ed);
 
         ed.WriteMessage($"\n  Found {activeLayerNames.Count} user layers in active drawing.");
 
@@ -66,39 +181,38 @@ public static class StandardizeCommand
         var heuristicMatcher = new HeuristicMatcher(standardLayers.Keys.ToArray(), config.HeuristicThreshold);
         var engine = new MatchingEngine(memoryMatcher, heuristicMatcher);
 
-        var results = engine.ClassifyAll(activeLayerNames);
-
-        PrintResults(ed, results, standardLayers);
-
-        var newMappings = results
-            .Where(r => r.Source == MatchSource.Memory && r.TargetLayer is not null)
-            .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
-
-        if (newMappings.Count > 0)
-        {
-            var updated = false;
-            foreach (var kvp in newMappings)
-            {
-                if (memory.Mappings.TryAdd(kvp.Key, kvp.Value))
-                    updated = true;
-            }
-
-            if (updated)
-            {
-                store.Save(memory);
-                ed.WriteMessage($"\n  Added {newMappings.Count} new mappings to memory.");
-            }
-        }
-
-        ed.WriteMessage("\nAcLayerStandardizer: Analysis complete.");
+        return new PipelineContext(ed, standardLayers, activeLayerNames, store, memory, engine);
     }
 
-    private static List<string> GetActiveLayerNames(Database db)
+    private static void SaveNewMappings(
+        Dictionary<string, string> newMappings,
+        Data.TranslationMemory memory,
+        MemoryStore store,
+        Editor ed)
     {
+        if (newMappings.Count == 0) return;
+
+        var updated = false;
+        foreach (var kvp in newMappings)
+        {
+            if (memory.Mappings.TryAdd(kvp.Key, kvp.Value))
+                updated = true;
+        }
+
+        if (updated)
+        {
+            store.Save(memory);
+            ed.WriteMessage($"\n  Added {newMappings.Count} new mappings to memory.");
+        }
+    }
+
+    private static List<string> GetActiveLayerNames(Editor ed)
+    {
+        var doc = ed.Document;
         var names = new List<string>();
 
-        using var tr = db.TransactionManager.StartTransaction();
-        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+        using var tr = doc.TransactionManager.StartTransaction();
+        var lt = (LayerTable)tr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
 
         foreach (ObjectId id in lt)
         {
@@ -117,6 +231,37 @@ public static class StandardizeCommand
     {
         return name is "0" or "Defpoints" or "AsBuilt"
             || name.StartsWith("*") || name.StartsWith("_");
+    }
+
+    private static ObjectId? GetLayerId(LayerTable lt, Transaction tr, string name)
+    {
+        if (lt.Has(name))
+            return lt[name];
+        return null;
+    }
+
+    private static ObjectId GetLinetypeId(Database db, Transaction tr, string name)
+    {
+        var lt = (LinetypeTable)tr.GetObject(db.LinetypeTableId, OpenMode.ForRead);
+        if (lt.Has(name))
+            return lt[name];
+        return lt["Continuous"];
+    }
+
+    private static void TransferEntities(Database db, Transaction tr, ObjectId sourceLayerId, ObjectId targetLayerId)
+    {
+        var blk = (BlockTableRecord)tr.GetObject(
+            db.CurrentSpaceId, OpenMode.ForRead);
+
+        foreach (ObjectId entId in blk)
+        {
+            var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+            if (ent is not null && ent.LayerId == sourceLayerId)
+            {
+                ent.UpgradeOpen();
+                ent.LayerId = targetLayerId;
+            }
+        }
     }
 
     private static void PrintResults(Editor ed, IReadOnlyList<MatchResult> results, IReadOnlyDictionary<string, LayerProperties> standardLayers)
