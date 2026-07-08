@@ -30,7 +30,7 @@ public static class SideDatabase
     private static bool IsSystemLayer(LayerTableRecord ltr)
     {
         var name = ltr.Name;
-        return name is "0" or "Defpoints" or "AsBuilt"
+        return name is "Defpoints" or "AsBuilt"
             || name.StartsWith("*") || name.StartsWith("_");
     }
 }

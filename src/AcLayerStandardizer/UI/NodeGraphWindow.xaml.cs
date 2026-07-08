@@ -38,6 +38,7 @@ public partial class NodeGraphWindow : Window
     private Point _panStart;
     private double _panOriginX;
     private double _panOriginY;
+    private DateTime _lastZoomLabelUpdate = DateTime.MinValue;
 
     private double _zoomLevel = 1.0;
 
@@ -77,11 +78,13 @@ public partial class NodeGraphWindow : Window
         var canvasW = Math.Max(GraphCanvas.ActualWidth, 850);
         var tx = TargetX;
 
+        GraphCanvas.CacheMode = null;
         GraphCanvas.Children.Clear();
         DrawConnections(tx);
         DrawSourceNodes(tx);
         DrawTargetNodes(tx);
         DrawColumnLabels(tx, canvasW);
+        GraphCanvas.CacheMode = new BitmapCache();
     }
 
     private void DrawColumnLabels(double targetX, double canvasW)
@@ -322,6 +325,15 @@ public partial class NodeGraphWindow : Window
 
     private void OnCanvasPreviewMouseMove(object sender, MouseEventArgs e)
     {
+        if (_isPanning)
+        {
+            var cur = e.GetPosition(GraphCanvas);
+            PanTransform.X = _panOriginX + (cur.X - _panStart.X);
+            PanTransform.Y = _panOriginY + (cur.Y - _panStart.Y);
+            e.Handled = true;
+            return;
+        }
+
         if (_dragCandidate == null || !_sourceLayers.Contains(_dragCandidate)) return;
 
         var pos = e.GetPosition(GraphCanvas);
@@ -369,6 +381,14 @@ public partial class NodeGraphWindow : Window
 
     private void OnCanvasPreviewMouseUp(object sender, MouseButtonEventArgs e)
     {
+        if (_isPanning && e.ChangedButton == MouseButton.Middle)
+        {
+            _isPanning = false;
+            Mouse.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_dragCandidate == null || !_sourceLayers.Contains(_dragCandidate))
         {
             Mouse.Capture(null);
@@ -419,7 +439,11 @@ public partial class NodeGraphWindow : Window
         PanTransform.X = pos.X - (pos.X - PanTransform.X) * (_zoomLevel / oldZoom);
         PanTransform.Y = pos.Y - (pos.Y - PanTransform.Y) * (_zoomLevel / oldZoom);
 
-        ZoomLabel.Text = $"{_zoomLevel * 100:F0}%";
+        if ((DateTime.UtcNow - _lastZoomLabelUpdate).TotalMilliseconds > 80)
+        {
+            ZoomLabel.Text = $"{_zoomLevel * 100:F0}%";
+            _lastZoomLabelUpdate = DateTime.UtcNow;
+        }
         e.Handled = true;
     }
 
@@ -427,36 +451,12 @@ public partial class NodeGraphWindow : Window
     {
         if (e.ChangedButton != MouseButton.Middle) return;
 
-        var pos = e.GetPosition(GraphCanvas);
         _isPanning = true;
-        _panStart = pos;
+        _panStart = e.GetPosition(GraphCanvas);
         _panOriginX = PanTransform.X;
         _panOriginY = PanTransform.Y;
         Mouse.Capture(GraphCanvas);
         e.Handled = true;
-
-        var prevMove = (MouseEventHandler?)null;
-        prevMove = null!;
-        prevMove = (_, me) =>
-        {
-            if (!_isPanning) return;
-            var cur = me.GetPosition(GraphCanvas);
-            PanTransform.X = _panOriginX + (cur.X - _panStart.X);
-            PanTransform.Y = _panOriginY + (cur.Y - _panStart.Y);
-            me.Handled = true;
-        };
-        GraphCanvas.PreviewMouseMove += prevMove;
-
-        void OnMiddleUp(object? _, MouseButtonEventArgs ue)
-        {
-            if (ue.ChangedButton != MouseButton.Middle) return;
-            _isPanning = false;
-            Mouse.Capture(null);
-            GraphCanvas.PreviewMouseMove -= prevMove;
-            GraphCanvas.PreviewMouseUp -= OnMiddleUp;
-            ue.Handled = true;
-        }
-        GraphCanvas.PreviewMouseUp += OnMiddleUp;
     }
 
     // ── Click handlers ──
