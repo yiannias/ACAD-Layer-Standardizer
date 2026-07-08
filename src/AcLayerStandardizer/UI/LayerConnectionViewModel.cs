@@ -1,3 +1,5 @@
+using System.Windows.Media;
+
 namespace AcLayerStandardizer.UI;
 
 public enum ConnectionMatchSource
@@ -27,4 +29,19 @@ public class LayerConnectionViewModel
     public LayerNodeViewModel Source { get; }
     public LayerNodeViewModel Target { get; }
     public ConnectionMatchSource MatchSource { get; }
+
+    public string Stroke => MatchSource switch
+    {
+        ConnectionMatchSource.ExactName => "#00e676",
+        ConnectionMatchSource.Memory => "#448aff",
+        ConnectionMatchSource.Heuristic => "#ffd740",
+        ConnectionMatchSource.Manual => "#7c4dff",
+        _ => "#7c4dff",
+    };
+
+    public DoubleCollection? StrokeDashCollection => MatchSource switch
+    {
+        ConnectionMatchSource.Memory or ConnectionMatchSource.Heuristic => new DoubleCollection([4, 3]),
+        _ => null,
+    };
 }

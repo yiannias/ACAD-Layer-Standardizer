@@ -11,6 +11,7 @@ public class LayerNodeViewModel : ObservableObject
         [ConnectionMatchSource.Heuristic] = "#ffd740",
         [ConnectionMatchSource.Manual] = "#7c4dff",
     };
+    private const double NodeWidth = 170;
 
     public string Name { get; }
     public bool IsSource { get; }
@@ -59,16 +60,14 @@ public class LayerNodeViewModel : ObservableObject
         set
         {
             SetProperty(ref _size, value);
-            UpdateAnchor();
         }
     }
 
     public void UpdateAnchor()
     {
-        double ew = _size.Width; // 178
         Anchor = IsSource
-            ? new Point(_location.X + ew, _location.Y + _size.Height / 2)
-            : new Point(_location.X, _location.Y + _size.Height / 2);
+            ? new Point(_location.X + NodeWidth, _location.Y + 15)
+            : new Point(_location.X, _location.Y + 15);
     }
 
     public LayerNodeViewModel(string name, bool isSource, Point location)
@@ -76,7 +75,7 @@ public class LayerNodeViewModel : ObservableObject
         Name = name;
         IsSource = isSource;
         _location = location;
-        _size = new Size(178, 30);
+        _size = new Size(NodeWidth, 30);
         UpdateAnchor();
     }
 }

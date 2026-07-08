@@ -27,15 +27,12 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="nodify:StateNode">
-              <Grid Width="178" Height="30">
+              <Grid Width="170" Height="30">
                 <Border x:Name="NodeBorder"
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="4"
-                        Width="170"
-                        HorizontalAlignment="Center"
-                        ClipToBounds="True">
+                        CornerRadius="4">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center" />
                 </Border>
@@ -70,52 +67,10 @@
         </Style.Triggers>
       </Style>
 
-      <!-- Connection lines: color-coded by match source, glowing on connect -->
+      <!-- Connection lines: color + dash are bound directly on the element via Stroke/StrokeDashCollection -->
       <Style TargetType="nodify:Connection">
         <Setter Property="StrokeThickness" Value="2" />
-        <Setter Property="Stroke" Value="#7c4dff" />
-        <Setter Property="Effect">
-          <Setter.Value>
-            <DropShadowEffect BlurRadius="0" Opacity="0" Color="Transparent" ShadowDepth="0" />
-          </Setter.Value>
-        </Setter>
         <Style.Triggers>
-          <DataTrigger Binding="{Binding MatchSource}" Value="ExactName">
-            <Setter Property="Stroke" Value="#00e676" />
-            <Setter Property="StrokeDashArray" Value="0" />
-            <Setter Property="Effect">
-              <Setter.Value>
-                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#00e676" ShadowDepth="0" />
-              </Setter.Value>
-            </Setter>
-          </DataTrigger>
-          <DataTrigger Binding="{Binding MatchSource}" Value="Memory">
-            <Setter Property="Stroke" Value="#448aff" />
-            <Setter Property="StrokeDashArray" Value="4,3" />
-            <Setter Property="Effect">
-              <Setter.Value>
-                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#448aff" ShadowDepth="0" />
-              </Setter.Value>
-            </Setter>
-          </DataTrigger>
-          <DataTrigger Binding="{Binding MatchSource}" Value="Heuristic">
-            <Setter Property="Stroke" Value="#ffd740" />
-            <Setter Property="StrokeDashArray" Value="4,3" />
-            <Setter Property="Effect">
-              <Setter.Value>
-                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#ffd740" ShadowDepth="0" />
-              </Setter.Value>
-            </Setter>
-          </DataTrigger>
-          <DataTrigger Binding="{Binding MatchSource}" Value="Manual">
-            <Setter Property="Stroke" Value="#7c4dff" />
-            <Setter Property="StrokeDashArray" Value="0" />
-            <Setter Property="Effect">
-              <Setter.Value>
-                <DropShadowEffect BlurRadius="12" Opacity="0.8" Color="#7c4dff" ShadowDepth="0" />
-              </Setter.Value>
-            </Setter>
-          </DataTrigger>
           <Trigger Property="IsMouseOver" Value="True">
             <Setter Property="Stroke" Value="#ef5350" />
             <Setter Property="StrokeDashArray" Value="0" />
@@ -229,6 +184,8 @@
           <DataTemplate DataType="{x:Type local:LayerConnectionViewModel}">
             <nodify:Connection Source="{Binding Source.Anchor, Mode=OneWay}"
                                 Target="{Binding Target.Anchor, Mode=OneWay}"
+                                Stroke="{Binding Stroke, Converter={StaticResource ColorStringToBrush}}"
+                                StrokeDashArray="{Binding StrokeDashCollection}"
                                 PreviewMouseDown="OnConnectionPreviewMouseDown" />
           </DataTemplate>
         </nodify:NodifyEditor.ConnectionTemplate>
@@ -251,6 +208,7 @@
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
@@ -270,6 +228,9 @@
                    VerticalAlignment="Center">
           Ready
         </TextBlock>
+        <TextBlock Grid.Row="2" Grid.Column="0"
+                   Foreground="#555" FontSize="10"
+                   VerticalAlignment="Center">v12</TextBlock>
         <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
                 Style="{StaticResource ModernButton}"
                 Margin="0,0,8,0"
