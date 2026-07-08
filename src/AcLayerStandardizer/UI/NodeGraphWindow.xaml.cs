@@ -8,6 +8,13 @@ using System.Windows.Shapes;
 
 namespace AcLayerStandardizer.UI;
 
+public enum MappingEditorAction
+{
+    Cancel,
+    Apply,
+    ApplyAndSave,
+}
+
 public partial class NodeGraphWindow : Window
 {
     private const double NodeWidth = 170;
@@ -43,6 +50,8 @@ public partial class NodeGraphWindow : Window
     private double _zoomLevel = 1.0;
 
     public IReadOnlyDictionary<string, string> ResultMappings => _mappings;
+
+    public MappingEditorAction ResultAction { get; private set; }
 
     public NodeGraphWindow(
         List<string> sourceLayers,
@@ -521,13 +530,27 @@ public partial class NodeGraphWindow : Window
         RenderGraph();
     }
 
-    private void OnSave(object sender, RoutedEventArgs e)
+    private void OnApply(object sender, RoutedEventArgs e)
     {
-        if (!_hasChanges && _mappings.Count == 0)
+        if (_mappings.Count == 0)
         {
-            StatusBar.Text = "No mappings to save.";
+            StatusBar.Text = "No mappings to apply.";
             return;
         }
+        ResultAction = MappingEditorAction.Apply;
+        DialogResult = true;
+        Close();
+    }
+
+    private void OnApplyAndSave(object sender, RoutedEventArgs e)
+    {
+        if (_mappings.Count == 0)
+        {
+            StatusBar.Text = "No mappings to apply.";
+            return;
+        }
+        ResultAction = MappingEditorAction.ApplyAndSave;
+        _hasChanges = true;
         DialogResult = true;
         Close();
     }

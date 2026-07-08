@@ -62,29 +62,38 @@ public static class MappingsCommand
 
         new WindowInteropHelper(dialog) { Owner = Application.MainWindow.Handle };
 
-        if (dialog.ShowDialog() == true)
+        if (dialog.ShowDialog() != true)
         {
-            var newMappings = dialog.ResultMappings;
-            var added = 0;
+            ed.WriteMessage("\nCancelled.");
+            return;
+        }
 
-            foreach (var kvp in newMappings)
+        var resultMappings = dialog.ResultMappings;
+        var action = dialog.ResultAction;
+
+        if (action is MappingEditorAction.ApplyAndSave)
+        {
+            var added = 0;
+            foreach (var kvp in resultMappings)
             {
                 if (memory.Mappings.TryAdd(kvp.Key, kvp.Value))
                     added++;
             }
-
             if (added > 0)
             {
                 store.Save(memory);
                 ed.WriteMessage($"\nAdded {added} new mappings to translation memory.");
             }
-
-            ed.WriteMessage($"\nTotal mappings: {memory.Mappings.Count}");
-            ed.WriteMessage("\nAcLayerStandardizer: Mappings updated.");
         }
-        else
+
+        if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)
         {
-            ed.WriteMessage("\nCancelled.");
+            var result = StandardizeCommand.ApplyMappings(
+                doc.Database, resultMappings, standardLayers);
+            ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
+            ed.WriteMessage($"\n  Properties synced: {result.Synced}");
+            ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");
+            ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
         }
     }
 

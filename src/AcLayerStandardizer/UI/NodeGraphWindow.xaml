@@ -48,21 +48,29 @@
       </Canvas>
     </Grid>
 
-    <Border Grid.Row="2" Background="#2d2d2d" Padding="12,8">
+    <Border Grid.Row="2" Background="#2d2d2d" Padding="12,10">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
         <TextBlock x:Name="StatusBar" Grid.Column="0"
                    Foreground="#aaa" VerticalAlignment="Center">
           Ready
         </TextBlock>
-        <StackPanel Grid.Column="1" Orientation="Horizontal">
-          <Button x:Name="SaveButton" Content="Save Mappings" Width="120" Height="28"
-                  Margin="0,0,8,0" IsDefault="True" Click="OnSave" />
-          <Button Content="Close" Width="80" Height="28" IsCancel="True" Click="OnClose" />
-        </StackPanel>
+        <Button Grid.Column="1" Content="Apply Mappings" Width="140" Height="34"
+                Margin="0,0,8,0" FontSize="12" FontWeight="SemiBold"
+                Click="OnApply" />
+        <Button Grid.Column="2" x:Name="ApplySaveButton"
+                Content="Apply &amp; Save" Width="150" Height="38"
+                Margin="0,0,8,0" FontSize="13" FontWeight="Bold"
+                Background="#2e7d32" Foreground="White"
+                BorderBrush="#1b5e20" IsDefault="True"
+                Click="OnApplyAndSave" />
+        <Button Grid.Column="3" Content="Close" Width="80" Height="30"
+                IsCancel="True" Click="OnClose" />
       </Grid>
     </Border>
   </Grid>

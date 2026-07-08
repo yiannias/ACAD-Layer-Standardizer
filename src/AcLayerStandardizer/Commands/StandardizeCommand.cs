@@ -84,82 +84,14 @@ public static class StandardizeCommand
             .ToList()!;
 
         var db = doc.Database;
-        var snapshot = new RollbackSnapshot();
-        var renamed = 0;
-        var syncedProps = 0;
+        var mappings = toApply
+            .Where(r => r.TargetLayer is not null)
+            .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
 
-        using (var tr = doc.TransactionManager.StartTransaction())
-        {
-            var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+        var result = ApplyMappings(db, mappings, ctx.StandardLayers);
 
-            foreach (var result in toApply)
-            {
-                var sourceId = GetLayerId(lt, tr, result.SourceLayer);
-                if (sourceId is null) continue;
-
-                ObjectId targetId;
-
-                if (lt.Has(result.TargetLayer!))
-                {
-                    targetId = lt[result.TargetLayer!];
-
-                    var srcLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForRead);
-                    var erased = new ErasedLayerBackup
-                    {
-                        OriginalName = result.SourceLayer,
-                        ColorIndex = srcLtr.Color.ColorIndex,
-                        Linetype = GetLinetypeName(tr, srcLtr),
-                        LineWeight = srcLtr.LineWeight.ToString(),
-                        IsPlottable = srcLtr.IsPlottable,
-                        Description = srcLtr.Description,
-                        TransferredEntityHandles = TransferEntities(db, tr, sourceId.Value, targetId),
-                    };
-                    snapshot.ErasedLayers.Add(erased);
-
-                    var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
-                    wipLtr.Erase(true);
-                }
-                else
-                {
-                    var srcLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForRead);
-                    var backup = new RenamedLayerBackup
-                    {
-                        OriginalName = result.SourceLayer,
-                        NewName = result.TargetLayer!,
-                        ColorIndex = srcLtr.Color.ColorIndex,
-                        Linetype = GetLinetypeName(tr, srcLtr),
-                        LineWeight = srcLtr.LineWeight.ToString(),
-                        IsPlottable = srcLtr.IsPlottable,
-                        Description = srcLtr.Description,
-                    };
-                    snapshot.RenamedLayers.Add(backup);
-
-                    var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
-                    wipLtr.Name = result.TargetLayer!;
-                    targetId = sourceId.Value;
-                }
-
-                if (ctx.StandardLayers.TryGetValue(result.TargetLayer!, out var props))
-                {
-                    var ltr = (LayerTableRecord)tr.GetObject(targetId, OpenMode.ForWrite);
-                    ltr.Color = props.Color;
-                    ltr.LinetypeObjectId = GetLinetypeId(db, tr, props.Linetype);
-                    ltr.LineWeight = props.LineWeight;
-                    ltr.IsPlottable = props.IsPlottable;
-                    if (!string.IsNullOrEmpty(props.Description))
-                        ltr.Description = props.Description;
-                    syncedProps++;
-                }
-
-                renamed++;
-            }
-
-            tr.Commit();
-        }
-
-        snapshot.Save();
-        ed.WriteMessage($"\n  Renamed/merged: {renamed}");
-        ed.WriteMessage($"\n  Properties synced: {syncedProps}");
+        ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
+        ed.WriteMessage($"\n  Properties synced: {result.Synced}");
 
         var newMappings = toApply
             .Where(r => r.Source == MatchSource.Heuristic && r.TargetLayer is not null)
@@ -264,6 +196,92 @@ public static class StandardizeCommand
         ed.WriteMessage($"\n  Erased layers restored: {restoredErased}");
         ed.WriteMessage($"\n  Note: Entity transfers may not fully revert if entities were modified since.");
         ed.WriteMessage($"\nAcLayerStandardizer: Undo complete.");
+    }
+
+    public sealed record ApplyMappingsResult(int Renamed, int Synced);
+
+    public static ApplyMappingsResult ApplyMappings(
+        Database db,
+        IReadOnlyDictionary<string, string> mappings,
+        IReadOnlyDictionary<string, LayerProperties> standardLayers)
+    {
+        var snapshot = new RollbackSnapshot();
+        var renamed = 0;
+        var synced = 0;
+
+        using (var tr = db.TransactionManager.StartTransaction())
+        {
+            var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+
+            foreach (var (source, target) in mappings)
+            {
+                if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase)) continue;
+
+                var sourceId = GetLayerId(lt, tr, source);
+                if (sourceId is null) continue;
+
+                ObjectId targetId;
+
+                if (lt.Has(target))
+                {
+                    targetId = lt[target];
+
+                    var srcLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForRead);
+                    var erased = new ErasedLayerBackup
+                    {
+                        OriginalName = source,
+                        ColorIndex = srcLtr.Color.ColorIndex,
+                        Linetype = GetLinetypeName(tr, srcLtr),
+                        LineWeight = srcLtr.LineWeight.ToString(),
+                        IsPlottable = srcLtr.IsPlottable,
+                        Description = srcLtr.Description,
+                        TransferredEntityHandles = TransferEntities(db, tr, sourceId.Value, targetId),
+                    };
+                    snapshot.ErasedLayers.Add(erased);
+
+                    var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
+                    wipLtr.Erase(true);
+                }
+                else
+                {
+                    var srcLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForRead);
+                    var backup = new RenamedLayerBackup
+                    {
+                        OriginalName = source,
+                        NewName = target,
+                        ColorIndex = srcLtr.Color.ColorIndex,
+                        Linetype = GetLinetypeName(tr, srcLtr),
+                        LineWeight = srcLtr.LineWeight.ToString(),
+                        IsPlottable = srcLtr.IsPlottable,
+                        Description = srcLtr.Description,
+                    };
+                    snapshot.RenamedLayers.Add(backup);
+
+                    var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
+                    wipLtr.Name = target;
+                    targetId = sourceId.Value;
+                }
+
+                if (standardLayers.TryGetValue(target, out var props))
+                {
+                    var ltr = (LayerTableRecord)tr.GetObject(targetId, OpenMode.ForWrite);
+                    ltr.Color = props.Color;
+                    ltr.LinetypeObjectId = GetLinetypeId(db, tr, props.Linetype);
+                    ltr.LineWeight = props.LineWeight;
+                    ltr.IsPlottable = props.IsPlottable;
+                    if (!string.IsNullOrEmpty(props.Description))
+                        ltr.Description = props.Description;
+                    synced++;
+                }
+
+                renamed++;
+            }
+
+            tr.Commit();
+        }
+
+        snapshot.Save();
+        return new ApplyMappingsResult(renamed, synced);
     }
 
     private sealed record PipelineContext(
