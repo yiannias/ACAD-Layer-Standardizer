@@ -108,17 +108,16 @@ public static class MappingsCommand
 
         if (action is MappingEditorAction.ApplyAndSave)
         {
-            var added = 0;
+            var beforeCount = memory.Mappings.Count;
+            memory.Mappings.Clear();
             foreach (var kvp in resultMappings)
-            {
-                if (memory.Mappings.TryAdd(kvp.Key, kvp.Value))
-                    added++;
-            }
-            if (added > 0)
-            {
-                store.Save(memory);
-                ed.WriteMessage($"\nAdded {added} new mappings to translation memory.");
-            }
+                memory.Mappings[kvp.Key] = kvp.Value;
+            store.Save(memory);
+            var diff = memory.Mappings.Count - beforeCount;
+            if (diff != 0)
+                ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
+            else
+                ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
         }
 
         if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)

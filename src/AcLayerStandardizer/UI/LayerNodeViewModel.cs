@@ -65,8 +65,9 @@ public class LayerNodeViewModel : ObservableObject
 
     public void UpdateAnchor()
     {
+        double ew = _size.Width; // 178
         Anchor = IsSource
-            ? new Point(_location.X + _size.Width, _location.Y + _size.Height / 2)
+            ? new Point(_location.X + ew, _location.Y + _size.Height / 2)
             : new Point(_location.X, _location.Y + _size.Height / 2);
     }
 
@@ -75,7 +76,7 @@ public class LayerNodeViewModel : ObservableObject
         Name = name;
         IsSource = isSource;
         _location = location;
-        _size = new Size(170, 30);
+        _size = new Size(178, 30);
         UpdateAnchor();
     }
 }

@@ -27,17 +27,18 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="nodify:StateNode">
-              <Grid Width="170" Height="30">
+              <Grid Width="178" Height="30">
                 <Border x:Name="NodeBorder"
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="4"
+                        Width="170"
+                        HorizontalAlignment="Center"
                         ClipToBounds="True">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center" />
                 </Border>
-                <!-- Source connector: right edge, source nodes only -->
                 <Ellipse x:Name="SourceConnector"
                          Width="8" Height="8"
                          Fill="{Binding ConnectorColor, Converter={StaticResource ColorStringToBrush}}"
@@ -45,7 +46,6 @@
                          HorizontalAlignment="Right" VerticalAlignment="Center"
                          Margin="0,0,-4,0"
                          Visibility="{Binding IsSource, Converter={StaticResource BoolToVis}}" />
-                <!-- Target connector: left edge, standard nodes only -->
                 <Ellipse x:Name="TargetConnector"
                          Width="8" Height="8"
                          Fill="{Binding ConnectorColor, Converter={StaticResource ColorStringToBrush}}"
@@ -73,6 +73,7 @@
       <!-- Connection lines: color-coded by match source, glowing on connect -->
       <Style TargetType="nodify:Connection">
         <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Stroke" Value="#7c4dff" />
         <Setter Property="Effect">
           <Setter.Value>
             <DropShadowEffect BlurRadius="0" Opacity="0" Color="Transparent" ShadowDepth="0" />

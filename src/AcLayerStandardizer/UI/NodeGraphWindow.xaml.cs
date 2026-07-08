@@ -71,6 +71,7 @@ public partial class NodeGraphWindow : Window
             return;
         }
         ResultAction = MappingEditorAction.Apply;
+        _hasChanges = false;
         DialogResult = true;
         Close();
     }
