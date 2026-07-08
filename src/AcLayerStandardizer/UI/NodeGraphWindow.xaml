@@ -31,7 +31,7 @@
     </Border>
 
     <Grid Grid.Row="1" ClipToBounds="True" Background="#1e1e1e">
-      <Canvas x:Name="GraphCanvas"
+      <Canvas x:Name="GraphCanvas" Background="Transparent"
               MinWidth="850" MinHeight="500"
               SizeChanged="OnCanvasSizeChanged"
               PreviewMouseLeftButtonDown="OnCanvasPreviewMouseDown"

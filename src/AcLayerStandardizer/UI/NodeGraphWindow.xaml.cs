@@ -32,6 +32,7 @@ public partial class NodeGraphWindow : Window
     private Point _dragStartPos;
     private bool _isDragging;
     private Point _lastDragCursor;
+    private Path? _tempBezier;
 
     private bool _isPanning;
     private Point _panStart;
@@ -50,7 +51,7 @@ public partial class NodeGraphWindow : Window
         InitializeComponent();
 
         _sourceLayers = [.. sourceLayers.OrderBy(n => n)];
-        _allStandardLayers = [.. standardLayers.OrderBy(n => n)];
+        _allStandardLayers = [.. standardLayers.OrderBy(n => n == "0" ? 0 : 1).ThenBy(n => n)];
         _mappings = new Dictionary<string, string>(existingMappings, StringComparer.OrdinalIgnoreCase);
 
         SourceInitialized += (_, _) => EnableDarkTitleBar();
@@ -349,15 +350,19 @@ public partial class NodeGraphWindow : Window
 
             var geo = MakeBezier(srcX, srcY, srcX + 40, srcY, pos.X - 40, pos.Y, pos.X, pos.Y);
 
-            var dashed = new Path
+            if (_tempBezier is null)
             {
-                Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 167, 38)),
-                StrokeThickness = 2.5,
-                StrokeDashArray = new DoubleCollection([4, 3]),
-                Fill = Brushes.Transparent,
-                Data = geo,
-            };
-            GraphCanvas.Children.Add(dashed);
+                _tempBezier = new Path
+                {
+                    Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 167, 38)),
+                    StrokeThickness = 2.5,
+                    StrokeDashArray = new DoubleCollection([4, 3]),
+                    Fill = Brushes.Transparent,
+                };
+                GraphCanvas.Children.Add(_tempBezier);
+            }
+
+            _tempBezier.Data = geo;
             e.Handled = true;
         }
     }
@@ -369,6 +374,8 @@ public partial class NodeGraphWindow : Window
             Mouse.Capture(null);
             return;
         }
+
+        _tempBezier = null;
 
         if (_isDragging)
         {
@@ -467,12 +474,15 @@ public partial class NodeGraphWindow : Window
     {
         if (_selectedSource is null)
         {
-            if (_mappings.ContainsValue(name))
+            var toRemove = _mappings.Where(kv => kv.Value == name).Select(kv => kv.Key).ToList();
+            if (toRemove.Count > 0)
             {
-                var src = _mappings.FirstOrDefault(kv => kv.Value == name).Key;
-                _mappings.Remove(src);
+                foreach (var s in toRemove)
+                    _mappings.Remove(s);
                 _hasChanges = true;
-                StatusBar.Text = $"Removed mapping → {name}";
+                StatusBar.Text = toRemove.Count == 1
+                    ? $"Removed mapping → {name}"
+                    : $"Removed {toRemove.Count} mappings → {name}";
                 RenderGraph();
             }
             return;
@@ -493,10 +503,6 @@ public partial class NodeGraphWindow : Window
         var prevTarget = _mappings.TryGetValue(source, out var oldTarget) ? oldTarget : null;
 
         _mappings[source] = target;
-
-        var other = _mappings.FirstOrDefault(kv => kv.Value == target && kv.Key != source).Key;
-        if (other is not null)
-            _mappings.Remove(other);
 
         _hasChanges = true;
         _selectedSource = null;
