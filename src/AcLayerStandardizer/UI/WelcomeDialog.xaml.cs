@@ -52,8 +52,8 @@ public partial class WelcomeDialog : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Select Template DWG",
-            Filter = "DWG Files (*.dwg)|*.dwg|All Files (*.*)|*.*",
+            Title = "Select Template DWG / Standards File",
+            Filter = "Drawing Files (*.dwg;*.dws)|*.dwg;*.dws|All Files (*.*)|*.*",
             CheckFileExists = true
         };
 

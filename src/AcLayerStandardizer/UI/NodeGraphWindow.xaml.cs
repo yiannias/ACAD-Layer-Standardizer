@@ -1,6 +1,8 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Shapes;
 
@@ -10,18 +12,33 @@ public partial class NodeGraphWindow : Window
 {
     private const double NodeWidth = 170;
     private const double NodeHeight = 30;
-    private const double ColumnGap = 80;
     private const double NodeSpacing = 44;
     private const double TopMargin = 30;
     private const double LeftMargin = 40;
     private const double RightMargin = 40;
     private const double ConnectionHitWidth = 14;
+    private const double DragThreshold = 6;
+    private const double MinZoom = 0.2;
+    private const double MaxZoom = 3.0;
+    private const double ZoomFactor = 1.12;
 
     private readonly List<string> _sourceLayers;
     private readonly List<string> _allStandardLayers;
-    private readonly Dictionary<string, string> _mappings; // source → target
+    private readonly Dictionary<string, string> _mappings;
     private string? _selectedSource;
     private bool _hasChanges;
+
+    private string? _dragCandidate;
+    private Point _dragStartPos;
+    private bool _isDragging;
+    private Point _lastDragCursor;
+
+    private bool _isPanning;
+    private Point _panStart;
+    private double _panOriginX;
+    private double _panOriginY;
+
+    private double _zoomLevel = 1.0;
 
     public IReadOnlyDictionary<string, string> ResultMappings => _mappings;
 
@@ -32,40 +49,47 @@ public partial class NodeGraphWindow : Window
     {
         InitializeComponent();
 
-        _sourceLayers = sourceLayers;
-        _allStandardLayers = standardLayers;
+        _sourceLayers = [.. sourceLayers.OrderBy(n => n)];
+        _allStandardLayers = [.. standardLayers.OrderBy(n => n)];
         _mappings = new Dictionary<string, string>(existingMappings, StringComparer.OrdinalIgnoreCase);
 
+        SourceInitialized += (_, _) => EnableDarkTitleBar();
         RenderGraph();
     }
 
-    private void OnCanvasSizeChanged(object sender, SizeChangedEventArgs e)
+    private void EnableDarkTitleBar()
     {
-        RenderGraph();
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var dark = 1;
+        _ = DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
     }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private double TargetX => Math.Max(GraphCanvas.ActualWidth, 850) - NodeWidth - RightMargin;
+
+    private void OnCanvasSizeChanged(object sender, SizeChangedEventArgs e) => RenderGraph();
 
     private void RenderGraph()
     {
-        GraphCanvas.Children.Clear();
-
         var canvasW = Math.Max(GraphCanvas.ActualWidth, 850);
-        var targetX = canvasW - NodeWidth - RightMargin;
+        var tx = TargetX;
 
-        DrawConnections(targetX);
-        DrawSourceNodes(targetX);
-        DrawTargetNodes(targetX);
-        DrawColumnLabels(targetX, canvasW);
+        GraphCanvas.Children.Clear();
+        DrawConnections(tx);
+        DrawSourceNodes(tx);
+        DrawTargetNodes(tx);
+        DrawColumnLabels(tx, canvasW);
     }
 
     private void DrawColumnLabels(double targetX, double canvasW)
     {
-        var titleStyle = new TextStyle("#ffa726", 13, true);
-        AddLabel(LeftMargin, 6, "Drawing Layers", titleStyle);
-        AddLabel(targetX, 6, "Standard Layers", titleStyle);
+        AddLabel(LeftMargin, 6, "Drawing Layers", "#ffa726", 13, true);
+        AddLabel(targetX, 6, "Standard Layers", "#ffa726", 13, true);
 
         var midX = (LeftMargin + NodeWidth + targetX) / 2;
-        var unmatched = _sourceLayers.Count(l => !_mappings.ContainsKey(l));
-        AddLabel(midX - 60, 6, $"Mappings ({_mappings.Count})", new TextStyle("#66bb6a", 11, false));
+        AddLabel(midX - 60, 6, $"Mappings ({_mappings.Count})", "#66bb6a", 11, false);
     }
 
     private void DrawSourceNodes(double targetX)
@@ -74,10 +98,7 @@ public partial class NodeGraphWindow : Window
         {
             var name = _sourceLayers[i];
             var y = TopMargin + i * NodeSpacing;
-            var isMapped = _mappings.ContainsKey(name);
-            var isSelected = name == _selectedSource;
-
-            var border = CreateNode(name, y, isMapped, isSelected, isSource: true);
+            var border = CreateNode(name, y, isSource: true, targetX);
             Canvas.SetLeft(border, LeftMargin);
             Canvas.SetTop(border, y);
             GraphCanvas.Children.Add(border);
@@ -90,16 +111,18 @@ public partial class NodeGraphWindow : Window
         {
             var name = _allStandardLayers[i];
             var y = TopMargin + i * NodeSpacing;
-
-            var border = CreateNode(name, y, isMapped: false, isSelected: false, isSource: false);
+            var border = CreateNode(name, y, isSource: false, targetX);
             Canvas.SetLeft(border, targetX);
             Canvas.SetTop(border, y);
             GraphCanvas.Children.Add(border);
         }
     }
 
-    private Border CreateNode(string name, double y, bool isMapped, bool isSelected, bool isSource)
+    private Border CreateNode(string name, double y, bool isSource, double targetX)
     {
+        var isMapped = isSource ? _mappings.ContainsKey(name) : _mappings.ContainsValue(name);
+        var isSelected = isSource && name == _selectedSource;
+
         var bg = isSelected ? "#ffa726" : isMapped ? "#2e7d32" : "#424242";
         var textColor = isSelected ? "#1e1e1e" : "#eee";
 
@@ -126,11 +149,6 @@ public partial class NodeGraphWindow : Window
             Cursor = Cursors.Hand,
         };
 
-        if (isSource)
-            border.MouseLeftButtonDown += (_, _) => OnSourceClick(name);
-        else
-            border.MouseLeftButtonDown += (_, _) => OnTargetClick(name);
-
         return border;
     }
 
@@ -144,83 +162,299 @@ public partial class NodeGraphWindow : Window
 
             var srcY = TopMargin + srcIdx * NodeSpacing + NodeHeight / 2;
             var tgtY = TopMargin + tgtIdx * NodeSpacing + NodeHeight / 2;
-
-            var srcRight = LeftMargin + NodeWidth;
-            var tgtLeft = targetX;
-
-            var mid1X = srcRight + (tgtLeft - srcRight) * 0.35;
-            var mid2X = srcRight + (tgtLeft - srcRight) * 0.65;
-
-            var path = new Path
-            {
-                Stroke = new SolidColorBrush(Color.FromArgb(120, 102, 187, 255)),
-                StrokeThickness = 2.5,
-                Fill = Brushes.Transparent,
-                Tag = kvp.Key,
-                Cursor = Cursors.Hand,
-            };
-
-            var geo = new PathGeometry();
-            var fig = new PathFigure(
-                new Point(srcRight, srcY),
-                [
-                    new BezierSegment(
-                        new Point(mid1X, srcY),
-                        new Point(mid2X, tgtY),
-                        new Point(tgtLeft, tgtY),
-                        true),
-                ],
-                false);
-            geo.Figures.Add(fig);
-            path.Data = geo;
-
-            path.MouseLeftButtonDown += (_, _) => OnConnectionClick(kvp.Key);
-            path.MouseEnter += (_, _) => path.Stroke = new SolidColorBrush(Color.FromRgb(239, 83, 80));
-            path.MouseLeave += (_, _) => path.Stroke = new SolidColorBrush(Color.FromArgb(120, 102, 187, 255));
-
-            GraphCanvas.Children.Add(path);
-
-            var hitPath = new Path
-            {
-                Stroke = Brushes.Transparent,
-                StrokeThickness = ConnectionHitWidth,
-                Fill = Brushes.Transparent,
-                Data = geo.Clone(),
-                Cursor = Cursors.Hand,
-            };
-            hitPath.MouseLeftButtonDown += (_, _) => OnConnectionClick(kvp.Key);
-            GraphCanvas.Children.Add(hitPath);
-
-            var labelMidX = (srcRight + tgtLeft) / 2 - 20;
-            var labelMidY = (srcY + tgtY) / 2;
-            var label = new TextBlock
-            {
-                Text = "\u2192",
-                Foreground = new SolidColorBrush(Color.FromArgb(160, 102, 187, 255)),
-                FontSize = 16,
-                FontWeight = FontWeights.Bold,
-            };
-            Canvas.SetLeft(label, labelMidX);
-            Canvas.SetTop(label, labelMidY - 10);
-            GraphCanvas.Children.Add(label);
+            DrawOneConnection(kvp.Key, LeftMargin + NodeWidth, srcY, targetX, tgtY);
         }
     }
 
-    private void AddLabel(double x, double y, string text, TextStyle style)
+    private void DrawOneConnection(string? tagKey, double x1, double y1, double x2, double y2)
+    {
+        var mid1X = x1 + (x2 - x1) * 0.35;
+        var mid2X = x1 + (x2 - x1) * 0.65;
+
+        var geo = MakeBezier(x1, y1, mid1X, y1, mid2X, y2, x2, y2);
+
+        var path = new Path
+        {
+            Stroke = new SolidColorBrush(Color.FromArgb(120, 102, 187, 255)),
+            StrokeThickness = 2.5,
+            Fill = Brushes.Transparent,
+            Data = geo,
+            Tag = tagKey,
+            Cursor = Cursors.Hand,
+        };
+        path.MouseEnter += (_, _) => path.Stroke = new SolidColorBrush(Color.FromRgb(239, 83, 80));
+        path.MouseLeave += (_, _) => path.Stroke = new SolidColorBrush(Color.FromArgb(120, 102, 187, 255));
+
+        var hit = new Path
+        {
+            Stroke = Brushes.Transparent,
+            StrokeThickness = ConnectionHitWidth,
+            Fill = Brushes.Transparent,
+            Data = geo.Clone(),
+            Cursor = Cursors.Hand,
+        };
+
+        GraphCanvas.Children.Add(path);
+        GraphCanvas.Children.Add(hit);
+
+        var labelMidX = (x1 + x2) / 2 - 10;
+        var labelMidY = (y1 + y2) / 2 - 8;
+        var arrow = new TextBlock
+        {
+            Text = "\u2192",
+            Foreground = new SolidColorBrush(Color.FromArgb(160, 102, 187, 255)),
+            FontSize = 16,
+            FontWeight = FontWeights.Bold,
+        };
+        Canvas.SetLeft(arrow, labelMidX);
+        Canvas.SetTop(arrow, labelMidY);
+        GraphCanvas.Children.Add(arrow);
+    }
+
+    private static PathGeometry MakeBezier(double x1, double y1, double cx1, double cy1,
+                                            double cx2, double cy2, double x2, double y2)
+    {
+        var geo = new PathGeometry();
+        geo.Figures.Add(new PathFigure(
+            new Point(x1, y1),
+            [new BezierSegment(new Point(cx1, cy1), new Point(cx2, cy2), new Point(x2, y2), true)],
+            false));
+        return geo;
+    }
+
+    private void AddLabel(double x, double y, string text, string color, double size, bool bold)
     {
         var tb = new TextBlock
         {
             Text = text,
-            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(style.Color)),
-            FontSize = style.Size,
-            FontWeight = style.Bold ? FontWeights.Bold : FontWeights.Normal,
+            Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color)),
+            FontSize = size,
+            FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
         };
         Canvas.SetLeft(tb, x);
         Canvas.SetTop(tb, y);
         GraphCanvas.Children.Add(tb);
     }
 
-    private void OnSourceClick(string name)
+    private string? HitTestNodeAt(Point pos, bool targetsOnly)
+    {
+        if (!targetsOnly)
+        {
+            for (int i = 0; i < _sourceLayers.Count; i++)
+            {
+                var y = TopMargin + i * NodeSpacing;
+                var r = new Rect(LeftMargin, y, NodeWidth, NodeHeight);
+                if (r.Contains(pos)) return _sourceLayers[i];
+            }
+        }
+
+        for (int i = 0; i < _allStandardLayers.Count; i++)
+        {
+            var y = TopMargin + i * NodeSpacing;
+            var r = new Rect(TargetX, y, NodeWidth, NodeHeight);
+            if (r.Contains(pos)) return _allStandardLayers[i];
+        }
+
+        return null;
+    }
+
+    private string? HitTestConnectionAt(Point pos)
+    {
+        foreach (var kvp in _mappings)
+        {
+            var srcIdx = _sourceLayers.IndexOf(kvp.Key);
+            var tgtIdx = _allStandardLayers.IndexOf(kvp.Value);
+            if (srcIdx < 0 || tgtIdx < 0) continue;
+
+            var srcY = TopMargin + srcIdx * NodeSpacing + NodeHeight / 2;
+            var tgtY = TopMargin + tgtIdx * NodeSpacing + NodeHeight / 2;
+            var tx = TargetX;
+
+            var mid1X = LeftMargin + NodeWidth + (tx - LeftMargin - NodeWidth) * 0.35;
+            var mid2X = LeftMargin + NodeWidth + (tx - LeftMargin - NodeWidth) * 0.65;
+
+            var geo = MakeBezier(LeftMargin + NodeWidth, srcY, mid1X, srcY, mid2X, tgtY, tx, tgtY);
+            if (geo.FillContains(pos))
+                return kvp.Key;
+        }
+        return null;
+    }
+
+    // ── Preview mouse handlers (tunnel down, intercept before child elements) ──
+
+    private void OnCanvasPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left) return;
+
+        var pos = e.GetPosition(GraphCanvas);
+        _dragCandidate = HitTestNodeAt(pos, targetsOnly: false);
+
+        if (_dragCandidate != null && _sourceLayers.Contains(_dragCandidate))
+        {
+            _dragStartPos = pos;
+            _isDragging = false;
+            Mouse.Capture(GraphCanvas);
+            e.Handled = true;
+        }
+        else if (_dragCandidate != null && _allStandardLayers.Contains(_dragCandidate))
+        {
+            HandleTargetClick(_dragCandidate);
+            e.Handled = true;
+        }
+        else
+        {
+            var conn = HitTestConnectionAt(pos);
+            if (conn != null)
+            {
+                HandleConnectionClick(conn);
+                e.Handled = true;
+            }
+            else
+            {
+                _selectedSource = null;
+                StatusBar.Text = "Ready";
+                RenderGraph();
+                e.Handled = true;
+            }
+        }
+    }
+
+    private void OnCanvasPreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_dragCandidate == null || !_sourceLayers.Contains(_dragCandidate)) return;
+
+        var pos = e.GetPosition(GraphCanvas);
+
+        if (!_isDragging)
+        {
+            var dx = pos.X - _dragStartPos.X;
+            var dy = pos.Y - _dragStartPos.Y;
+            if (Math.Sqrt(dx * dx + dy * dy) > DragThreshold)
+            {
+                _isDragging = true;
+                _selectedSource = null;
+                RenderGraph();
+            }
+        }
+
+        if (_isDragging)
+        {
+            _lastDragCursor = pos;
+
+            var srcIdx = _sourceLayers.IndexOf(_dragCandidate);
+            if (srcIdx < 0) return;
+
+            var srcX = LeftMargin + NodeWidth;
+            var srcY = TopMargin + srcIdx * NodeSpacing + NodeHeight / 2;
+
+            var geo = MakeBezier(srcX, srcY, srcX + 40, srcY, pos.X - 40, pos.Y, pos.X, pos.Y);
+
+            var dashed = new Path
+            {
+                Stroke = new SolidColorBrush(Color.FromArgb(200, 255, 167, 38)),
+                StrokeThickness = 2.5,
+                StrokeDashArray = new DoubleCollection([4, 3]),
+                Fill = Brushes.Transparent,
+                Data = geo,
+            };
+            GraphCanvas.Children.Add(dashed);
+            e.Handled = true;
+        }
+    }
+
+    private void OnCanvasPreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_dragCandidate == null || !_sourceLayers.Contains(_dragCandidate))
+        {
+            Mouse.Capture(null);
+            return;
+        }
+
+        if (_isDragging)
+        {
+            var target = HitTestNodeAt(_lastDragCursor, targetsOnly: true);
+            if (target != null && _allStandardLayers.Contains(target))
+            {
+                CreateMapping(_dragCandidate, target);
+            }
+
+            _isDragging = false;
+            _dragCandidate = null;
+            Mouse.Capture(null);
+            RenderGraph();
+            e.Handled = true;
+        }
+        else
+        {
+            _isDragging = false;
+            Mouse.Capture(null);
+
+            if (_sourceLayers.Contains(_dragCandidate))
+            {
+                HandleSourceClick(_dragCandidate);
+            }
+            _dragCandidate = null;
+            e.Handled = true;
+        }
+    }
+
+    private void OnCanvasPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        var pos = e.GetPosition(GraphCanvas);
+        var oldZoom = _zoomLevel;
+
+        _zoomLevel *= e.Delta > 0 ? ZoomFactor : (1.0 / ZoomFactor);
+        _zoomLevel = Math.Clamp(_zoomLevel, MinZoom, MaxZoom);
+
+        ZoomTransform.ScaleX = _zoomLevel;
+        ZoomTransform.ScaleY = _zoomLevel;
+
+        PanTransform.X = pos.X - (pos.X - PanTransform.X) * (_zoomLevel / oldZoom);
+        PanTransform.Y = pos.Y - (pos.Y - PanTransform.Y) * (_zoomLevel / oldZoom);
+
+        ZoomLabel.Text = $"{_zoomLevel * 100:F0}%";
+        e.Handled = true;
+    }
+
+    private void OnCanvasMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Middle) return;
+
+        var pos = e.GetPosition(GraphCanvas);
+        _isPanning = true;
+        _panStart = pos;
+        _panOriginX = PanTransform.X;
+        _panOriginY = PanTransform.Y;
+        Mouse.Capture(GraphCanvas);
+        e.Handled = true;
+
+        var prevMove = (MouseEventHandler?)null;
+        prevMove = null!;
+        prevMove = (_, me) =>
+        {
+            if (!_isPanning) return;
+            var cur = me.GetPosition(GraphCanvas);
+            PanTransform.X = _panOriginX + (cur.X - _panStart.X);
+            PanTransform.Y = _panOriginY + (cur.Y - _panStart.Y);
+            me.Handled = true;
+        };
+        GraphCanvas.PreviewMouseMove += prevMove;
+
+        void OnMiddleUp(object? _, MouseButtonEventArgs ue)
+        {
+            if (ue.ChangedButton != MouseButton.Middle) return;
+            _isPanning = false;
+            Mouse.Capture(null);
+            GraphCanvas.PreviewMouseMove -= prevMove;
+            GraphCanvas.PreviewMouseUp -= OnMiddleUp;
+            ue.Handled = true;
+        }
+        GraphCanvas.PreviewMouseUp += OnMiddleUp;
+    }
+
+    // ── Click handlers ──
+
+    private void HandleSourceClick(string name)
     {
         _selectedSource = _selectedSource == name ? null : name;
         StatusBar.Text = _selectedSource is null
@@ -229,7 +463,7 @@ public partial class NodeGraphWindow : Window
         RenderGraph();
     }
 
-    private void OnTargetClick(string name)
+    private void HandleTargetClick(string name)
     {
         if (_selectedSource is null)
         {
@@ -251,39 +485,34 @@ public partial class NodeGraphWindow : Window
             return;
         }
 
-        var sourceName = _selectedSource;
-        var prevTarget = _mappings.TryGetValue(sourceName, out var oldTarget) ? oldTarget : null;
-        _mappings[sourceName] = name;
+        CreateMapping(_selectedSource, name);
+    }
 
-        var otherSource = _mappings.FirstOrDefault(kv => kv.Value == name && kv.Key != sourceName).Key;
-        if (otherSource is not null)
-            _mappings.Remove(otherSource);
+    private void CreateMapping(string source, string target)
+    {
+        var prevTarget = _mappings.TryGetValue(source, out var oldTarget) ? oldTarget : null;
+
+        _mappings[source] = target;
+
+        var other = _mappings.FirstOrDefault(kv => kv.Value == target && kv.Key != source).Key;
+        if (other is not null)
+            _mappings.Remove(other);
 
         _hasChanges = true;
         _selectedSource = null;
         StatusBar.Text = prevTarget is null
-            ? $"Mapped: {sourceName} → {name}"
-            : $"Re-mapped: {sourceName} now points to {name} (was {prevTarget})";
+            ? $"Mapped: {source} → {target}"
+            : $"Re-mapped: {source} now points to {target} (was {prevTarget})";
         RenderGraph();
     }
 
-    private void OnConnectionClick(string sourceName)
+    private void HandleConnectionClick(string sourceName)
     {
         _mappings.Remove(sourceName);
         _hasChanges = true;
         _selectedSource = null;
         StatusBar.Text = $"Removed mapping from {sourceName}";
         RenderGraph();
-    }
-
-    private void OnCanvasClick(object sender, MouseButtonEventArgs e)
-    {
-        if (e.OriginalSource is Canvas)
-        {
-            _selectedSource = null;
-            StatusBar.Text = "Ready";
-            RenderGraph();
-        }
     }
 
     private void OnSave(object sender, RoutedEventArgs e)
@@ -309,6 +538,4 @@ public partial class NodeGraphWindow : Window
         DialogResult = false;
         Close();
     }
-
-    private readonly record struct TextStyle(string Color, double Size, bool Bold);
 }
