@@ -1,0 +1,70 @@
+<Window x:Class="AcLayerStandardizer.UI.WelcomeDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Layer Standardizer"
+        Width="560" Height="420"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI" FontSize="12"
+        ResizeMode="CanResizeWithGrip">
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4">
+      Welcome to Layer Standardizer
+    </TextBlock>
+    <TextBlock Grid.Row="1" TextWrapping="Wrap" Margin="0,0,0,20" LineHeight="20" Foreground="#444">
+      This tool helps you standardize drawing layer names and properties
+      against a template DWG. Set your template and memory file below,
+      then open the visual mapping editor to connect your layers.
+    </TextBlock>
+
+    <Border Grid.Row="2" BorderBrush="#ccc" BorderThickness="1" Padding="16" CornerRadius="4"
+            Background="#f9f9f9" Margin="0,0,0,16">
+      <StackPanel>
+        <!-- Template DWG -->
+        <Grid Margin="0,0,0,10">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0" Text="Template DWG:" VerticalAlignment="Center" FontWeight="SemiBold" />
+          <TextBlock Grid.Column="1" x:Name="TemplateLabel" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" ToolTipService.ShowDuration="30000"
+                     Margin="0,0,8,0" />
+          <Button Grid.Column="2" Content="Browse..." Padding="12,4" Click="BrowseTemplate_Click" />
+        </Grid>
+
+        <!-- Memory File -->
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="110" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <TextBlock Grid.Column="0" Text="Memory File:" VerticalAlignment="Center" FontWeight="SemiBold" />
+          <TextBlock Grid.Column="1" x:Name="MemoryLabel" VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" ToolTipService.ShowDuration="30000"
+                     Margin="0,0,8,0" />
+          <Button Grid.Column="2" Content="Browse..." Padding="12,4" Click="BrowseMemory_Click" />
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+      <Button Content="Open Visual Mappings Editor" Width="224" Height="34"
+              FontSize="13" FontWeight="SemiBold"
+              Click="OpenMappingsEditor_Click" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="4" x:Name="StatusLine" Foreground="#888"
+               Text="Tip: set a template DWG first, then open the editor."
+               Margin="0,16,0,0" TextWrapping="Wrap" />
+  </Grid>
+</Window>
