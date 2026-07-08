@@ -3,11 +3,12 @@ namespace AcLayerStandardizer.Matching;
 public class HeuristicMatcher
 {
     private readonly IReadOnlyCollection<string> _standardLayerNames;
-    private const double MinConfidence = 0.6;
+    private readonly double _minConfidence;
 
-    public HeuristicMatcher(IReadOnlyCollection<string> standardLayerNames)
+    public HeuristicMatcher(IReadOnlyCollection<string> standardLayerNames, double minConfidence = 0.6)
     {
         _standardLayerNames = standardLayerNames;
+        _minConfidence = minConfidence;
     }
 
     public MatchResult? TryMatch(string layerName)
@@ -17,7 +18,7 @@ public class HeuristicMatcher
         foreach (var standard in _standardLayerNames)
         {
             var confidence = CalculateSimilarity(layerName, standard);
-            if (confidence >= MinConfidence && (best is null || confidence > best.Confidence))
+            if (confidence >= _minConfidence && (best is null || confidence > best.Confidence))
             {
                 best = new MatchResult
                 {
@@ -32,7 +33,7 @@ public class HeuristicMatcher
         return best;
     }
 
-    private static double CalculateSimilarity(string a, string b)
+    public static double CalculateSimilarity(string a, string b)
     {
         if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return 0.0;
 
@@ -42,12 +43,26 @@ public class HeuristicMatcher
         if (a == b) return 1.0;
         if (a.Contains(b) || b.Contains(a)) return 0.85;
 
+        var normalizedA = StripCommonPrefixes(a);
+        var normalizedB = StripCommonPrefixes(b);
+
+        if (normalizedA != a || normalizedB != b)
+        {
+            if (normalizedA == normalizedB) return 0.9;
+            if (normalizedA.Contains(normalizedB) || normalizedB.Contains(normalizedA)) return 0.8;
+        }
+
         var distance = LevenshteinDistance(a, b);
         var maxLen = Math.Max(a.Length, b.Length);
         return 1.0 - (double)distance / maxLen;
     }
 
-    private static int LevenshteinDistance(string a, string b)
+    private static string StripCommonPrefixes(string s)
+    {
+        return s.TrimStart('A', 'S', 'E', 'L', 'V', 'I', '-', '_');
+    }
+
+    public static int LevenshteinDistance(string a, string b)
     {
         var m = a.Length;
         var n = b.Length;
