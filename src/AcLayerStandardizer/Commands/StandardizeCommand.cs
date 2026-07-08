@@ -1,4 +1,5 @@
 using System.IO;
+using System.Windows.Interop;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
@@ -6,6 +7,7 @@ using Autodesk.AutoCAD.EditorInput;
 using AcLayerStandardizer.Core;
 using AcLayerStandardizer.Data;
 using AcLayerStandardizer.Matching;
+using AcLayerStandardizer.UI;
 
 namespace AcLayerStandardizer.Commands;
 
@@ -54,15 +56,31 @@ public static class StandardizeCommand
             return;
         }
 
-        var kwOpts = new PromptKeywordOptions(
-            $"\nApply {toApply.Count} layer changes?", "Yes No");
-        kwOpts.Keywords.Default = "No";
-        var pr = ed.GetKeywords(kwOpts);
-        if (pr.Status != PromptStatus.OK || pr.StringResult != "Yes")
+        var previewItems = toApply.Select(r => new PreviewItem
+        {
+            SourceLayer = r.SourceLayer,
+            TargetLayer = r.TargetLayer!,
+            Confidence = r.Confidence.ToString("P0"),
+        }).ToList();
+
+        var unmatched = results
+            .Where(r => r.Source == MatchSource.Unmatched)
+            .Select(r => r.SourceLayer)
+            .ToList();
+
+        var dialog = new PreviewDialog(previewItems, unmatched);
+        new WindowInteropHelper(dialog) { Owner = Application.MainWindow.Handle };
+
+        if (dialog.ShowDialog() != true)
         {
             ed.WriteMessage("\nCancelled.");
             return;
         }
+
+        toApply = dialog.SelectedItems
+            .Select(i => results.FirstOrDefault(r => r.SourceLayer == i.SourceLayer))
+            .Where(r => r is not null)
+            .ToList()!;
 
         var renamed = 0;
         var syncedProps = 0;
@@ -114,7 +132,7 @@ public static class StandardizeCommand
         ed.WriteMessage($"\n  Renamed/merged: {renamed}");
         ed.WriteMessage($"\n  Properties synced: {syncedProps}");
 
-        var newMappings = results
+        var newMappings = toApply
             .Where(r => r.Source == MatchSource.Heuristic && r.TargetLayer is not null)
             .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
 
