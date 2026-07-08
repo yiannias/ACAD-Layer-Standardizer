@@ -22,13 +22,13 @@ public partial class WelcomeDialog : Window
 
     private void RefreshDisplay()
     {
-        SetPathLabel(TemplateLabel, _config.TemplateDwgPath, "No template DWG set");
+        SetPathLabel(TemplateLabel, _config.TemplateDwgPath, "No reference file set");
         SetPathLabel(MemoryLabel, _config.MemoryFilePath, "No memory file set");
 
         var hasTemplate = !string.IsNullOrEmpty(_config.TemplateDwgPath) && File.Exists(_config.TemplateDwgPath);
         StatusLine.Text = hasTemplate
             ? "Ready. Open the mappings editor to connect your layers."
-            : "Tip: set a template DWG first, then open the editor.";
+            : "Tip: set a reference file first, then open the editor.";
     }
 
     private static void SetPathLabel(System.Windows.Controls.TextBlock label, string? fullPath, string fallback)
@@ -52,7 +52,7 @@ public partial class WelcomeDialog : Window
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Select Template DWG / Standards File",
+            Title = "Select Reference File / Standards File",
             Filter = "Drawing Files (*.dwg;*.dws)|*.dwg;*.dws|All Files (*.*)|*.*",
             CheckFileExists = true
         };
@@ -99,8 +99,8 @@ public partial class WelcomeDialog : Window
         if (string.IsNullOrEmpty(_config.TemplateDwgPath) || !File.Exists(_config.TemplateDwgPath))
         {
             MessageBox.Show(this,
-                "Please set a valid template DWG file before opening the mappings editor.",
-                "Template Required", MessageBoxButton.OK, MessageBoxImage.Warning);
+                "Please set a valid reference file before opening the mappings editor.",
+                "Reference Required", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 

@@ -9,6 +9,7 @@
     <AssemblyName>AcLayerStandardizer</AssemblyName>
     <RootNamespace>AcLayerStandardizer</RootNamespace>
     <NoWarn>MSB3277</NoWarn>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +25,10 @@
       <HintPath>C:\Program Files\Autodesk\AutoCAD 2026\acmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nodify" Version="7.3.0" />
   </ItemGroup>
 
 </Project>

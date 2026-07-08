@@ -55,10 +55,33 @@ public static class MappingsCommand
         var existingMappings = new Dictionary<string, string>(
             memory.Mappings, StringComparer.OrdinalIgnoreCase);
 
-        var dialog = new NodeGraphWindow(
-            activeLayers,
-            [.. standardLayers.Keys],
-            existingMappings);
+        var sortedSource = activeLayers.OrderBy(n => n).ToList();
+        var sortedStandard = standardLayers.Keys
+            .OrderBy(n => n == "0" ? 0 : 1)
+            .ThenBy(n => n)
+            .ToList();
+
+        NodeGraphWindow dialog;
+        try
+        {
+            dialog = new NodeGraphWindow(
+                sortedSource,
+                sortedStandard,
+                existingMappings);
+        }
+        catch (System.Exception ex)
+        {
+            var logPath = System.IO.Path.Combine(
+                System.Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                "std_mappings_error.log");
+            System.IO.File.WriteAllText(logPath,
+                $"=== STD_Mappings Error ===\nTime: {DateTime.UtcNow:O}\n\n{ex}\n");
+            ed.WriteMessage($"\nError creating editor — details written to {logPath}");
+            ed.WriteMessage($"\n  Exception: {ex.GetType().Name}: {ex.Message}");
+            if (ex.InnerException != null)
+                ed.WriteMessage($"\n  Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
+            return;
+        }
 
         new WindowInteropHelper(dialog) { Owner = Application.MainWindow.Handle };
 

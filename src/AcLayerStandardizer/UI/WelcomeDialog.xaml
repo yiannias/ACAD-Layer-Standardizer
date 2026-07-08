@@ -20,21 +20,21 @@
     </TextBlock>
     <TextBlock Grid.Row="1" TextWrapping="Wrap" Margin="0,0,0,20" LineHeight="20" Foreground="#444">
       This tool helps you standardize drawing layer names and properties
-      against a template DWG. Set your template and memory file below,
-      then open the visual mapping editor to connect your layers.
+      against a reference file (DWG/DWS). Set your reference and memory file below,
+       then open the visual mapping editor to connect your layers.
     </TextBlock>
 
     <Border Grid.Row="2" BorderBrush="#ccc" BorderThickness="1" Padding="16" CornerRadius="4"
             Background="#f9f9f9" Margin="0,0,0,16">
       <StackPanel>
-        <!-- Template DWG -->
+        <!-- Reference File -->
         <Grid Margin="0,0,0,10">
           <Grid.ColumnDefinitions>
             <ColumnDefinition Width="110" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
           </Grid.ColumnDefinitions>
-          <TextBlock Grid.Column="0" Text="Template DWG:" VerticalAlignment="Center" FontWeight="SemiBold" />
+          <TextBlock Grid.Column="0" Text="Reference File:" VerticalAlignment="Center" FontWeight="SemiBold" />
           <TextBlock Grid.Column="1" x:Name="TemplateLabel" VerticalAlignment="Center"
                      TextTrimming="CharacterEllipsis" ToolTipService.ShowDuration="30000"
                      Margin="0,0,8,0" />
@@ -64,7 +64,7 @@
     </StackPanel>
 
     <TextBlock Grid.Row="4" x:Name="StatusLine" Foreground="#888"
-               Text="Tip: set a template DWG first, then open the editor."
+               Text="Tip: set a reference file first, then open the editor."
                Margin="0,16,0,0" TextWrapping="Wrap" />
   </Grid>
 </Window>
