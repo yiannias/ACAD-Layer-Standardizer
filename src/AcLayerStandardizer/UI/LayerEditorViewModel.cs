@@ -79,6 +79,8 @@ public class LayerEditorViewModel
         {
             if (conn is null) return;
             conn.Source.IsMapped = false;
+            if (!Connections.Any(c => c != conn && c.Target == conn.Target))
+                conn.Target.IsMapped = false;
             Connections.Remove(conn);
         });
 
@@ -90,6 +92,8 @@ public class LayerEditorViewModel
                 if (c.Source == node || c.Target == node)
                 {
                     c.Source.IsMapped = false;
+                    if (!Connections.Any(other => other != c && other.Target == c.Target))
+                        c.Target.IsMapped = false;
                     Connections.RemoveAt(i);
                 }
             }
@@ -133,6 +137,8 @@ public class PendingConnectionViewModel
             {
                 var old = _editor.Connections.First(c => c.Source == _pendingSource);
                 old.Source.IsMapped = false;
+                if (!_editor.Connections.Any(other => other != old && other.Target == old.Target))
+                    old.Target.IsMapped = false;
                 _editor.Connections.Remove(old);
             }
 

@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:local="clr-namespace:AcLayerStandardizer.UI"
-        Title="Layer Mapping Editor"
+        Title="Layer Standardizer: Layer Mapping Editor"
         Width="900" Height="650"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" FontSize="12">
@@ -32,18 +32,18 @@
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center" />
                 </Border>
-                <!-- Connector port on right edge (source nodes) -->
+                <!-- Connector port on right edge -->
                 <Ellipse x:Name="SourceConnector"
                          Width="8" Height="8"
                          Fill="#aaa" Stroke="#555" StrokeThickness="0.5"
                          HorizontalAlignment="Right" VerticalAlignment="Center"
-                         Margin="0,0,-4,0" Visibility="Collapsed" />
-                <!-- Connector port on left edge (target nodes) -->
+                         Margin="0,0,0,0" />
+                <!-- Connector port on left edge -->
                 <Ellipse x:Name="TargetConnector"
                          Width="8" Height="8"
                          Fill="#aaa" Stroke="#555" StrokeThickness="0.5"
                          HorizontalAlignment="Left" VerticalAlignment="Center"
-                         Margin="-4,0,0,0" Visibility="Collapsed" />
+                         Margin="0,0,0,0" />
               </Grid>
               <ControlTemplate.Triggers>
                 <DataTrigger Binding="{Binding IsMapped}" Value="True">
@@ -137,23 +137,10 @@
       <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
-    <!-- Header -->
-    <Border Grid.Row="0" Background="#2d2d2d" Padding="12,8">
-      <Grid>
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="*" />
-          <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
-        <TextBlock Foreground="White" FontSize="14" FontWeight="SemiBold"
-                   VerticalAlignment="Center">
-          Drag from a source layer → standard layer to map. Click a connection to remove it.
-          Scroll to zoom. Middle-drag to pan.
-        </TextBlock>
-        <TextBlock Grid.Column="1" Foreground="#aaa"
-                   FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0">
-          100%
-        </TextBlock>
-      </Grid>
+    <!-- Title bar -->
+    <Border Grid.Row="0" Background="#2d2d2d" Padding="16,8">
+      <TextBlock Text="Layer Standardizer: Layer Mapping Editor"
+                 Foreground="White" FontSize="16" FontWeight="SemiBold" />
     </Border>
 
     <!-- Nodify editor area -->
@@ -174,6 +161,9 @@
             <Setter Property="Location" Value="{Binding Location}" />
             <Setter Property="ActualSize" Value="{Binding Size, Mode=OneWayToSource}" />
             <Setter Property="IsDraggable" Value="False" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
           </Style>
         </nodify:NodifyEditor.ItemContainerStyle>
 
@@ -183,9 +173,10 @@
               <nodify:StateNode.ContentTemplate>
                 <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
                   <TextBlock Text="{Binding Name}"
-                             Foreground="White"
+                             Foreground="#ddd"
+                             FontFamily="Fira Sans"
                              FontSize="11"
-                             FontWeight="SemiBold"
+                             FontWeight="Medium"
                              TextTrimming="CharacterEllipsis"
                              HorizontalAlignment="Center"
                              VerticalAlignment="Center" />
@@ -218,26 +209,33 @@
     <!-- Status bar + action buttons -->
     <Border Grid.Row="2" Background="#2d2d2d" Padding="12,10">
       <Grid>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-          <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <Button Grid.Column="0" Content="Close" Width="70"
-                Style="{StaticResource ModernButton}"
-                IsCancel="True" Click="OnClose" />
-        <TextBlock x:Name="StatusText" Grid.Column="1"
-                   Foreground="#aaa" VerticalAlignment="Center"
-                   Margin="12,0,0,0">
+        <!-- Guidance line -->
+        <TextBlock Grid.Row="0" Grid.ColumnSpan="3"
+                   Foreground="#aaa" FontSize="11"
+                   Text="Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan."
+                   Margin="0,0,0,4" />
+
+        <!-- Status + action buttons -->
+        <TextBlock x:Name="StatusText" Grid.Row="1" Grid.Column="0"
+                   Foreground="#aaa" FontSize="11"
+                   VerticalAlignment="Center">
           Ready
         </TextBlock>
-        <Button Grid.Column="2" Content="Apply Mappings"
+        <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
                 Style="{StaticResource ModernButton}"
                 Margin="0,0,8,0"
                 Click="OnApply" />
-        <Button Grid.Column="3" Content="Apply &amp; Save"
+        <Button Grid.Row="1" Grid.Column="2" Content="Apply &amp; Save"
                 Style="{StaticResource ModernButton}"
                 Foreground="White"
                 IsDefault="True"

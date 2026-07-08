@@ -7,6 +7,7 @@ public class LayerConnectionViewModel
         Source = source;
         Target = target;
         source.IsMapped = true;
+        target.IsMapped = true;
     }
 
     public LayerNodeViewModel Source { get; }

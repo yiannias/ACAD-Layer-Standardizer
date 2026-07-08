@@ -31,6 +31,8 @@ public partial class NodeGraphWindow : Window
         _viewModel = new LayerEditorViewModel(sourceLayers, standardLayers, existingMappings);
         DataContext = _viewModel;
 
+        Closing += OnWindowClosing;
+
         _viewModel.Connections.CollectionChanged += (_, _) =>
         {
             _hasChanges = true;
@@ -53,8 +55,8 @@ public partial class NodeGraphWindow : Window
     private void UpdateStatus()
     {
         StatusText.Text = _viewModel.Connections.Count == 0
-            ? "Drag from a source layer to a standard layer to create a mapping."
-            : $"{_viewModel.Connections.Count} mapping(s) — click a connection to remove it.";
+            ? "Ready"
+            : $"{_viewModel.Connections.Count} mapping(s) active";
     }
 
     private void OnApply(object sender, RoutedEventArgs e)
@@ -97,16 +99,19 @@ public partial class NodeGraphWindow : Window
         }
     }
 
-    private void OnClose(object sender, RoutedEventArgs e)
+    private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (_hasChanges)
         {
             var result = MessageBox.Show(
                 "Discard unsaved changes?", "Layer Mapping Editor",
                 MessageBoxButton.YesNo, MessageBoxImage.Warning);
-            if (result != MessageBoxResult.Yes) return;
+            if (result != MessageBoxResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
         }
         DialogResult = false;
-        Close();
     }
 }
