@@ -360,7 +360,7 @@ public static class StandardizeCommand
         foreach (ObjectId id in lt)
         {
             var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!IsSystemLayer(ltr.Name))
+            if (IsStandardizationCandidate(ltr.Name))
             {
                 names.Add(ltr.Name);
             }
@@ -370,10 +370,9 @@ public static class StandardizeCommand
         return names;
     }
 
-    private static bool IsSystemLayer(string name)
+    private static bool IsStandardizationCandidate(string name)
     {
-        return name is "0" or "Defpoints" or "AsBuilt"
-            || name.StartsWith("*") || name.StartsWith("_");
+        return !Core.LayerHelper.IsSystemLayer(name) && name != "0";
     }
 
     private static ObjectId? GetLayerId(LayerTable lt, Transaction tr, string name)
@@ -406,18 +405,23 @@ public static class StandardizeCommand
 
     private static List<long> TransferEntities(Database db, Transaction tr, ObjectId sourceLayerId, ObjectId targetLayerId)
     {
-        var blk = (BlockTableRecord)tr.GetObject(
-            db.CurrentSpaceId, OpenMode.ForRead);
         var handles = new List<long>();
+        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
 
-        foreach (ObjectId entId in blk)
+        foreach (ObjectId btrId in bt)
         {
-            var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
-            if (ent is not null && ent.LayerId == sourceLayerId)
+            var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
+            if (btr.IsFromExternalReference || btr.IsFromOverlayReference) continue;
+
+            foreach (ObjectId entId in btr)
             {
-                handles.Add(entId.Handle.Value);
-                ent.UpgradeOpen();
-                ent.LayerId = targetLayerId;
+                var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                if (ent is not null && ent.LayerId == sourceLayerId)
+                {
+                    handles.Add(entId.Handle.Value);
+                    ent.UpgradeOpen();
+                    ent.LayerId = targetLayerId;
+                }
             }
         }
 

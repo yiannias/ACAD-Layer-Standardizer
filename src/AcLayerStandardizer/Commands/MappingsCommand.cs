@@ -98,7 +98,7 @@ public static class MappingsCommand
         foreach (ObjectId id in lt)
         {
             var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!IsSystemLayer(ltr.Name))
+            if (!Core.LayerHelper.IsSystemLayer(ltr.Name))
                 names.Add(ltr.Name);
         }
 
@@ -106,9 +106,4 @@ public static class MappingsCommand
         return names;
     }
 
-    private static bool IsSystemLayer(string name)
-    {
-        return name is "Defpoints" or "AsBuilt"
-            || name.StartsWith("*") || name.StartsWith("_");
-    }
 }

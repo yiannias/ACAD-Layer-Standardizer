@@ -17,7 +17,7 @@ public static class SideDatabase
         foreach (ObjectId id in lt)
         {
             var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!IsSystemLayer(ltr))
+            if (!LayerHelper.IsSystemLayer(ltr.Name))
             {
                 layers[ltr.Name] = LayerProperties.FromLayerTableRecord(ltr, tr);
             }
@@ -27,10 +27,4 @@ public static class SideDatabase
         return layers;
     }
 
-    private static bool IsSystemLayer(LayerTableRecord ltr)
-    {
-        var name = ltr.Name;
-        return name is "Defpoints" or "AsBuilt"
-            || name.StartsWith("*") || name.StartsWith("_");
-    }
 }
