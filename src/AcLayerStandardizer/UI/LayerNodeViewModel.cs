@@ -6,7 +6,7 @@ public class LayerNodeViewModel : ObservableObject
 {
     private static readonly Dictionary<ConnectionMatchSource, string> SourceColors = new()
     {
-        [ConnectionMatchSource.ExactName] = "#00e676",
+        [ConnectionMatchSource.ExactName] = "#8bc34a",
         [ConnectionMatchSource.Memory] = "#448aff",
         [ConnectionMatchSource.Heuristic] = "#ffd740",
         [ConnectionMatchSource.Manual] = "#7c4dff",

@@ -25,11 +25,11 @@
                         BlurRadius="12"
                         ShadowDepth="3" />
 
-      <!-- Filter toggle button style -->
+      <!-- Filter toggle button style with animated transitions -->
       <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
         <Setter Property="Foreground" Value="White" />
-        <Setter Property="FontSize" Value="12" />
-        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="ToggleButton">
@@ -37,14 +37,40 @@
                       Background="{TemplateBinding Background}"
                       CornerRadius="4"
                       BorderThickness="0">
-                <TextBlock Text="{TemplateBinding Content}"
-                           Foreground="{TemplateBinding Foreground}"
+                <TextBlock x:Name="Tb"
+                           Text="{TemplateBinding Content}"
+                           Foreground="White"
+                           FontWeight="Bold"
+                           FontSize="13"
                            HorizontalAlignment="Center"
                            VerticalAlignment="Center" />
               </Border>
               <ControlTemplate.Triggers>
-                <Trigger Property="IsChecked" Value="False">
-                  <Setter TargetName="Bg" Property="Opacity" Value="0.3" />
+                <Trigger Property="IsChecked" Value="True">
+                  <Trigger.EnterActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Bg"
+                                         Storyboard.TargetProperty="Opacity"
+                                         To="1" Duration="0:0:0.2" />
+                        <ColorAnimation Storyboard.TargetName="Tb"
+                                        Storyboard.TargetProperty="Foreground.Color"
+                                        To="#222" Duration="0:0:0.2" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.EnterActions>
+                  <Trigger.ExitActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Bg"
+                                         Storyboard.TargetProperty="Opacity"
+                                         To="0.3" Duration="0:0:0.2" />
+                        <ColorAnimation Storyboard.TargetName="Tb"
+                                        Storyboard.TargetProperty="Foreground.Color"
+                                        To="White" Duration="0:0:0.2" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.ExitActions>
                 </Trigger>
                 <Trigger Property="IsMouseOver" Value="True">
                   <Setter TargetName="Bg" Property="Opacity" Value="0.85" />
@@ -162,7 +188,7 @@
             <DrawingGroup>
               <GeometryDrawing Geometry="M 0,0 L 0,24 M 0,0 L 24,0">
                 <GeometryDrawing.Pen>
-                  <Pen Brush="#33ffffff" Thickness="1" />
+                  <Pen Brush="#22ffffff" Thickness="1" />
                 </GeometryDrawing.Pen>
               </GeometryDrawing>
             </DrawingGroup>
@@ -178,8 +204,8 @@
     </Grid.RowDefinitions>
 
     <!-- Nodify editor area -->
-    <Grid Grid.Row="0" Background="#1e1e1e">
-      <Rectangle Fill="{StaticResource GridBrush}" Opacity="0.2" IsHitTestVisible="False" />
+    <Grid Grid.Row="0" Background="#141414">
+      <Rectangle Fill="{StaticResource GridBrush}" Opacity="0.15" IsHitTestVisible="False" />
 
       <nodify:NodifyEditor x:Name="Editor"
                             Background="Transparent"
@@ -251,7 +277,9 @@
               Margin="25,25,0,0"
               Padding="14,12"
               CornerRadius="8"
-              Background="#CC2a2a2a"
+              Background="#882a2a2a"
+              BorderBrush="#999"
+              BorderThickness="3"
               Panel.ZIndex="10"
               Effect="{StaticResource PanelShadow}">
         <StackPanel Orientation="Vertical">
@@ -264,7 +292,7 @@
                      Margin="0,0,0,10" />
 
           <ToggleButton Content="Exact Match"
-                        Background="#00e676"
+                        Background="#8bc34a"
                         IsChecked="{Binding IsExactNameVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -333,7 +361,7 @@
         </TextBlock>
         <TextBlock Grid.Row="2" Grid.Column="0"
                    Foreground="#555" FontSize="10"
-                   VerticalAlignment="Center">v12</TextBlock>
+                    VerticalAlignment="Center">2027-07-08.v1 (ALPHA)</TextBlock>
         <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
                 Style="{StaticResource ModernButton}"
                 Margin="0,0,8,0"
