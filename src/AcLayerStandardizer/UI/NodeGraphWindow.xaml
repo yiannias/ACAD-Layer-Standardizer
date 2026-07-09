@@ -115,7 +115,7 @@
                       <Storyboard>
                         <ColorAnimation Storyboard.TargetName="Track"
                                         Storyboard.TargetProperty="Background.Color"
-                                        To="#8bc34a" Duration="0:0:0.15" />
+                                        To="#4682b4" Duration="0:0:0.15" />
                         <DoubleAnimation Storyboard.TargetName="Thumb"
                                         Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.X)"
                                         To="20" Duration="0:0:0.15" />
@@ -214,8 +214,8 @@
         <Setter Property="Foreground" Value="#eee" />
         <Setter Property="BorderBrush" Value="#555" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="16,6" />
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="24,10" />
+        <Setter Property="FontSize" Value="18" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -301,7 +301,7 @@
               <nodify:StateNode.ContentTemplate>
                 <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
                   <TextBlock Text="{Binding Name}"
-                             Foreground="#888"
+                             Foreground="#222"
                              FontFamily="Fira Sans"
                              FontSize="11"
                              FontWeight="Medium"
@@ -402,6 +402,11 @@
           <!-- Empty layer actions -->
           <Rectangle Height="1" Fill="#555" Margin="0,10" />
 
+          <TextBlock Text="Empty Layers"
+                     FontSize="13"
+                     Foreground="#777"
+                     Margin="0,0,0,8" />
+
           <Grid Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*" />
@@ -410,20 +415,20 @@
             </Grid.ColumnDefinitions>
 
             <ToggleButton Grid.Column="0"
-                          Content="Highlight Empty"
+                          Content="Highlight"
                           IsChecked="{Binding IsEmptyHighlighted}"
                           Style="{StaticResource FilterToggleButton}"
-                          Background="#b71c1c"
-                          Width="Auto" Height="32"
+                          Background="#c62828"
+                          Width="80" Height="32"
                           Cursor="Hand" />
 
             <Button Grid.Column="2"
-                    Content="Purge Unused"
+                    Content="Purge"
                     Command="{Binding PurgeUnusedCommand}"
                     Style="{StaticResource ModernButton}"
-                    Background="#5a0000"
-                    Foreground="#eee"
-                    Width="Auto" Height="32"
+                    Background="#c62828"
+                    Foreground="White"
+                    Width="80" Height="32"
                     Cursor="Hand" />
           </Grid>
 
@@ -462,11 +467,10 @@
       </Border>
     </Grid>
 
-    <!-- Status bar + action buttons -->
+      <!-- Status bar + action buttons -->
     <Border Grid.Row="1" Background="#2d2d2d" Padding="12,10">
       <Grid>
         <Grid.RowDefinitions>
-          <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
           <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -478,19 +482,30 @@
 
         <!-- Guidance line -->
         <TextBlock Grid.Row="0" Grid.ColumnSpan="3"
-                   Foreground="#aaa" FontSize="11"
+                   Foreground="#aaa"
+                   FontFamily="Fira Sans"
+                   FontSize="15"
                    Text="Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan."
                    Margin="0,0,0,4" />
 
-        <!-- Status + action buttons -->
-        <TextBlock x:Name="StatusText" Grid.Row="1" Grid.Column="0"
-                   Foreground="#aaa" FontSize="11"
-                   VerticalAlignment="Center">
-          Ready
-        </TextBlock>
-        <TextBlock Grid.Row="2" Grid.Column="0"
-                   Foreground="#555" FontSize="10"
-                    VerticalAlignment="Center">2026-07-09.v1 (ALPHA)</TextBlock>
+        <!-- Status + build version + action buttons -->
+        <StackPanel Grid.Row="1" Grid.Column="0"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center">
+          <TextBlock x:Name="StatusText"
+                     Foreground="#aaa"
+                     FontFamily="Fira Sans"
+                     FontSize="15"
+                     VerticalAlignment="Center">
+            Ready
+          </TextBlock>
+          <TextBlock Foreground="#555"
+                     FontFamily="Fira Sans"
+                     FontSize="15"
+                     VerticalAlignment="Center"
+                     Margin="14,0,0,0">2026-07-09.v2 (ALPHA)</TextBlock>
+        </StackPanel>
+
         <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
                 Style="{StaticResource ModernButton}"
                 Margin="0,0,8,0"
@@ -498,22 +513,12 @@
         <Button Grid.Row="1" Grid.Column="2" Content="Apply &amp; Save"
                 Style="{StaticResource ModernButton}"
                 Foreground="White"
+                Background="#4682b4"
+                BorderBrush="#5a9ec4"
                 IsDefault="True"
                 Click="OnApplyAndSave">
-          <Button.Background>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-              <GradientStop Color="#7c4dff" Offset="0.0" />
-              <GradientStop Color="#536dfe" Offset="1.0" />
-            </LinearGradientBrush>
-          </Button.Background>
-          <Button.BorderBrush>
-            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-              <GradientStop Color="#651fff" Offset="0.0" />
-              <GradientStop Color="#3d5afe" Offset="1.0" />
-            </LinearGradientBrush>
-          </Button.BorderBrush>
           <Button.Effect>
-            <DropShadowEffect Color="#7c4dff" Opacity="0.35" BlurRadius="10" ShadowDepth="3" />
+            <DropShadowEffect Color="#4682b4" Opacity="0.35" BlurRadius="10" ShadowDepth="3" />
           </Button.Effect>
         </Button>
       </Grid>
