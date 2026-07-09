@@ -1,0 +1,128 @@
+<Window x:Class="AcLayerStandardizer.UI.PurgeConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Purge Unused Layers"
+        Width="480" Height="500"
+        WindowStartupLocation="CenterScreen"
+        Background="#1a1a1a"
+        Foreground="#ccc"
+        FontFamily="Fira Sans"
+        FontSize="14"
+        ShowInTaskbar="False"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        AllowsTransparency="False"
+        MouseDown="Window_MouseDown">
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Grid.Row="0"
+               TextWrapping="Wrap"
+               Foreground="#ccc"
+               FontSize="15"
+               Margin="0,0,0,12">
+      <Run x:Name="CountRun" /><Run Text=" unused layer(s) will be permanently deleted. Continue?" />
+    </TextBlock>
+
+    <Border Grid.Row="1"
+            Background="#111"
+            BorderBrush="#444"
+            BorderThickness="1"
+            CornerRadius="4"
+            Margin="0,0,0,16">
+      <ScrollViewer VerticalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Disabled"
+                    Padding="8">
+        <ItemsControl x:Name="LayerList" />
+      </ScrollViewer>
+    </Border>
+
+    <StackPanel Grid.Row="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right">
+      <Button x:Name="CancelButton"
+              Content="Cancel"
+              Width="100" Height="34"
+              Margin="0,0,10,0"
+              Cursor="Hand"
+              IsCancel="True"
+              Click="OnCancel">
+        <Button.Style>
+          <Style TargetType="Button">
+            <Setter Property="Background" Value="#3a3a3a" />
+            <Setter Property="Foreground" Value="#eee" />
+            <Setter Property="BorderBrush" Value="#555" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                  <Border Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="6"
+                          Padding="16,6">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter Property="Background" Value="#4a4a4a" />
+                      <Setter Property="BorderBrush" Value="#888" />
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                      <Setter Property="Background" Value="#2a2a2a" />
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Button.Style>
+      </Button>
+
+      <Button x:Name="ConfirmButton"
+              Content="Purge"
+              Width="100" Height="34"
+              Cursor="Hand"
+              IsDefault="True"
+              Click="OnConfirm">
+        <Button.Style>
+          <Style TargetType="Button">
+            <Setter Property="Background" Value="#c62828" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#e53935" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                  <Border Background="{TemplateBinding Background}"
+                          BorderBrush="{TemplateBinding BorderBrush}"
+                          BorderThickness="{TemplateBinding BorderThickness}"
+                          CornerRadius="6"
+                          Padding="16,6">
+                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter Property="Background" Value="#e53935" />
+                    </Trigger>
+                    <Trigger Property="IsPressed" Value="True">
+                      <Setter Property="Background" Value="#b71c1c" />
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </Button.Style>
+      </Button>
+    </StackPanel>
+  </Grid>
+</Window>

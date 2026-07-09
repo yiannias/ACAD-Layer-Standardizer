@@ -214,8 +214,8 @@
         <Setter Property="Foreground" Value="#eee" />
         <Setter Property="BorderBrush" Value="#555" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="24,10" />
-        <Setter Property="FontSize" Value="18" />
+        <Setter Property="Padding" Value="17,7" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -467,8 +467,8 @@
       </Border>
     </Grid>
 
-      <!-- Status bar + action buttons -->
-    <Border Grid.Row="1" Background="#2d2d2d" Padding="12,10">
+    <!-- Status bar + action buttons -->
+    <Border Grid.Row="1" Background="#2d2d2d" Padding="12,7">
       <Grid>
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
@@ -506,15 +506,17 @@
                      Margin="14,0,0,0">2026-07-09.v2 (ALPHA)</TextBlock>
         </StackPanel>
 
-        <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
+        <Button Grid.Row="1" Grid.Column="1" Content="Apply"
                 Style="{StaticResource ModernButton}"
+                VerticalAlignment="Center"
                 Margin="0,0,8,0"
                 Click="OnApply" />
-        <Button Grid.Row="1" Grid.Column="2" Content="Apply &amp; Save"
+        <Button Grid.Row="1" Grid.Column="2" Content="Apply &amp; Remember"
                 Style="{StaticResource ModernButton}"
                 Foreground="White"
                 Background="#4682b4"
                 BorderBrush="#5a9ec4"
+                VerticalAlignment="Center"
                 IsDefault="True"
                 Click="OnApplyAndSave">
           <Button.Effect>
