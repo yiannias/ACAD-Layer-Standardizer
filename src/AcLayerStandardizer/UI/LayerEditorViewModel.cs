@@ -6,7 +6,7 @@ using Nodify;
 
 namespace AcLayerStandardizer.UI;
 
-public class LayerEditorViewModel
+public class LayerEditorViewModel : ObservableObject
 {
     private const double NodeWidth = 170;
     private const double NodeHeight = 30;
@@ -22,6 +22,72 @@ public class LayerEditorViewModel
 
     public ICommand RemoveConnectionCommand { get; }
     public ICommand DisconnectConnectorCommand { get; }
+    public ICommand ToggleFilterCommand { get; }
+
+    private bool _isExactNameVisible = true;
+    public bool IsExactNameVisible
+    {
+        get => _isExactNameVisible;
+        set
+        {
+            if (_isExactNameVisible == value) return;
+            _isExactNameVisible = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
+
+    private bool _isMemoryMatchVisible = true;
+    public bool IsMemoryMatchVisible
+    {
+        get => _isMemoryMatchVisible;
+        set
+        {
+            if (_isMemoryMatchVisible == value) return;
+            _isMemoryMatchVisible = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
+
+    private bool _isHeuristicMatchVisible = true;
+    public bool IsHeuristicMatchVisible
+    {
+        get => _isHeuristicMatchVisible;
+        set
+        {
+            if (_isHeuristicMatchVisible == value) return;
+            _isHeuristicMatchVisible = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
+
+    private bool _isManualMatchVisible = true;
+    public bool IsManualMatchVisible
+    {
+        get => _isManualMatchVisible;
+        set
+        {
+            if (_isManualMatchVisible == value) return;
+            _isManualMatchVisible = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
+
+    private bool _isUnmatchedVisible = true;
+    public bool IsUnmatchedVisible
+    {
+        get => _isUnmatchedVisible;
+        set
+        {
+            if (_isUnmatchedVisible == value) return;
+            _isUnmatchedVisible = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
 
     public IReadOnlyDictionary<string, string> CurrentMappings
     {
@@ -109,6 +175,7 @@ public class LayerEditorViewModel
             if (!Connections.Any(c => c != conn && c.Target == conn.Target))
                 conn.Target.IsMapped = false;
             Connections.Remove(conn);
+            ApplyFilters();
         });
 
         DisconnectConnectorCommand = new DelegateCommand<LayerNodeViewModel>(node =>
@@ -124,7 +191,99 @@ public class LayerEditorViewModel
                     Connections.RemoveAt(i);
                 }
             }
+            ApplyFilters();
         });
+
+        ToggleFilterCommand = new DelegateCommand<ConnectionMatchSource>(source =>
+        {
+            switch (source)
+            {
+                case ConnectionMatchSource.ExactName: IsExactNameVisible = !IsExactNameVisible; break;
+                case ConnectionMatchSource.Memory: IsMemoryMatchVisible = !IsMemoryMatchVisible; break;
+                case ConnectionMatchSource.Heuristic: IsHeuristicMatchVisible = !IsHeuristicMatchVisible; break;
+                case ConnectionMatchSource.Manual: IsManualMatchVisible = !IsManualMatchVisible; break;
+                case ConnectionMatchSource.Unmatched: IsUnmatchedVisible = !IsUnmatchedVisible; break;
+            }
+        });
+
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        foreach (var node in Nodes)
+        {
+            if (!node.IsSource)
+            {
+                node.IsVisible = true;
+                continue;
+            }
+
+            var conn = Connections.FirstOrDefault(c => c.Source == node);
+            ConnectionMatchSource matchType;
+
+            if (conn is null)
+                matchType = ConnectionMatchSource.Unmatched;
+            else
+                matchType = conn.MatchSource;
+
+            node.IsVisible = matchType switch
+            {
+                ConnectionMatchSource.ExactName => IsExactNameVisible,
+                ConnectionMatchSource.Memory => IsMemoryMatchVisible,
+                ConnectionMatchSource.Heuristic => IsHeuristicMatchVisible,
+                ConnectionMatchSource.Manual => IsManualMatchVisible,
+                ConnectionMatchSource.Unmatched => IsUnmatchedVisible,
+                _ => true,
+            };
+        }
+
+        foreach (var conn in Connections)
+        {
+            conn.IsVisible = conn.Source.IsVisible;
+        }
+
+        RepositionVisibleNodes();
+        UpdateTargetNodeColors();
+    }
+
+    private void RepositionVisibleNodes()
+    {
+        var visibleSources = Nodes.Where(n => n.IsSource && n.IsVisible).ToList();
+
+        for (int i = 0; i < visibleSources.Count; i++)
+        {
+            visibleSources[i].Location = new Point(LeftColX, TopMargin + i * NodeSpacing);
+        }
+    }
+
+    private void UpdateTargetNodeColors()
+    {
+        var targetColors = new Dictionary<LayerNodeViewModel, string>();
+
+        foreach (var conn in Connections)
+        {
+            if (!targetColors.ContainsKey(conn.Target))
+            {
+                targetColors[conn.Target] = conn.MatchSource switch
+                {
+                    ConnectionMatchSource.ExactName => "#1b5e20",
+                    ConnectionMatchSource.Memory => "#0d47a1",
+                    ConnectionMatchSource.Heuristic => "#e65100",
+                    ConnectionMatchSource.Manual => "#4a148c",
+                    _ => "#4a6b8a",
+                };
+            }
+        }
+
+        foreach (var node in Nodes)
+        {
+            if (node.IsSource) continue;
+            if (targetColors.TryGetValue(node, out var color))
+                node.BackgroundColor = color;
+            else
+                node.BackgroundColor = "#424242";
+        }
     }
 }
 
