@@ -16,6 +16,7 @@
       <local:BooleanToVisibilityConverter x:Key="BoolToVis" />
       <local:InverseBooleanToVisibilityConverter x:Key="InvBoolToVis" />
       <local:ColorStringToBrushConverter x:Key="ColorStringToBrush" />
+      <local:BooleanToOpacityConverter x:Key="BoolToOpacity" />
 
       <!-- Layer node style: base dark, slate-blue when mapped -->
       <Style TargetType="nodify:StateNode">
@@ -57,8 +58,8 @@
           </Setter.Value>
         </Setter>
         <Style.Triggers>
-          <DataTrigger Binding="{Binding IsMapped}" Value="True">
-            <Setter Property="Background" Value="#4a6b8a" />
+          <DataTrigger Binding="{Binding IsSource}" Value="False">
+            <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
           </DataTrigger>
           <Trigger Property="IsMouseOver" Value="True">
             <Setter Property="BorderBrush" Value="#fff" />
@@ -158,6 +159,7 @@
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
           </Style>
         </nodify:NodifyEditor.ItemContainerStyle>
 
@@ -186,7 +188,8 @@
                                 Target="{Binding Target.Anchor, Mode=OneWay}"
                                 Stroke="{Binding Stroke, Converter={StaticResource ColorStringToBrush}}"
                                 StrokeDashArray="{Binding StrokeDashCollection}"
-                                PreviewMouseDown="OnConnectionPreviewMouseDown" />
+                                PreviewMouseDown="OnConnectionPreviewMouseDown"
+                                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
           </DataTemplate>
         </nodify:NodifyEditor.ConnectionTemplate>
 
@@ -200,6 +203,77 @@
           </DataTemplate>
         </nodify:NodifyEditor.PendingConnectionTemplate>
       </nodify:NodifyEditor>
+
+      <!-- Floating filter toggles (top-right, fixed, legend + toggle) -->
+      <StackPanel Grid.Row="0"
+                  Orientation="Vertical"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="0,16,16,0"
+                  Panel.ZIndex="10">
+        <StackPanel.Resources>
+          <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Width" Value="20" />
+            <Setter Property="Height" Value="20" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="Opacity" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToOpacity}}" />
+            <Setter Property="Template">
+              <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                  <Border x:Name="Border"
+                          Width="20" Height="20"
+                          CornerRadius="4"
+                          Background="{TemplateBinding Background}"
+                          BorderThickness="1"
+                          BorderBrush="#555">
+                    <TextBlock Text=""
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               FontSize="9" FontWeight="Bold"
+                               Foreground="White" />
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="Border" Property="BorderBrush" Value="#fff" />
+                      <Setter TargetName="Border" Property="Width" Value="22" />
+                      <Setter TargetName="Border" Property="Height" Value="22" />
+                    </Trigger>
+                    <Trigger Property="IsChecked" Value="False">
+                      <Setter TargetName="Border" Property="Opacity" Value="0.5" />
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Setter.Value>
+            </Setter>
+          </Style>
+        </StackPanel.Resources>
+
+        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                      Background="#00e676"
+                      IsChecked="{Binding IsExactNameVisible}"
+                      ToolTip="Exact Match" />
+
+        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                      Background="#448aff"
+                      IsChecked="{Binding IsMemoryMatchVisible}"
+                      ToolTip="Memory Match" />
+
+        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                      Background="#ffd740"
+                      IsChecked="{Binding IsHeuristicMatchVisible}"
+                      ToolTip="Heuristic Match" />
+
+        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                      Background="#7c4dff"
+                      IsChecked="{Binding IsManualMatchVisible}"
+                      ToolTip="Manual Match" />
+
+        <ToggleButton Style="{StaticResource FilterToggleButton}"
+                      Background="#888"
+                      IsChecked="{Binding IsUnmatchedVisible}"
+                      ToolTip="Unmatched" />
+      </StackPanel>
     </Grid>
 
     <!-- Status bar + action buttons -->
