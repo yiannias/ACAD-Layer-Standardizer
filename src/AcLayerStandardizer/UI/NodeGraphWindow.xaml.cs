@@ -104,6 +104,39 @@ public partial class NodeGraphWindow : Window
         }
     }
 
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Space && !e.IsRepeat)
+        {
+            var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
+            if (eg is null)
+            {
+                eg = new Nodify.Interactivity.EditorGestures();
+                Editor.InputGestures = eg;
+            }
+            eg.Editor.Pan.Value = new Nodify.Interactivity.AnyGesture(
+                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.LeftClick));
+        }
+    }
+
+    private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Space)
+        {
+            var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
+            if (eg is null)
+            {
+                eg = new Nodify.Interactivity.EditorGestures();
+                Editor.InputGestures = eg;
+            }
+            eg.Editor.Pan.Value = new Nodify.Interactivity.AnyGesture(
+                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick));
+        }
+    }
+
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (_hasChanges && DialogResult is null)

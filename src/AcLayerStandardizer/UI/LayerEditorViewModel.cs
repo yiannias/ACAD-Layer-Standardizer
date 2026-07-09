@@ -14,6 +14,8 @@ public class LayerEditorViewModel : ObservableObject
     private const double TopMargin = 40;
     private const double LeftColX = 50;
     private const double RightColX = 550;
+    private const double TargetColumnGap = 40;
+    private const int TargetColumns = 3;
 
     public ObservableCollection<LayerNodeViewModel> Nodes { get; } = [];
     public ObservableCollection<LayerConnectionViewModel> Connections { get; } = [];
@@ -119,8 +121,7 @@ public class LayerEditorViewModel : ObservableObject
 
         for (int i = 0; i < standardLayers.Count; i++)
         {
-            var loc = new Point(RightColX, TopMargin + i * NodeSpacing);
-            var vm = new LayerNodeViewModel(standardLayers[i], false, loc);
+            var vm = new LayerNodeViewModel(standardLayers[i], false, new Point(0, 0));
             standardModels.Add(vm);
             Nodes.Add(vm);
         }
@@ -206,6 +207,7 @@ public class LayerEditorViewModel : ObservableObject
             }
         });
 
+        ArrangeTargetsInColumns();
         ApplyFilters();
     }
 
@@ -253,6 +255,89 @@ public class LayerEditorViewModel : ObservableObject
         for (int i = 0; i < visibleSources.Count; i++)
         {
             visibleSources[i].Location = new Point(LeftColX, TopMargin + i * NodeSpacing);
+        }
+    }
+
+    private static string ExtractPrefix(string layerName)
+    {
+        int hyphenCount = 0;
+        int cutIndex = -1;
+        for (int i = 0; i < layerName.Length; i++)
+        {
+            if (layerName[i] == '-')
+            {
+                hyphenCount++;
+                if (hyphenCount == 2)
+                {
+                    cutIndex = i;
+                    break;
+                }
+            }
+        }
+        return cutIndex >= 0 ? layerName[..cutIndex] : layerName;
+    }
+
+    private void ArrangeTargetsInColumns()
+    {
+        var targetNodes = Nodes.Where(n => !n.IsSource).ToList();
+        if (targetNodes.Count == 0) return;
+
+        var mapped = new List<(LayerNodeViewModel node, double sortKey)>();
+        var unmapped = new List<LayerNodeViewModel>();
+
+        foreach (var target in targetNodes)
+        {
+            var conns = Connections.Where(c => c.Target == target).ToList();
+            if (conns.Count > 0)
+            {
+                double avgY = conns.Average(c => c.Source.Location.Y);
+                mapped.Add((target, avgY));
+            }
+            else
+            {
+                unmapped.Add(target);
+            }
+        }
+
+        mapped.Sort((a, b) => a.sortKey.CompareTo(b.sortKey));
+
+        var unmappedOrdered = unmapped
+            .GroupBy(n => ExtractPrefix(n.Name))
+            .OrderByDescending(g => g.Count())
+            .SelectMany(g => g.OrderBy(n => n.Name));
+
+        var orderedTargets = mapped.Select(m => m.node).Concat(unmappedOrdered).ToList();
+        int total = orderedTargets.Count;
+        int idealPerColumn = (int)Math.Ceiling((double)total / TargetColumns);
+
+        var columns = new List<string>[TargetColumns];
+        for (int i = 0; i < TargetColumns; i++)
+            columns[i] = [];
+
+        int col = 0;
+        int currentCount = 0;
+        foreach (var node in orderedTargets)
+        {
+            if (currentCount >= idealPerColumn && col < TargetColumns - 1)
+            {
+                col++;
+                currentCount = 0;
+            }
+            columns[col].Add(node.Name);
+            currentCount++;
+        }
+
+        double x = RightColX;
+        for (int c = 0; c < TargetColumns; c++)
+        {
+            double y = TopMargin;
+            foreach (var name in columns[c])
+            {
+                var node = targetNodes.First(n => n.Name == name);
+                node.Location = new Point(x, y);
+                y += NodeSpacing;
+            }
+            x += NodeWidth + TargetColumnGap;
         }
     }
 
