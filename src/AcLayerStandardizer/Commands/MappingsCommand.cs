@@ -61,6 +61,9 @@ public static class MappingsCommand
             .ThenBy(n => n)
             .ToList();
 
+        // Detect empty source layers
+        var emptyLayers = GetEmptyLayers(doc.Database);
+
         // Run heuristic matching for all source layers not already in memory
         var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
         var heuristicResults = new List<MatchResult>();
@@ -79,7 +82,21 @@ public static class MappingsCommand
                 sortedSource,
                 sortedStandard,
                 memory.Mappings,
-                heuristicResults);
+                heuristicResults,
+                emptyLayers,
+                names =>
+                {
+                    using var purgeTr = doc.Database.TransactionManager.StartTransaction();
+                    var purgeLt = (LayerTable)purgeTr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
+                    foreach (var name in names)
+                    {
+                        if (!purgeLt.Has(name)) continue;
+                        var ltr = (LayerTableRecord)purgeTr.GetObject(purgeLt[name], OpenMode.ForWrite);
+                        try { ltr.Erase(true); }
+                        catch { }
+                    }
+                    purgeTr.Commit();
+                });
         }
         catch (System.Exception ex)
         {
@@ -123,12 +140,55 @@ public static class MappingsCommand
         if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)
         {
             var result = StandardizeCommand.ApplyMappings(
-                doc.Database, resultMappings, standardLayers);
+                doc.Database, resultMappings, standardLayers, dialog.PropertySettings);
             ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
             ed.WriteMessage($"\n  Properties synced: {result.Synced}");
             ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");
             ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
         }
+    }
+
+    private static HashSet<string> GetEmptyLayers(Database db)
+    {
+        var layerCounts = new Dictionary<ObjectId, int>();
+
+        using var tr = db.TransactionManager.StartTransaction();
+
+        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+        foreach (ObjectId id in lt)
+            layerCounts[id] = 0;
+
+        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+        foreach (ObjectId btrId in bt)
+        {
+            var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
+            if (btr.IsFromExternalReference || btr.IsFromOverlayReference) continue;
+
+            foreach (ObjectId entId in btr)
+            {
+                var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                if (ent is null || ent.IsErased) continue;
+                if (layerCounts.ContainsKey(ent.LayerId))
+                    layerCounts[ent.LayerId]++;
+            }
+        }
+
+        tr.Commit();
+
+        var emptyIds = layerCounts.Where(kvp => kvp.Value == 0)
+            .Select(kvp => kvp.Key).ToHashSet();
+
+        var emptyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var tr2 = db.TransactionManager.StartTransaction();
+        var lt2 = (LayerTable)tr2.GetObject(db.LayerTableId, OpenMode.ForRead);
+        foreach (var id in emptyIds)
+        {
+            var ltr = (LayerTableRecord)tr2.GetObject(id, OpenMode.ForRead);
+            emptyNames.Add(ltr.Name);
+        }
+        tr2.Commit();
+
+        return emptyNames;
     }
 
     private static List<string> GetActiveLayerNames(Database db)

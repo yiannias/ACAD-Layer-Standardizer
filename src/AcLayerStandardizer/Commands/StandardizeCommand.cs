@@ -203,7 +203,8 @@ public static class StandardizeCommand
     public static ApplyMappingsResult ApplyMappings(
         Database db,
         IReadOnlyDictionary<string, string> mappings,
-        IReadOnlyDictionary<string, LayerProperties> standardLayers)
+        IReadOnlyDictionary<string, LayerProperties> standardLayers,
+        PropertyMatchSettings? propSettings = null)
     {
         var snapshot = new RollbackSnapshot();
         var renamed = 0;
@@ -277,12 +278,23 @@ public static class StandardizeCommand
                 if (standardLayers.TryGetValue(target, out var props))
                 {
                     var ltr = (LayerTableRecord)tr.GetObject(targetId, OpenMode.ForWrite);
-                    ltr.Color = props.Color;
-                    ltr.LinetypeObjectId = GetLinetypeId(db, tr, props.Linetype);
-                    ltr.LineWeight = props.LineWeight;
+
+                    var settings = propSettings ?? new PropertyMatchSettings();
+
+                    if (settings.MatchColor)
+                        ltr.Color = props.Color;
+
+                    if (settings.MatchLinetype)
+                        ltr.LinetypeObjectId = GetLinetypeId(db, tr, props.Linetype);
+
+                    if (settings.MatchLineweight)
+                        ltr.LineWeight = props.LineWeight;
+
                     ltr.IsPlottable = props.IsPlottable;
+
                     if (!string.IsNullOrEmpty(props.Description))
                         ltr.Description = props.Description;
+
                     synced++;
                 }
 

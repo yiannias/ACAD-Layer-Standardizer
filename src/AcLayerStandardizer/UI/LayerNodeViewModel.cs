@@ -23,11 +23,25 @@ public class LayerNodeViewModel : ObservableObject
         set => SetProperty(ref _isMapped, value);
     }
 
+    private bool _isEmpty;
+    public bool IsEmpty
+    {
+        get => _isEmpty;
+        set => SetProperty(ref _isEmpty, value);
+    }
+
     private bool _isVisible = true;
     public bool IsVisible
     {
         get => _isVisible;
         set => SetProperty(ref _isVisible, value);
+    }
+
+    private string _backgroundColor = "#424242";
+    public string BackgroundColor
+    {
+        get => _backgroundColor;
+        set => SetProperty(ref _backgroundColor, value);
     }
 
     private string _connectorColor = "#aaa";

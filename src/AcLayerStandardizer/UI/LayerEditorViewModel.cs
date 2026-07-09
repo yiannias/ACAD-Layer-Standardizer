@@ -15,7 +15,6 @@ public class LayerEditorViewModel : ObservableObject
     private const double LeftColX = 50;
     private const double RightColX = 550;
     private const double TargetColumnGap = 40;
-    private const int TargetColumns = 3;
 
     public ObservableCollection<LayerNodeViewModel> Nodes { get; } = [];
     public ObservableCollection<LayerConnectionViewModel> Connections { get; } = [];
@@ -25,6 +24,13 @@ public class LayerEditorViewModel : ObservableObject
     public ICommand RemoveConnectionCommand { get; }
     public ICommand DisconnectConnectorCommand { get; }
     public ICommand ToggleFilterCommand { get; }
+
+    private ICommand _purgeUnusedCommand = new DelegateCommand<object>(_ => { });
+    public ICommand PurgeUnusedCommand
+    {
+        get => _purgeUnusedCommand;
+        set => SetProperty(ref _purgeUnusedCommand, value);
+    }
 
     private bool _isExactNameVisible = true;
     public bool IsExactNameVisible
@@ -91,6 +97,55 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
+    private bool _isMatchColorEnabled = true;
+    public bool IsMatchColorEnabled
+    {
+        get => _isMatchColorEnabled;
+        set
+        {
+            if (_isMatchColorEnabled == value) return;
+            _isMatchColorEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isMatchLinetypeEnabled = true;
+    public bool IsMatchLinetypeEnabled
+    {
+        get => _isMatchLinetypeEnabled;
+        set
+        {
+            if (_isMatchLinetypeEnabled == value) return;
+            _isMatchLinetypeEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isMatchLineweightEnabled = true;
+    public bool IsMatchLineweightEnabled
+    {
+        get => _isMatchLineweightEnabled;
+        set
+        {
+            if (_isMatchLineweightEnabled == value) return;
+            _isMatchLineweightEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    private bool _isEmptyHighlighted;
+    public bool IsEmptyHighlighted
+    {
+        get => _isEmptyHighlighted;
+        set
+        {
+            if (_isEmptyHighlighted == value) return;
+            _isEmptyHighlighted = value;
+            OnPropertyChanged();
+            UpdateNodeColors();
+        }
+    }
+
     public IReadOnlyDictionary<string, string> CurrentMappings
     {
         get
@@ -106,7 +161,8 @@ public class LayerEditorViewModel : ObservableObject
         List<string> sourceLayers,
         List<string> standardLayers,
         Dictionary<string, string>? memoryMappings = null,
-        List<Matching.MatchResult>? heuristicResults = null)
+        List<Matching.MatchResult>? heuristicResults = null,
+        HashSet<string>? emptyLayers = null)
     {
         var sourceModels = new List<LayerNodeViewModel>();
         var standardModels = new List<LayerNodeViewModel>();
@@ -167,6 +223,15 @@ public class LayerEditorViewModel : ObservableObject
             }
         }
 
+        if (emptyLayers is not null)
+        {
+            foreach (var node in Nodes)
+            {
+                if (node.IsSource && emptyLayers.Contains(node.Name))
+                    node.IsEmpty = true;
+            }
+        }
+
         PendingConnection = new PendingConnectionViewModel(this, sourceMap, standardMap);
 
         RemoveConnectionCommand = new DelegateCommand<LayerConnectionViewModel>(conn =>
@@ -207,6 +272,12 @@ public class LayerEditorViewModel : ObservableObject
             }
         });
 
+        Connections.CollectionChanged += (_, _) =>
+        {
+            UpdateNodeColors();
+            ArrangeTargetsInColumns();
+        };
+
         ArrangeTargetsInColumns();
         ApplyFilters();
     }
@@ -246,6 +317,8 @@ public class LayerEditorViewModel : ObservableObject
         }
 
         RepositionVisibleNodes();
+        UpdateNodeColors();
+        ArrangeTargetsInColumns();
     }
 
     private void RepositionVisibleNodes()
@@ -255,6 +328,32 @@ public class LayerEditorViewModel : ObservableObject
         for (int i = 0; i < visibleSources.Count; i++)
         {
             visibleSources[i].Location = new Point(LeftColX, TopMargin + i * NodeSpacing);
+        }
+    }
+
+    private void UpdateNodeColors()
+    {
+        foreach (var node in Nodes)
+        {
+            if (node.IsSource)
+            {
+                var conn = Connections.FirstOrDefault(c => c.Source == node);
+                node.BackgroundColor = conn switch
+                {
+                    { MatchSource: ConnectionMatchSource.ExactName } => "#8bc34a",
+                    { MatchSource: ConnectionMatchSource.Memory } => "#448aff",
+                    { MatchSource: ConnectionMatchSource.Heuristic } => "#ffd740",
+                    { MatchSource: ConnectionMatchSource.Manual } => "#7c4dff",
+                    _ => "#424242",
+                };
+                if (node.IsEmpty && IsEmptyHighlighted)
+                    node.BackgroundColor = "#b71c1c";
+            }
+            else
+            {
+                bool inUse = Connections.Any(c => c.Target == node);
+                node.BackgroundColor = inUse ? "#4682b4" : "#424242";
+            }
         }
     }
 
@@ -282,53 +381,61 @@ public class LayerEditorViewModel : ObservableObject
         var targetNodes = Nodes.Where(n => !n.IsSource).ToList();
         if (targetNodes.Count == 0) return;
 
-        var mapped = new List<(LayerNodeViewModel node, double sortKey)>();
-        var unmapped = new List<LayerNodeViewModel>();
+        // Build source Y for each connected target (visible sources only)
+        var sourceY = new Dictionary<LayerNodeViewModel, double>();
+        foreach (var conn in Connections)
+        {
+            if (!sourceY.ContainsKey(conn.Target) && conn.Source.IsVisible)
+                sourceY[conn.Target] = conn.Source.Location.Y;
+        }
+
+        var connected = new List<LayerNodeViewModel>();
+        var unconnected = new List<LayerNodeViewModel>();
 
         foreach (var target in targetNodes)
         {
-            var conns = Connections.Where(c => c.Target == target).ToList();
-            if (conns.Count > 0)
-            {
-                double avgY = conns.Average(c => c.Source.Location.Y);
-                mapped.Add((target, avgY));
-            }
+            if (sourceY.ContainsKey(target))
+                connected.Add(target);
             else
-            {
-                unmapped.Add(target);
-            }
+                unconnected.Add(target);
         }
 
-        mapped.Sort((a, b) => a.sortKey.CompareTo(b.sortKey));
+        // Connected targets sit at RightColX, row-aligned with their source
+        double xConnected = RightColX;
+        foreach (var node in connected)
+            node.Location = new Point(xConnected, sourceY[node]);
 
-        var unmappedOrdered = unmapped
+        if (unconnected.Count == 0) return;
+
+        // Unconnected targets: prefix-grouped, dynamically sized columns
+        var ordered = unconnected
             .GroupBy(n => ExtractPrefix(n.Name))
             .OrderByDescending(g => g.Count())
-            .SelectMany(g => g.OrderBy(n => n.Name));
+            .SelectMany(g => g.OrderBy(n => n.Name))
+            .ToList();
 
-        var orderedTargets = mapped.Select(m => m.node).Concat(unmappedOrdered).ToList();
-        int total = orderedTargets.Count;
-        int idealPerColumn = (int)Math.Ceiling((double)total / TargetColumns);
+        int numUncColumns = Math.Clamp((int)Math.Ceiling((double)ordered.Count / 10.0), 2, 5);
+        int ideal = (int)Math.Ceiling((double)ordered.Count / numUncColumns);
 
-        var columns = new List<string>[TargetColumns];
-        for (int i = 0; i < TargetColumns; i++)
+        var columns = new List<string>[numUncColumns];
+        for (int i = 0; i < numUncColumns; i++)
             columns[i] = [];
 
         int col = 0;
-        int currentCount = 0;
-        foreach (var node in orderedTargets)
+        int count = 0;
+        foreach (var node in ordered)
         {
-            if (currentCount >= idealPerColumn && col < TargetColumns - 1)
+            if (count >= ideal && col < numUncColumns - 1)
             {
                 col++;
-                currentCount = 0;
+                count = 0;
             }
             columns[col].Add(node.Name);
-            currentCount++;
+            count++;
         }
 
-        double x = RightColX;
-        for (int c = 0; c < TargetColumns; c++)
+        double x = xConnected + (connected.Count > 0 ? NodeWidth + TargetColumnGap : 0);
+        for (int c = 0; c < numUncColumns; c++)
         {
             double y = TopMargin;
             foreach (var name in columns[c])
@@ -339,6 +446,25 @@ public class LayerEditorViewModel : ObservableObject
             }
             x += NodeWidth + TargetColumnGap;
         }
+    }
+
+    public void RemoveEmptyLayers()
+    {
+        var empty = Nodes.Where(n => n.IsSource && n.IsEmpty).ToList();
+        foreach (var node in empty)
+        {
+            var conns = Connections.Where(c => c.Source == node || c.Target == node).ToList();
+            foreach (var c in conns)
+            {
+                c.Source.IsMapped = false;
+                if (!Connections.Any(other => other != c && other.Target == c.Target))
+                    c.Target.IsMapped = false;
+                Connections.Remove(c);
+            }
+            Nodes.Remove(node);
+        }
+        ArrangeTargetsInColumns();
+        ApplyFilters();
     }
 
 }

@@ -83,9 +83,67 @@
         </Setter>
       </Style>
 
+      <!-- Slide-toggle style for property matching switches -->
+      <Style x:Key="SlideToggle" TargetType="ToggleButton">
+        <Setter Property="Width" Value="40" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ToggleButton">
+              <Border x:Name="Track"
+                      Width="40" Height="20"
+                      CornerRadius="10"
+                      Background="#555"
+                      SnapsToDevicePixels="True">
+                <Border x:Name="Thumb"
+                        Width="16" Height="16"
+                        CornerRadius="8"
+                        Background="#ddd"
+                        HorizontalAlignment="Left"
+                        Margin="2,0,0,0"
+                        RenderTransformOrigin="0.5,0.5">
+                  <Border.RenderTransform>
+                    <TranslateTransform />
+                  </Border.RenderTransform>
+                </Border>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                  <Trigger.EnterActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <ColorAnimation Storyboard.TargetName="Track"
+                                        Storyboard.TargetProperty="Background.Color"
+                                        To="#8bc34a" Duration="0:0:0.15" />
+                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                        Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.X)"
+                                        To="20" Duration="0:0:0.15" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.EnterActions>
+                  <Trigger.ExitActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <ColorAnimation Storyboard.TargetName="Track"
+                                        Storyboard.TargetProperty="Background.Color"
+                                        To="#555" Duration="0:0:0.15" />
+                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                        Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.X)"
+                                        To="0" Duration="0:0:0.15" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.ExitActions>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <!-- Layer node style: base dark, target nodes thicken border when mapped -->
       <Style TargetType="nodify:StateNode">
-        <Setter Property="Background" Value="#424242" />
+        <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
         <Setter Property="BorderBrush" Value="#666" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
@@ -121,6 +179,9 @@
           </Setter.Value>
         </Setter>
         <Style.Triggers>
+          <DataTrigger Binding="{Binding IsSource}" Value="False">
+            <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
+          </DataTrigger>
           <MultiDataTrigger>
             <MultiDataTrigger.Conditions>
               <Condition Binding="{Binding IsSource}" Value="False" />
@@ -240,7 +301,7 @@
               <nodify:StateNode.ContentTemplate>
                 <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
                   <TextBlock Text="{Binding Name}"
-                             Foreground="#ddd"
+                             Foreground="#888"
                              FontFamily="Fira Sans"
                              FontSize="11"
                              FontWeight="Medium"
@@ -259,6 +320,9 @@
                                 Target="{Binding Target.Anchor, Mode=OneWay}"
                                 Stroke="{Binding Stroke, Converter={StaticResource ColorStringToBrush}}"
                                 StrokeDashArray="{Binding StrokeDashCollection}"
+                                ArrowSize="0,0"
+                                SourceOffset="0,0"
+                                TargetOffset="0,0"
                                 PreviewMouseDown="OnConnectionPreviewMouseDown"
                                 Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
           </DataTemplate>
@@ -289,10 +353,10 @@
               Effect="{StaticResource PanelShadow}">
         <StackPanel Orientation="Vertical">
           <TextBlock Text="Legend"
-                     FontSize="16" FontWeight="Bold"
-                     Foreground="#fff" />
+                     FontSize="18" FontWeight="Bold"
+                     Foreground="#e6e6e6" />
           <TextBlock Text="Visibility Toggle"
-                     FontSize="10"
+                     FontSize="13"
                      Foreground="#777"
                      Margin="0,0,0,10" />
 
@@ -334,6 +398,66 @@
                         Cursor="Hand"
                         Width="150" Height="30"
                         Style="{StaticResource FilterToggleButton}" />
+
+          <!-- Empty layer actions -->
+          <Rectangle Height="1" Fill="#555" Margin="0,10" />
+
+          <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="8" />
+              <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <ToggleButton Grid.Column="0"
+                          Content="Highlight Empty"
+                          IsChecked="{Binding IsEmptyHighlighted}"
+                          Style="{StaticResource FilterToggleButton}"
+                          Background="#b71c1c"
+                          Width="Auto" Height="32"
+                          Cursor="Hand" />
+
+            <Button Grid.Column="2"
+                    Content="Purge Unused"
+                    Command="{Binding PurgeUnusedCommand}"
+                    Style="{StaticResource ModernButton}"
+                    Background="#5a0000"
+                    Foreground="#eee"
+                    Width="Auto" Height="32"
+                    Cursor="Hand" />
+          </Grid>
+
+          <!-- Property matching section -->
+          <Rectangle Height="1" Fill="#555" Margin="0,10" />
+
+          <TextBlock Text="Property Matching"
+                     FontSize="13"
+                     Foreground="#777"
+                     Margin="0,0,0,8" />
+
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="Match Color"
+                       Foreground="#aaa" FontSize="11"
+                       VerticalAlignment="Center" Width="100" />
+            <ToggleButton Style="{StaticResource SlideToggle}"
+                          IsChecked="{Binding IsMatchColorEnabled}" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="Match Linetype"
+                       Foreground="#aaa" FontSize="11"
+                       VerticalAlignment="Center" Width="100" />
+            <ToggleButton Style="{StaticResource SlideToggle}"
+                          IsChecked="{Binding IsMatchLinetypeEnabled}" />
+          </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="Match Lineweight"
+                       Foreground="#aaa" FontSize="11"
+                       VerticalAlignment="Center" Width="100" />
+            <ToggleButton Style="{StaticResource SlideToggle}"
+                          IsChecked="{Binding IsMatchLineweightEnabled}" />
+          </StackPanel>
         </StackPanel>
       </Border>
     </Grid>
@@ -366,7 +490,7 @@
         </TextBlock>
         <TextBlock Grid.Row="2" Grid.Column="0"
                    Foreground="#555" FontSize="10"
-                    VerticalAlignment="Center">2027-07-08.v2 (ALPHA)</TextBlock>
+                    VerticalAlignment="Center">2026-07-09.v1 (ALPHA)</TextBlock>
         <Button Grid.Row="1" Grid.Column="1" Content="Apply Mappings"
                 Style="{StaticResource ModernButton}"
                 Margin="0,0,8,0"

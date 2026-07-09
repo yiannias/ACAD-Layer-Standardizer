@@ -2,6 +2,9 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using AcLayerStandardizer.Core;
 using Nodify;
 
 namespace AcLayerStandardizer.UI;
@@ -26,11 +29,29 @@ public partial class NodeGraphWindow : Window
         List<string> sourceLayers,
         List<string> standardLayers,
         Dictionary<string, string>? memoryMappings,
-        List<Matching.MatchResult>? heuristicResults = null)
+        List<Matching.MatchResult>? heuristicResults = null,
+        HashSet<string>? emptyLayers = null,
+        Action<IReadOnlySet<string>>? purgeCallback = null)
     {
         InitializeComponent();
 
-        _viewModel = new LayerEditorViewModel(sourceLayers, standardLayers, memoryMappings, heuristicResults);
+        _viewModel = new LayerEditorViewModel(
+            sourceLayers, standardLayers, memoryMappings, heuristicResults, emptyLayers);
+
+        if (purgeCallback is not null && emptyLayers is { Count: > 0 })
+        {
+            _viewModel.PurgeUnusedCommand = new DelegateCommand<object>(_ =>
+            {
+                var msg = $"Purge {emptyLayers.Count} unused layer(s)?\n\n{string.Join("\n", emptyLayers.OrderBy(n => n))}";
+                if (MessageBox.Show(msg, "Purge Unused Layers",
+                        MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+
+                purgeCallback(emptyLayers);
+                _viewModel.RemoveEmptyLayers();
+            });
+        }
+
         DataContext = _viewModel;
 
         Closing += OnWindowClosing;
@@ -44,6 +65,43 @@ public partial class NodeGraphWindow : Window
         _initializing = false;
 
         SourceInitialized += (_, _) => EnableDarkTitleBar();
+        Editor.AddHandler(ItemContainer.LocationChangedEvent, new RoutedEventHandler(OnItemLocationChanged));
+    }
+
+    public PropertyMatchSettings PropertySettings => new(
+        _viewModel.IsMatchColorEnabled,
+        _viewModel.IsMatchLinetypeEnabled,
+        _viewModel.IsMatchLineweightEnabled
+    );
+
+    private static readonly DependencyProperty PrevLocationProperty =
+        DependencyProperty.RegisterAttached("PrevLocation", typeof(Point), typeof(NodeGraphWindow));
+
+    private void OnItemLocationChanged(object sender, RoutedEventArgs e)
+    {
+        if (e.OriginalSource is not ItemContainer container || !container.IsLoaded)
+            return;
+
+        var newLoc = container.Location;
+        var prevLoc = (Point)container.GetValue(PrevLocationProperty);
+        container.SetValue(PrevLocationProperty, newLoc);
+
+        if (prevLoc == default || prevLoc == newLoc)
+            return;
+
+        var offset = new Vector(prevLoc.X - newLoc.X, prevLoc.Y - newLoc.Y);
+        var dist = Math.Sqrt(offset.X * offset.X + offset.Y * offset.Y);
+        if (dist < 5) return;
+
+        var transform = new TranslateTransform(offset.X, offset.Y);
+        container.RenderTransform = transform;
+        container.RenderTransformOrigin = new Point(0, 0);
+
+        double duration = Math.Clamp(dist / 60.0, 0.15, 0.4);
+        transform.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(0, TimeSpan.FromSeconds(duration)) { DecelerationRatio = 0.3 });
+        transform.BeginAnimation(TranslateTransform.YProperty,
+            new DoubleAnimation(0, TimeSpan.FromSeconds(duration)) { DecelerationRatio = 0.3 });
     }
 
     private void EnableDarkTitleBar()
