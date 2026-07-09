@@ -220,6 +220,8 @@ public static class StandardizeCommand
                 var sourceId = GetLayerId(lt, tr, source);
                 if (sourceId is null) continue;
 
+                EnsureNotCurrentLayer(db, tr, source);
+
                 ObjectId targetId;
 
                 if (lt.Has(target))
@@ -240,7 +242,17 @@ public static class StandardizeCommand
                     snapshot.ErasedLayers.Add(erased);
 
                     var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
-                    wipLtr.Erase(true);
+                    try
+                    {
+                        wipLtr.Erase(true);
+                    }
+                    catch (System.Exception ex)
+                    {
+                        var ed = Application.DocumentManager.MdiActiveDocument.Editor;
+                        ed.WriteMessage($"\n  Warning: could not erase layer '{source}' ({ex.Message}). Renaming instead.");
+                        wipLtr.Name = target;
+                        targetId = sourceId.Value;
+                    }
                 }
                 else
                 {
@@ -282,6 +294,23 @@ public static class StandardizeCommand
 
         snapshot.Save();
         return new ApplyMappingsResult(renamed, synced);
+    }
+
+    private static void EnsureNotCurrentLayer(Database db, Transaction tr, string layerName)
+    {
+        var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc.Database != db) return;
+
+        var curLtr = (LayerTableRecord)tr.GetObject(doc.Database.Clayer, OpenMode.ForRead);
+        if (!string.Equals(curLtr.Name, layerName, StringComparison.OrdinalIgnoreCase)) return;
+
+        curLtr.UpgradeOpen();
+        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
+        if (lt.Has("0"))
+            doc.Database.Clayer = lt["0"];
+
+        var ed = doc.Editor;
+        ed.WriteMessage($"\n  Switched current layer from '{layerName}' to '0'.");
     }
 
     private sealed record PipelineContext(
