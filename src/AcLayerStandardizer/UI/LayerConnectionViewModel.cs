@@ -2,14 +2,6 @@ using System.Windows.Media;
 
 namespace AcLayerStandardizer.UI;
 
-public enum ConnectionMatchSource
-{
-    ExactName,
-    Memory,
-    Heuristic,
-    Manual,
-}
-
 public class LayerConnectionViewModel
 {
     public LayerConnectionViewModel(
