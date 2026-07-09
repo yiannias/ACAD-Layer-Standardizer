@@ -11,7 +11,7 @@ public class LayerNodeViewModel : ObservableObject
         [ConnectionMatchSource.Heuristic] = "#ffd740",
         [ConnectionMatchSource.Manual] = "#7c4dff",
     };
-    private const double NodeWidth = 170;
+    private const double NodeWidth = 280;
 
     public string Name { get; }
     public bool IsSource { get; }
@@ -28,13 +28,6 @@ public class LayerNodeViewModel : ObservableObject
     {
         get => _isVisible;
         set => SetProperty(ref _isVisible, value);
-    }
-
-    private string _backgroundColor = "#424242";
-    public string BackgroundColor
-    {
-        get => _backgroundColor;
-        set => SetProperty(ref _backgroundColor, value);
     }
 
     private string _connectorColor = "#aaa";

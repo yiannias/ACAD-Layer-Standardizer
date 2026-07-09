@@ -8,7 +8,7 @@ namespace AcLayerStandardizer.UI;
 
 public class LayerEditorViewModel : ObservableObject
 {
-    private const double NodeWidth = 170;
+    private const double NodeWidth = 280;
     private const double NodeHeight = 30;
     private const double NodeSpacing = 44;
     private const double TopMargin = 40;
@@ -244,7 +244,6 @@ public class LayerEditorViewModel : ObservableObject
         }
 
         RepositionVisibleNodes();
-        UpdateTargetNodeColors();
     }
 
     private void RepositionVisibleNodes()
@@ -257,34 +256,6 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
-    private void UpdateTargetNodeColors()
-    {
-        var targetColors = new Dictionary<LayerNodeViewModel, string>();
-
-        foreach (var conn in Connections)
-        {
-            if (!targetColors.ContainsKey(conn.Target))
-            {
-                targetColors[conn.Target] = conn.MatchSource switch
-                {
-                    ConnectionMatchSource.ExactName => "#1b5e20",
-                    ConnectionMatchSource.Memory => "#0d47a1",
-                    ConnectionMatchSource.Heuristic => "#e65100",
-                    ConnectionMatchSource.Manual => "#4a148c",
-                    _ => "#4a6b8a",
-                };
-            }
-        }
-
-        foreach (var node in Nodes)
-        {
-            if (node.IsSource) continue;
-            if (targetColors.TryGetValue(node, out var color))
-                node.BackgroundColor = color;
-            else
-                node.BackgroundColor = "#424242";
-        }
-    }
 }
 
 public class PendingConnectionViewModel

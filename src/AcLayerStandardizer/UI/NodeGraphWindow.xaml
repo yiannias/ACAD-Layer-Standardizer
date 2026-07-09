@@ -18,7 +18,44 @@
       <local:ColorStringToBrushConverter x:Key="ColorStringToBrush" />
       <local:BooleanToOpacityConverter x:Key="BoolToOpacity" />
 
-      <!-- Layer node style: base dark, slate-blue when mapped -->
+      <!-- Shadow for floating panel -->
+      <DropShadowEffect x:Key="PanelShadow"
+                        Color="#000"
+                        Opacity="0.5"
+                        BlurRadius="12"
+                        ShadowDepth="3" />
+
+      <!-- Filter toggle button style -->
+      <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ToggleButton">
+              <Border x:Name="Bg"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="4"
+                      BorderThickness="0">
+                <TextBlock Text="{TemplateBinding Content}"
+                           Foreground="{TemplateBinding Foreground}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="False">
+                  <Setter TargetName="Bg" Property="Opacity" Value="0.3" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Bg" Property="Opacity" Value="0.85" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
+      <!-- Layer node style: base dark, target nodes thicken border when mapped -->
       <Style TargetType="nodify:StateNode">
         <Setter Property="Background" Value="#424242" />
         <Setter Property="BorderBrush" Value="#666" />
@@ -28,7 +65,7 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="nodify:StateNode">
-              <Grid Width="170" Height="30">
+              <Grid Width="280" Height="30">
                 <Border x:Name="NodeBorder"
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
@@ -52,15 +89,18 @@
                          Margin="-4,0,0,0"
                          Visibility="{Binding IsSource, Converter={StaticResource InvBoolToVis}}" />
               </Grid>
-              <ControlTemplate.Triggers>
-              </ControlTemplate.Triggers>
             </ControlTemplate>
           </Setter.Value>
         </Setter>
         <Style.Triggers>
-          <DataTrigger Binding="{Binding IsSource}" Value="False">
-            <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
-          </DataTrigger>
+          <MultiDataTrigger>
+            <MultiDataTrigger.Conditions>
+              <Condition Binding="{Binding IsSource}" Value="False" />
+              <Condition Binding="{Binding IsMapped}" Value="True" />
+            </MultiDataTrigger.Conditions>
+            <Setter Property="BorderBrush" Value="#fff" />
+            <Setter Property="BorderThickness" Value="3" />
+          </MultiDataTrigger>
           <Trigger Property="IsMouseOver" Value="True">
             <Setter Property="BorderBrush" Value="#fff" />
             <Setter Property="BorderThickness" Value="2" />
@@ -115,19 +155,19 @@
       </Style>
 
       <!-- Grid background brush -->
-      <DrawingBrush x:Key="GridBrush"
-                    Viewport="0,0,24,24" ViewportUnits="Absolute"
-                    TileMode="Tile">
-        <DrawingBrush.Drawing>
-          <DrawingGroup>
-            <GeometryDrawing Geometry="M 0,0 L 0,24 M 0,0 L 24,0">
-              <GeometryDrawing.Pen>
-                <Pen Brush="#22ffffff" Thickness="1" />
-              </GeometryDrawing.Pen>
-            </GeometryDrawing>
-          </DrawingGroup>
-        </DrawingBrush.Drawing>
-      </DrawingBrush>
+        <DrawingBrush x:Key="GridBrush"
+                      Viewport="0,0,24,24" ViewportUnits="Absolute"
+                      TileMode="Tile">
+          <DrawingBrush.Drawing>
+            <DrawingGroup>
+              <GeometryDrawing Geometry="M 0,0 L 0,24 M 0,0 L 24,0">
+                <GeometryDrawing.Pen>
+                  <Pen Brush="#33ffffff" Thickness="1" />
+                </GeometryDrawing.Pen>
+              </GeometryDrawing>
+            </DrawingGroup>
+          </DrawingBrush.Drawing>
+        </DrawingBrush>
     </ResourceDictionary>
   </Window.Resources>
 
@@ -139,7 +179,7 @@
 
     <!-- Nodify editor area -->
     <Grid Grid.Row="0" Background="#1e1e1e">
-      <Rectangle Fill="{StaticResource GridBrush}" Opacity="0.12" IsHitTestVisible="False" />
+      <Rectangle Fill="{StaticResource GridBrush}" Opacity="0.2" IsHitTestVisible="False" />
 
       <nodify:NodifyEditor x:Name="Editor"
                             Background="Transparent"
@@ -148,7 +188,7 @@
                             PendingConnection="{Binding PendingConnection}"
                             RemoveConnectionCommand="{Binding RemoveConnectionCommand}"
                             DisconnectConnectorCommand="{Binding DisconnectConnectorCommand}"
-                            MinWidth="800" MinHeight="400">
+                            MinWidth="950" MinHeight="400">
 
         <nodify:NodifyEditor.ItemContainerStyle>
           <Style TargetType="nodify:ItemContainer">
@@ -204,76 +244,65 @@
         </nodify:NodifyEditor.PendingConnectionTemplate>
       </nodify:NodifyEditor>
 
-      <!-- Floating filter toggles (top-right, fixed, legend + toggle) -->
-      <StackPanel Grid.Row="0"
-                  Orientation="Vertical"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top"
-                  Margin="0,16,16,0"
-                  Panel.ZIndex="10">
-        <StackPanel.Resources>
-          <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Width" Value="20" />
-            <Setter Property="Height" Value="20" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-            <Setter Property="Opacity" Value="{Binding IsChecked, RelativeSource={RelativeSource Self}, Converter={StaticResource BoolToOpacity}}" />
-            <Setter Property="Template">
-              <Setter.Value>
-                <ControlTemplate TargetType="ToggleButton">
-                  <Border x:Name="Border"
-                          Width="20" Height="20"
-                          CornerRadius="4"
-                          Background="{TemplateBinding Background}"
-                          BorderThickness="1"
-                          BorderBrush="#555">
-                    <TextBlock Text=""
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"
-                               FontSize="9" FontWeight="Bold"
-                               Foreground="White" />
-                  </Border>
-                  <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                      <Setter TargetName="Border" Property="BorderBrush" Value="#fff" />
-                      <Setter TargetName="Border" Property="Width" Value="22" />
-                      <Setter TargetName="Border" Property="Height" Value="22" />
-                    </Trigger>
-                    <Trigger Property="IsChecked" Value="False">
-                      <Setter TargetName="Border" Property="Opacity" Value="0.5" />
-                    </Trigger>
-                  </ControlTemplate.Triggers>
-                </ControlTemplate>
-              </Setter.Value>
-            </Setter>
-          </Style>
-        </StackPanel.Resources>
+      <!-- Floating filter panel (top-left, legend + toggles) -->
+      <Border Grid.Row="0"
+              HorizontalAlignment="Left"
+              VerticalAlignment="Top"
+              Margin="25,25,0,0"
+              Padding="14,12"
+              CornerRadius="8"
+              Background="#CC2a2a2a"
+              Panel.ZIndex="10"
+              Effect="{StaticResource PanelShadow}">
+        <StackPanel Orientation="Vertical">
+          <TextBlock Text="Legend"
+                     FontSize="16" FontWeight="Bold"
+                     Foreground="#fff" />
+          <TextBlock Text="Visibility Toggle"
+                     FontSize="10"
+                     Foreground="#777"
+                     Margin="0,0,0,10" />
 
-        <ToggleButton Style="{StaticResource FilterToggleButton}"
-                      Background="#00e676"
-                      IsChecked="{Binding IsExactNameVisible}"
-                      ToolTip="Exact Match" />
+          <ToggleButton Content="Exact Match"
+                        Background="#00e676"
+                        IsChecked="{Binding IsExactNameVisible}"
+                        Cursor="Hand"
+                        Width="150" Height="30"
+                        Margin="0,0,0,5"
+                        Style="{StaticResource FilterToggleButton}" />
 
-        <ToggleButton Style="{StaticResource FilterToggleButton}"
-                      Background="#448aff"
-                      IsChecked="{Binding IsMemoryMatchVisible}"
-                      ToolTip="Memory Match" />
+          <ToggleButton Content="Memory Match"
+                        Background="#448aff"
+                        IsChecked="{Binding IsMemoryMatchVisible}"
+                        Cursor="Hand"
+                        Width="150" Height="30"
+                        Margin="0,0,0,5"
+                        Style="{StaticResource FilterToggleButton}" />
 
-        <ToggleButton Style="{StaticResource FilterToggleButton}"
-                      Background="#ffd740"
-                      IsChecked="{Binding IsHeuristicMatchVisible}"
-                      ToolTip="Heuristic Match" />
+          <ToggleButton Content="Heuristic Match"
+                        Background="#ffd740"
+                        IsChecked="{Binding IsHeuristicMatchVisible}"
+                        Cursor="Hand"
+                        Width="150" Height="30"
+                        Margin="0,0,0,5"
+                        Style="{StaticResource FilterToggleButton}" />
 
-        <ToggleButton Style="{StaticResource FilterToggleButton}"
-                      Background="#7c4dff"
-                      IsChecked="{Binding IsManualMatchVisible}"
-                      ToolTip="Manual Match" />
+          <ToggleButton Content="Manual Match"
+                        Background="#7c4dff"
+                        IsChecked="{Binding IsManualMatchVisible}"
+                        Cursor="Hand"
+                        Width="150" Height="30"
+                        Margin="0,0,0,5"
+                        Style="{StaticResource FilterToggleButton}" />
 
-        <ToggleButton Style="{StaticResource FilterToggleButton}"
-                      Background="#888"
-                      IsChecked="{Binding IsUnmatchedVisible}"
-                      ToolTip="Unmatched" />
-      </StackPanel>
+          <ToggleButton Content="Unmatched"
+                        Background="#888"
+                        IsChecked="{Binding IsUnmatchedVisible}"
+                        Cursor="Hand"
+                        Width="150" Height="30"
+                        Style="{StaticResource FilterToggleButton}" />
+        </StackPanel>
+      </Border>
     </Grid>
 
     <!-- Status bar + action buttons -->
