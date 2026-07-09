@@ -1,4 +1,3 @@
-#### File 2: `AutoCAD Layer Standardizer - Ideation.md`
 ```markdown
 # AutoCAD Layer Standardizer Plugin: Complete Project Ideation & Conversation Log
 **Date:** July 2026
