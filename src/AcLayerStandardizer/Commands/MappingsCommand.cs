@@ -13,6 +13,12 @@ namespace AcLayerStandardizer.Commands;
 
 public static class MappingsCommand
 {
+    [CommandMethod("LSTDR")]
+    public static void LaunchStandardizer()
+    {
+        ShowMappingsEditor();
+    }
+
     [CommandMethod("ACLAYERSTD", "STD_Mappings", CommandFlags.Modal)]
     public static void ShowMappingsEditor()
     {

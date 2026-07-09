@@ -275,7 +275,6 @@ public class LayerEditorViewModel : ObservableObject
         Connections.CollectionChanged += (_, _) =>
         {
             UpdateNodeColors();
-            ArrangeTargetsInColumns();
         };
 
         ArrangeTargetsInColumns();
@@ -318,7 +317,6 @@ public class LayerEditorViewModel : ObservableObject
 
         RepositionVisibleNodes();
         UpdateNodeColors();
-        ArrangeTargetsInColumns();
     }
 
     private void RepositionVisibleNodes()
@@ -357,91 +355,41 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
-    private static string ExtractPrefix(string layerName)
-    {
-        int hyphenCount = 0;
-        int cutIndex = -1;
-        for (int i = 0; i < layerName.Length; i++)
-        {
-            if (layerName[i] == '-')
-            {
-                hyphenCount++;
-                if (hyphenCount == 2)
-                {
-                    cutIndex = i;
-                    break;
-                }
-            }
-        }
-        return cutIndex >= 0 ? layerName[..cutIndex] : layerName;
-    }
-
     private void ArrangeTargetsInColumns()
     {
-        var targetNodes = Nodes.Where(n => !n.IsSource).ToList();
-        if (targetNodes.Count == 0) return;
+        var targets = Nodes.Where(n => !n.IsSource).OrderBy(n => n.Name).ToList();
+        if (targets.Count == 0) return;
 
-        // Build source Y for each connected target (visible sources only)
-        var sourceY = new Dictionary<LayerNodeViewModel, double>();
-        foreach (var conn in Connections)
-        {
-            if (!sourceY.ContainsKey(conn.Target) && conn.Source.IsVisible)
-                sourceY[conn.Target] = conn.Source.Location.Y;
-        }
+        var connected = targets.Where(t => Connections.Any(c => c.Target == t)).ToList();
+        var unconnected = targets.Where(t => !Connections.Any(c => c.Target == t)).ToList();
 
-        var connected = new List<LayerNodeViewModel>();
-        var unconnected = new List<LayerNodeViewModel>();
+        double x = RightColX;
 
-        foreach (var target in targetNodes)
-        {
-            if (sourceY.ContainsKey(target))
-                connected.Add(target);
-            else
-                unconnected.Add(target);
-        }
-
-        // Connected targets sit at RightColX, row-aligned with their source
-        double xConnected = RightColX;
-        foreach (var node in connected)
-            node.Location = new Point(xConnected, sourceY[node]);
-
-        if (unconnected.Count == 0) return;
-
-        // Unconnected targets: prefix-grouped, dynamically sized columns
-        var ordered = unconnected
-            .GroupBy(n => ExtractPrefix(n.Name))
-            .OrderByDescending(g => g.Count())
-            .SelectMany(g => g.OrderBy(n => n.Name))
-            .ToList();
-
-        int numUncColumns = Math.Clamp((int)Math.Ceiling((double)ordered.Count / 10.0), 2, 5);
-        int ideal = (int)Math.Ceiling((double)ordered.Count / numUncColumns);
-
-        var columns = new List<string>[numUncColumns];
-        for (int i = 0; i < numUncColumns; i++)
-            columns[i] = [];
-
-        int col = 0;
-        int count = 0;
-        foreach (var node in ordered)
-        {
-            if (count >= ideal && col < numUncColumns - 1)
-            {
-                col++;
-                count = 0;
-            }
-            columns[col].Add(node.Name);
-            count++;
-        }
-
-        double x = xConnected + (connected.Count > 0 ? NodeWidth + TargetColumnGap : 0);
-        for (int c = 0; c < numUncColumns; c++)
+        // Connected targets — first column, alphabetical
+        if (connected.Count > 0)
         {
             double y = TopMargin;
-            foreach (var name in columns[c])
+            foreach (var node in connected)
             {
-                var node = targetNodes.First(n => n.Name == name);
                 node.Location = new Point(x, y);
+                y += NodeSpacing;
+            }
+            x += NodeWidth + TargetColumnGap;
+        }
+
+        // Unconnected targets — remaining columns, alphabetical
+        if (unconnected.Count == 0) return;
+
+        int numColumns = Math.Clamp((int)Math.Ceiling((double)unconnected.Count / 10.0), 2, 5);
+        int perColumn = (int)Math.Ceiling((double)unconnected.Count / numColumns);
+        int idx = 0;
+
+        for (int c = 0; c < numColumns; c++)
+        {
+            double y = TopMargin;
+            for (int i = 0; i < perColumn && idx < unconnected.Count; i++, idx++)
+            {
+                unconnected[idx].Location = new Point(x, y);
                 y += NodeSpacing;
             }
             x += NodeWidth + TargetColumnGap;
@@ -463,7 +411,6 @@ public class LayerEditorViewModel : ObservableObject
             }
             Nodes.Remove(node);
         }
-        ArrangeTargetsInColumns();
         ApplyFilters();
     }
 
@@ -501,16 +448,33 @@ public class PendingConnectionViewModel
             if (!_pendingSource.IsSource) return;
             if (target.IsSource) return;
 
-            if (_editor.Connections.Any(c => c.Source == _pendingSource))
+            // Gather sources: all selected sources, or just the dragged one
+            var sources = _editor.Nodes
+                .Where(n => n.IsSource && n.IsSelected && n.IsVisible)
+                .ToHashSet();
+            if (sources.Count == 0)
+                sources.Add(_pendingSource);
+            else
+                sources.Add(_pendingSource); // ensure the dragged source is included
+
+            foreach (var src in sources)
             {
-                var old = _editor.Connections.First(c => c.Source == _pendingSource);
-                old.Source.IsMapped = false;
-                if (!_editor.Connections.Any(other => other != old && other.Target == old.Target))
-                    old.Target.IsMapped = false;
-                _editor.Connections.Remove(old);
+                if (_editor.Connections.Any(c => c.Source == src))
+                {
+                    var old = _editor.Connections.First(c => c.Source == src);
+                    old.Source.IsMapped = false;
+                    if (!_editor.Connections.Any(other => other != old && other.Target == old.Target))
+                        old.Target.IsMapped = false;
+                    _editor.Connections.Remove(old);
+                }
+
+                _editor.Connections.Add(new LayerConnectionViewModel(src, target, ConnectionMatchSource.Manual));
             }
 
-            _editor.Connections.Add(new LayerConnectionViewModel(_pendingSource, target, ConnectionMatchSource.Manual));
+            // Deselect all sources after connecting
+            foreach (var n in _editor.Nodes.Where(n => n.IsSelected))
+                n.IsSelected = false;
+
             _pendingSource = null;
         });
     }

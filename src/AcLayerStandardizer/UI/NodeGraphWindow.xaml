@@ -190,6 +190,10 @@
             <Setter Property="BorderBrush" Value="#fff" />
             <Setter Property="BorderThickness" Value="3" />
           </MultiDataTrigger>
+          <DataTrigger Binding="{Binding IsSelected}" Value="True">
+            <Setter Property="BorderBrush" Value="#FFD700" />
+            <Setter Property="BorderThickness" Value="3" />
+          </DataTrigger>
           <Trigger Property="IsMouseOver" Value="True">
             <Setter Property="BorderBrush" Value="#fff" />
             <Setter Property="BorderThickness" Value="2" />
@@ -287,6 +291,7 @@
             <Setter Property="Location" Value="{Binding Location}" />
             <Setter Property="ActualSize" Value="{Binding Size, Mode=OneWayToSource}" />
             <Setter Property="IsDraggable" Value="False" />
+            <Setter Property="IsSelected" Value="{Binding IsSelected}" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="BorderBrush" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />

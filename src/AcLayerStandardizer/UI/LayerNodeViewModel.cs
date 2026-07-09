@@ -37,6 +37,13 @@ public class LayerNodeViewModel : ObservableObject
         set => SetProperty(ref _isVisible, value);
     }
 
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
+    }
+
     private string _backgroundColor = "#424242";
     public string BackgroundColor
     {

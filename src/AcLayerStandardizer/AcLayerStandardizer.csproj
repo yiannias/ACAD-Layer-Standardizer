@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <AcadVersion Condition="'$(AcadVersion)' == ''">2026</AcadVersion>
+    <TargetFramework Condition="'$(AcadVersion)' == '2027'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(AcadVersion)' != '2027'">net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -14,15 +16,15 @@
 
   <ItemGroup>
     <Reference Include="AcDbMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\acdbmgd.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\acdbmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="AcCoreMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\accoremgd.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\accoremgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="AcMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD 2027\acmgd.dll</HintPath>
+      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\acmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
   </ItemGroup>

@@ -42,9 +42,9 @@ public partial class NodeGraphWindow : Window
         {
             _viewModel.PurgeUnusedCommand = new DelegateCommand<object>(_ =>
             {
-                var msg = $"Purge {emptyLayers.Count} unused layer(s)?\n\n{string.Join("\n", emptyLayers.OrderBy(n => n))}";
-                if (MessageBox.Show(msg, "Purge Unused Layers",
-                        MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                var ordered = emptyLayers.OrderBy(n => n).ToList();
+                var dialog = new PurgeConfirmDialog(emptyLayers.Count, ordered);
+                if (dialog.ShowDialog() != true)
                     return;
 
                 purgeCallback(emptyLayers);
@@ -164,6 +164,12 @@ public partial class NodeGraphWindow : Window
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape)
+        {
+            foreach (var n in _viewModel.Nodes.Where(n => n.IsSelected))
+                n.IsSelected = false;
+        }
+
         if (e.Key == Key.Space && !e.IsRepeat)
         {
             var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
