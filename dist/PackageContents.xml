@@ -8,14 +8,14 @@
     HelpFile=""
     OnlineDocumentationUrl="">
 
-  <CompanyDetails Name="HirschMPG" />
+  <CompanyDetails Name="CGY" />
 
-  <RuntimeRequirements OS="Win64" SeriesMax="R26" SeriesMin="R25" Platform="AutoCAD*" />
+  <RuntimeRequirements OS="Win64" SeriesMax="R27" SeriesMin="R25" Platform="AutoCAD*" />
 
   <Components>
     <ComponentEntry
         AppName="AcLayerStandardizer"
-        Version="1.0.0"
+        Version="ALPHA/0.1"
         ModuleName="./Contents/Windows/64-bit/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
         <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />

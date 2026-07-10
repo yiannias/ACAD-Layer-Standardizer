@@ -60,22 +60,43 @@ if (-not $PackageOnly)
     }
 }
 
-# Build MSI installer if requested
+# Build installer if requested
 if ($CreateInstaller)
 {
-    Write-Host ">> Building MSI installer..." -ForegroundColor Yellow
-    $WixProject = Join-Path $SolutionRoot "installer\AcLayerStandardizer.Installer.wixproj"
-    dotnet build $WixProject -p:AcadVersion=$AcadVersion -p:Configuration=$Configuration
+    Write-Host ">> Building installer..." -ForegroundColor Yellow
+    
+    # Find Inno Setup compiler
+    $IsccPath = $null
+    $PossiblePaths = @(
+        "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+        "C:\Program Files\Inno Setup 6\ISCC.exe",
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    )
+    foreach ($Path in $PossiblePaths)
+    {
+        if (Test-Path $Path)
+        {
+            $IsccPath = $Path
+            break
+        }
+    }
+    
+    if (-not $IsccPath)
+    {
+        Write-Error "Inno Setup not found. Install it from https://jrsoftware.org/isinfo.php"
+        exit 1
+    }
+    
+    # Set environment variables for Inno Setup script
+    $env:MYAPPVERSION = "ALPHA/0.1"
+    $env:MYAPPACADVERSION = $AcadVersion
+    
+    $IssScript = Join-Path $SolutionRoot "installer\ACADLayerStandardizer.iss"
+    & $IsccPath $IssScript
     if ($LASTEXITCODE -ne 0) { exit 1 }
     
-    # Copy MSI to dist
-    $MsiSource = Join-Path $SolutionRoot "installer\bin\$Configuration\AcLayerStandardizer_$AcadVersion.msi"
-    $MsiDest = Join-Path $DistDir "AcLayerStandardizer_$AcadVersion.msi"
-    if (Test-Path $MsiSource)
-    {
-        Copy-Item -Path $MsiSource -Destination $MsiDest -Force
-        Write-Host "  MSI: $MsiDest" -ForegroundColor Green
-    }
+    $InstallerDest = Join-Path $DistDir "AcLayerStandardizer_$AcadVersion.exe"
+    Write-Host "  Installer: $InstallerDest" -ForegroundColor Green
 }
 
 # Package
@@ -108,11 +129,11 @@ Write-Host "=== Done ===" -ForegroundColor Green
 Write-Host "  Bundle:  $BundleDir"
 if ($CreateInstaller)
 {
-    Write-Host "  MSI:     $DistDir\AcLayerStandardizer_$AcadVersion.msi" -ForegroundColor Green
+    Write-Host "  Installer: $DistDir\AcLayerStandardizer_$AcadVersion.exe" -ForegroundColor Green
 }
 Write-Host ""
 Write-Host "Installation:" -ForegroundColor Cyan
-Write-Host "  Option 1: Run the MSI installer"
+Write-Host "  Option 1: Run the installer (AcLayerStandardizer_$AcadVersion.exe)"
 Write-Host "  Option 2: Copy '$BundleName' folder to:"
 Write-Host "     %APPDATA%\Autodesk\ApplicationPlugins\"
 Write-Host "  Restart AutoCAD $AcadVersion"

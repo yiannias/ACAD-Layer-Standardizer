@@ -14,25 +14,11 @@ namespace AcLayerStandardizer.Commands;
 
 public static class StandardizeCommand
 {
+    [CommandMethod("LSR", CommandFlags.Modal)]
     [CommandMethod("ACLAYERSTD", "StandardizeLayers", CommandFlags.Modal)]
     public static void StandardizeLayers()
     {
-        var doc = Application.DocumentManager.MdiActiveDocument;
-        var ed = doc.Editor;
-
-        var ctx = SetupPipeline(ed);
-        if (ctx is null) return;
-
-        var results = ctx.Engine.ClassifyAll(ctx.ActiveLayerNames);
-        PrintResults(ed, results, ctx.StandardLayers);
-
-        var newMappings = results
-            .Where(r => r.Source == MatchSource.Heuristic && r.TargetLayer is not null)
-            .ToDictionary(r => r.SourceLayer, r => r.TargetLayer!);
-
-        SaveNewMappings(newMappings, ctx.Memory, ctx.Store, ed);
-
-        ed.WriteMessage("\nAcLayerStandardizer: Analysis complete.");
+        WelcomeCommand.ShowWelcome();
     }
 
     [CommandMethod("ACLAYERSTD", "ApplyStandardization", CommandFlags.Modal)]

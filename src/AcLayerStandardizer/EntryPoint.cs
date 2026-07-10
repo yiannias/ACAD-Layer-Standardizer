@@ -1,4 +1,6 @@
 using System.IO;
+using System.Windows.Threading;
+using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.Runtime;
 using AcLayerStandardizer.Core;
 
@@ -8,6 +10,8 @@ namespace AcLayerStandardizer;
 
 public class EntryPoint : IExtensionApplication
 {
+    private DispatcherTimer? _ribbonTimer;
+
     public void Initialize()
     {
         var config = PluginConfig.Load();
@@ -19,10 +23,38 @@ public class EntryPoint : IExtensionApplication
             config.Save();
         }
 
+        if (config.InstallRibbon)
+        {
+            _ribbonTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1)
+            };
+            _ribbonTimer.Tick += OnRibbonTimer;
+            _ribbonTimer.Start();
+        }
+
         System.Diagnostics.Debug.WriteLine("AcLayerStandardizer loaded.");
+    }
+
+    private void OnRibbonTimer(object? sender, EventArgs e)
+    {
+        try
+        {
+            var config = PluginConfig.Load();
+            if (RibbonSetup.Setup(config))
+            {
+                _ribbonTimer?.Stop();
+                _ribbonTimer = null;
+            }
+        }
+        catch
+        {
+        }
     }
 
     public void Terminate()
     {
+        _ribbonTimer?.Stop();
+        _ribbonTimer = null;
     }
 }

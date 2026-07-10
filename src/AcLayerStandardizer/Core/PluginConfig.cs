@@ -13,6 +13,8 @@ public class PluginConfig
     public string TemplateDwgPath { get; set; } = string.Empty;
     public string MemoryFilePath { get; set; } = string.Empty;
     public double HeuristicThreshold { get; set; } = 0.6;
+    public bool InstallRibbon { get; set; } = true;
+    public bool InstallMenu { get; set; } = true;
 
     public static string ConfigDirectory =>
         Path.Combine(

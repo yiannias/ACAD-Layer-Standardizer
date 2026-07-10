@@ -43,3 +43,5 @@ bld/
 ## Build artifacts / Release
 AcLayerStandardizer.bundle/
 AcLayerStandardizer_*.zip
+dist/*.exe
+dist/*.msi

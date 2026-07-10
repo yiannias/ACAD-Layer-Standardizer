@@ -27,6 +27,10 @@
       <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\acmgd.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="AdWindows">
+      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\AdWindows.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
