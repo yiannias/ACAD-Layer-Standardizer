@@ -1,3 +1,5 @@
+using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using Autodesk.Windows;
 
 namespace AcLayerStandardizer.Core;
@@ -32,20 +34,55 @@ internal static class RibbonSetup
             };
             addinsTab.Panels.Add(newPanel);
 
+            var largeIcon = LoadIcon("ribbon32.png");
+            var smallIcon = LoadIcon("ribbon16.png");
             var button = new RibbonButton
             {
                 Name = "Layer Standardizer",
                 Text = "Layer\nStandardizer",
                 ToolTip = "Open Layer Standardizer",
-                CommandHandler = new LsrCommandHandler()
+                CommandHandler = new LsrCommandHandler(),
+                Size = RibbonItemSize.Large,
+                Orientation = Orientation.Vertical,
+                ShowText = true,
+                ShowImage = largeIcon is not null,
+                LargeImage = largeIcon,
+                Image = smallIcon,
             };
             panelSource.Items.Add(button);
 
             return true;
         }
-        catch
+        catch (System.Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"AcLayerStandardizer ribbon setup failed: {ex}");
             return false;
+        }
+    }
+
+    // Loaded from embedded resources rather than WPF pack URIs -- pack URI
+    // resolution depends on WPF application-level state we don't control
+    // inside AutoCAD's process.
+    private static BitmapImage? LoadIcon(string fileName)
+    {
+        try
+        {
+            using var stream = typeof(RibbonSetup).Assembly
+                .GetManifestResourceStream($"AcLayerStandardizer.Resources.{fileName}");
+            if (stream is null) return null;
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"AcLayerStandardizer ribbon icon load failed: {ex}");
+            return null;
         }
     }
 
@@ -53,7 +90,7 @@ internal static class RibbonSetup
     {
         foreach (var tab in ribbon.Tabs)
         {
-            if (tab.Id == "Add-ins" || tab.Title == "Add-ins")
+            if (tab.Id == "ID_TabAddIns" || tab.Title == "Add-ins")
                 return tab;
         }
         return null;

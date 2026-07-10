@@ -5,7 +5,13 @@
 #define MyAppPublisher "CGY"
 #define MyAppURL "https://github.com/yiannias/ACAD-Layer-Standardizer"
 #define MyAppVersion GetEnv('MYAPPVERSION')
-#define MyAppAcadVersion GetEnv('MYAPPACADVERSION')
+; Target framework moniker of the build being packaged (e.g. net10.0-windows
+; for AutoCAD 2027, net8.0-windows for 2026/2025) -- must match whichever
+; -AcadVersion build.ps1 actually built, since AutoCAD 2027's .NET 10 host is
+; not binary-compatible with 2026/2025's .NET 8 host. Only one TFM is
+; packaged at a time today; see PackageContents.xml for how to add a second
+; ComponentEntry if both need to ship in one installer.
+#define MyAppTfm GetEnv('MYAPPTFM')
 
 [Setup]
 AppId={{E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57}
@@ -13,16 +19,22 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
-DefaultDirName={userappdata}\Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle
+; Installs to the machine-wide Program Files ApplicationPlugins folder, not
+; the per-user AppData one -- as of AutoCAD 2026, only the Program Files
+; location is trusted by default for autoloading (SECURELOAD). Installing to
+; AppData silently fails to autoload with no error shown. Requires admin
+; elevation as a result; see memory.md for the investigation.
+DefaultDirName={commonpf64}\Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle
 DefaultGroupName={#MyAppName}
 OutputDir=..\dist
-OutputBaseFilename=AcLayerStandardizer_{#MyAppAcadVersion}
+OutputBaseFilename=AcLayerStandardizer_{#StringChange(MyAppVersion, "/", "-")}
 SetupIconFile=assets\LayerStandardizer.ico
 WizardSmallImageFile=assets\LayerStandardizer_header.png
 WizardImageFile=assets\LayerStandardizer_sidebar.png
 Compression=lzma2
 SolidCompression=yes
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\Contents\Windows\64-bit\AcLayerStandardizer.dll
 WizardStyle=modern dark
 
@@ -30,8 +42,8 @@ WizardStyle=modern dark
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "..\src\AcLayerStandardizer\bin\Release\net10.0-windows\AcLayerStandardizer.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
-Source: "..\src\AcLayerStandardizer\bin\Release\net10.0-windows\Nodify.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
+Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\AcLayerStandardizer.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
+Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\Nodify.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\config.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion onlyifdoesntexist
 Source: "assets\LayerStandardizer.cuix"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion
@@ -43,8 +55,8 @@ Name: "{userappdata}\AcLayerStandardizer"; Flags: uninsalwaysuninstall
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Registry]
-Root: HKCU; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 
 [Code]
 var
@@ -54,6 +66,136 @@ var
   InfoPageID: Integer;
   RibbonCheck: TNewCheckBox;
   MenuCheck: TNewCheckBox;
+  ForceCleanReinstall: Boolean;
+
+{ Shows a 4-button choice when an existing installation is detected.
+  Returns mrYes (Update), mrNo (Reinstall), mrCancel (Uninstall), or
+  mrAbort (cancel setup entirely / dialog closed). }
+function ShowUpdateChoiceDialog(const CurrentVersion: String): Integer;
+var
+  Form: TSetupForm;
+  Lbl: TNewStaticText;
+  BtnUpdate, BtnReinstall, BtnUninstall, BtnCancel: TNewButton;
+  ButtonTop, ButtonWidth, ButtonHeight, Gap: Integer;
+begin
+  { CreateCustomForm is Inno's own factory for script-created dialogs.
+    TSetupForm.Create(nil) fails at runtime with "Resource TSetupForm not
+    found" -- the raw Delphi constructor tries to stream in a designed
+    form resource that script forms don't have. This Inno version's
+    signature (read from ISCmplr.dll) is (ClientWidth, ClientHeight,
+    KeepSizeX, KeepSizeY) -- KeepSize=True since the size is pre-scaled. }
+  Form := CreateCustomForm(ScaleX(460), ScaleY(150), True, True);
+  try
+    Form.Caption := 'ACAD Layer Standardizer - Existing Installation Detected';
+    Form.Position := poScreenCenter;
+    Form.BorderStyle := bsDialog;
+
+    Lbl := TNewStaticText.Create(Form);
+    Lbl.Parent := Form;
+    Lbl.Left := ScaleX(16);
+    Lbl.Top := ScaleY(16);
+    Lbl.Width := Form.ClientWidth - ScaleX(32);
+    Lbl.WordWrap := True;
+    Lbl.AutoSize := True;
+    Lbl.Caption := 'An existing installation (version ' + CurrentVersion + ') was found.' + #13#10 +
+      'What would you like to do?';
+
+    ButtonWidth := ScaleX(96);
+    ButtonHeight := ScaleY(23);
+    Gap := ScaleX(8);
+    ButtonTop := Form.ClientHeight - ButtonHeight - ScaleY(16);
+
+    BtnUpdate := TNewButton.Create(Form);
+    BtnUpdate.Parent := Form;
+    BtnUpdate.Caption := '&Update';
+    BtnUpdate.Width := ButtonWidth;
+    BtnUpdate.Height := ButtonHeight;
+    BtnUpdate.Left := ScaleX(16);
+    BtnUpdate.Top := ButtonTop;
+    BtnUpdate.ModalResult := mrYes;
+
+    BtnReinstall := TNewButton.Create(Form);
+    BtnReinstall.Parent := Form;
+    BtnReinstall.Caption := '&Reinstall';
+    BtnReinstall.Width := ButtonWidth;
+    BtnReinstall.Height := ButtonHeight;
+    BtnReinstall.Left := BtnUpdate.Left + ButtonWidth + Gap;
+    BtnReinstall.Top := ButtonTop;
+    BtnReinstall.ModalResult := mrNo;
+
+    BtnUninstall := TNewButton.Create(Form);
+    BtnUninstall.Parent := Form;
+    BtnUninstall.Caption := '&Uninstall';
+    BtnUninstall.Width := ButtonWidth;
+    BtnUninstall.Height := ButtonHeight;
+    BtnUninstall.Left := BtnReinstall.Left + ButtonWidth + Gap;
+    BtnUninstall.Top := ButtonTop;
+    BtnUninstall.ModalResult := mrCancel;
+
+    BtnCancel := TNewButton.Create(Form);
+    BtnCancel.Parent := Form;
+    BtnCancel.Caption := 'Cancel';
+    BtnCancel.Width := ButtonWidth;
+    BtnCancel.Height := ButtonHeight;
+    BtnCancel.Left := BtnUninstall.Left + ButtonWidth + Gap;
+    BtnCancel.Top := ButtonTop;
+    BtnCancel.ModalResult := mrAbort;
+    BtnCancel.Cancel := True;
+
+    Form.ActiveControl := BtnUpdate;
+    Result := Form.ShowModal;
+  finally
+    Form.Free;
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+var
+  ExistingVersion, InstallPath, UninstallExe: String;
+  Choice, ResultCode: Integer;
+begin
+  Result := True;
+  ForceCleanReinstall := False;
+
+  if RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'Version', ExistingVersion) then
+  begin
+    Choice := ShowUpdateChoiceDialog(ExistingVersion);
+    case Choice of
+      mrYes:
+        { Update: proceed with normal install, existing config/memory files
+          are left alone (config.json is only scaffolded if missing). };
+      mrNo:
+        begin
+          { Reinstall: same as Update, but force a clean copy of the plugin
+            binaries first (see PrepareToInstall). User config/memory in the
+            AppData config folder is untouched either way. }
+          ForceCleanReinstall := True;
+        end;
+      mrCancel:
+        begin
+          { Uninstall: hand off to the existing uninstaller, then abort this
+            setup run entirely. }
+          if RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'InstallPath', InstallPath) then
+          begin
+            UninstallExe := InstallPath + '\unins000.exe';
+            if FileExists(UninstallExe) then
+              Exec(UninstallExe, '', '', SW_SHOWNORMAL, ewWaitUntilTerminated, ResultCode);
+          end;
+          Result := False;
+        end;
+    else
+      { Cancel button or dialog closed: abort setup without changing anything. }
+      Result := False;
+    end;
+  end;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := '';
+  if ForceCleanReinstall then
+    DelTree(ExpandConstant('{app}\Contents'), True, True, True);
+end;
 
 procedure GitHubLinkClick(Sender: TObject);
 var
@@ -76,8 +218,20 @@ var
   InfoLbl: TNewStaticText;
   GitHubLink: TNewStaticText;
   EmailLink: TNewStaticText;
-  CustomizationLbl: TNewStaticText;
+  AboutImg: TBitmapImage;
 begin
+  { Defensive defaults matching the checkboxes' initial Checked state, in
+    case ssPostInstall is ever reached without visiting CustomizationPage. }
+  InstallRibbon := True;
+  InstallMenu := True;
+
+  { The small header image (WizardSmallImageFile) lives inside the wizard's
+    fixed-height top bar and always renders clipped/cramped there, so hide
+    the control entirely -- the About page shows the icon large instead.
+    The WizardSmallImageFile directive stays: its decoded bitmap is what
+    the About page image reuses below. }
+  WizardForm.WizardSmallBitmapImage.Visible := False;
+
   InfoPage := CreateCustomPage(wpWelcome,
     'About ACAD Layer Standardizer',
     'This application is free to use, open source, and MIT licensed.');
@@ -87,16 +241,17 @@ begin
   InfoLbl.Parent := InfoPage.Surface;
   InfoLbl.Left := 0;
   InfoLbl.Top := 8;
-  InfoLbl.Width := 400;
-  InfoLbl.Height := 60;
-  InfoLbl.AutoSize := False;
+  InfoLbl.Width := InfoPage.Surface.Width - ScaleX(110);
+  InfoLbl.WordWrap := True;
+  InfoLbl.AutoSize := True;
+  InfoLbl.Font.Size := 10;
   InfoLbl.Caption := 'ACAD Layer Standardizer analyzes DWG layers against a template and maps them to a master standard layer set.';
 
   GitHubLink := TNewStaticText.Create(InfoPage);
   GitHubLink.Parent := InfoPage.Surface;
   GitHubLink.Left := 0;
-  GitHubLink.Top := 72;
-  GitHubLink.Width := 400;
+  GitHubLink.Top := InfoLbl.Top + InfoLbl.Height + ScaleY(16);
+  GitHubLink.Width := InfoLbl.Width;
   GitHubLink.Height := 20;
   GitHubLink.Caption := 'GitHub: https://github.com/yiannias/ACAD-Layer-Standardizer';
   GitHubLink.Font.Color := clBlue;
@@ -107,14 +262,34 @@ begin
   EmailLink := TNewStaticText.Create(InfoPage);
   EmailLink.Parent := InfoPage.Surface;
   EmailLink.Left := 0;
-  EmailLink.Top := 96;
-  EmailLink.Width := 400;
+  EmailLink.Top := GitHubLink.Top + GitHubLink.Height + ScaleY(4);
+  EmailLink.Width := InfoLbl.Width;
   EmailLink.Height := 20;
   EmailLink.Caption := 'Contact: yiannias@gmail.com';
   EmailLink.Font.Color := clBlue;
   EmailLink.Font.Style := [fsUnderline];
   EmailLink.Cursor := crHand;
   EmailLink.OnClick := @EmailLinkClick;
+
+  { Large app icon under the text, centered in the remaining page space.
+    Reuses the bitmap the runtime already decoded from WizardSmallImageFile
+    (PNG, alpha intact) rather than loading a file -- script-side
+    LoadFromFile PNG support varies by Inno version, this doesn't. }
+  AboutImg := TBitmapImage.Create(InfoPage);
+  AboutImg.Parent := InfoPage.Surface;
+  AboutImg.Bitmap := WizardForm.WizardSmallBitmapImage.Bitmap;
+  AboutImg.Stretch := True;
+  AboutImg.Width := ScaleX(170);
+  AboutImg.Height := ScaleY(168);
+  AboutImg.Left := (InfoPage.Surface.Width - AboutImg.Width) div 2;
+  AboutImg.Top := EmailLink.Top + EmailLink.Height + ScaleY(16);
+  { If the page is too short for the full size, shrink to fit what's left. }
+  if AboutImg.Top + AboutImg.Height > InfoPage.Surface.Height then
+  begin
+    AboutImg.Height := InfoPage.Surface.Height - AboutImg.Top - ScaleY(4);
+    AboutImg.Width := AboutImg.Height;
+    AboutImg.Left := (InfoPage.Surface.Width - AboutImg.Width) div 2;
+  end;
 
   CustomizationPage := CreateCustomPage(wpSelectDir,
     'UI Customization',
@@ -150,6 +325,54 @@ begin
   end;
 end;
 
+function BoolToJson(Value: Boolean): String;
+begin
+  if Value then
+    Result := 'true'
+  else
+    Result := 'false';
+end;
+
+{ Scans every AutoCAD profile in the registry for settings that silently
+  disable the bundle Autoloader -- if APPAUTOLOAD is 0, AutoCAD never
+  loads ApplicationPlugins bundles at startup and the plugin appears
+  "installed but dead" with no error anywhere. Warns the user so they can
+  fix it (SECURELOAD/TRUSTEDPATHS don't need checking: this installer
+  targets the machine-wide Program Files plugins folder, which is trusted
+  at every SECURELOAD level). }
+procedure WarnIfAutoloadDisabled;
+var
+  SeriesKeys, ProductKeys, ProfileKeys: TArrayOfString;
+  i, j, k: Integer;
+  Base, VarsKey, Value: String;
+begin
+  Base := 'Software\Autodesk\AutoCAD';
+  if not RegGetSubkeyNames(HKCU, Base, SeriesKeys) then Exit;
+  for i := 0 to GetArrayLength(SeriesKeys) - 1 do
+  begin
+    if not RegGetSubkeyNames(HKCU, Base + '\' + SeriesKeys[i], ProductKeys) then Continue;
+    for j := 0 to GetArrayLength(ProductKeys) - 1 do
+    begin
+      if not RegGetSubkeyNames(HKCU, Base + '\' + SeriesKeys[i] + '\' + ProductKeys[j] + '\Profiles', ProfileKeys) then Continue;
+      for k := 0 to GetArrayLength(ProfileKeys) - 1 do
+      begin
+        VarsKey := Base + '\' + SeriesKeys[i] + '\' + ProductKeys[j] + '\Profiles\' + ProfileKeys[k] + '\Variables';
+        if RegQueryStringValue(HKCU, VarsKey, 'APPAUTOLOAD', Value) and (Value = '0') then
+        begin
+          MsgBox('Heads up: the AutoCAD profile "' + ProfileKeys[k] + '" (' +
+            SeriesKeys[i] + ') has plugin auto-loading disabled ' +
+            '(APPAUTOLOAD = 0).' + #13#10#13#10 +
+            'ACAD Layer Standardizer installed correctly, but AutoCAD will ' +
+            'not load it at startup until auto-loading is re-enabled. ' +
+            'In AutoCAD, type APPAUTOLOAD and set it back to 14 (the default).',
+            mbInformation, MB_OK);
+          Exit; { one warning is enough }
+        end;
+      end;
+    end;
+  end;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ConfigFile: String;
@@ -157,12 +380,21 @@ var
 begin
   if CurStep = ssPostInstall then
   begin
+    WarnIfAutoloadDisabled;
     ConfigFile := ExpandConstant('{userappdata}\AcLayerStandardizer\config.json');
-    ConfigContent := '{' + #13#10;
-    ConfigContent := ConfigContent + '  "TemplateDwgPath": "",' + #13#10;
-    ConfigContent := ConfigContent + '  "MemoryFilePath": ""' + #13#10;
-    ConfigContent := ConfigContent + '}';
-    SaveStringToFile(ConfigFile, ConfigContent, False);
+    { Only scaffold config.json on first install. On upgrade, leave the
+      user's existing TemplateDwgPath/MemoryFilePath/etc. alone rather than
+      clobbering them back to empty strings every time. }
+    if not FileExists(ConfigFile) then
+    begin
+      ConfigContent := '{' + #13#10;
+      ConfigContent := ConfigContent + '  "TemplateDwgPath": "",' + #13#10;
+      ConfigContent := ConfigContent + '  "MemoryFilePath": "",' + #13#10;
+      ConfigContent := ConfigContent + '  "InstallRibbon": ' + BoolToJson(InstallRibbon) + ',' + #13#10;
+      ConfigContent := ConfigContent + '  "InstallMenu": ' + BoolToJson(InstallMenu) + #13#10;
+      ConfigContent := ConfigContent + '}';
+      SaveStringToFile(ConfigFile, ConfigContent, False);
+    end;
   end;
 end;
 
@@ -172,18 +404,37 @@ var
   ConfigFile: String;
   CuiFile: String;
   MemFile: String;
+  UiPrefsFile: String;
 begin
   if CurUninstallStep = usUninstall then
   begin
     ConfigDir := ExpandConstant('{userappdata}\AcLayerStandardizer');
 
-    MemFile := ConfigDir + '\translations.json';
+    { Translation memory: default filename set by PluginConfig/EntryPoint.
+      Keeping this name in sync with EntryPoint.cs's default is important —
+      it was previously checking a stale filename ("translations.json") that
+      never matched what the app actually writes, so this prompt never fired
+      and the file was silently left behind. }
+    MemFile := ConfigDir + '\standards_memory.json';
     if FileExists(MemFile) then
     begin
-      if MsgBox('Remove memory/translations file?' + #13#10#13#10 +
-        'This contains your custom layer mappings.',
+      if MsgBox('Remove layer mapping memory file?' + #13#10#13#10 +
+        'This contains your learned/custom layer mappings (standards_memory.json).',
         mbConfirmation, MB_YESNO) = IDYES then
         DeleteFile(MemFile);
+    end;
+
+    { UI preferences file: doesn't exist yet as of 2026-07-10 (no code writes
+      it), but stubbed here so uninstall handles it correctly the moment it's
+      introduced, without needing to touch the uninstaller again. Update the
+      filename here if/when the real feature picks a different name. }
+    UiPrefsFile := ConfigDir + '\ui_preferences.json';
+    if FileExists(UiPrefsFile) then
+    begin
+      if MsgBox('Remove saved UI preferences file?' + #13#10#13#10 +
+        'This contains your personal UI settings (ui_preferences.json).',
+        mbConfirmation, MB_YESNO) = IDYES then
+        DeleteFile(UiPrefsFile);
     end;
 
     CuiFile := ConfigDir + '\LayerStandardizer.cuix';

@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $false)]
-    [string]$AcadVersion = "2026",
+    [string]$AcadVersion = "2027",
 
     [Parameter(Mandatory = $false)]
     [string]$Configuration = "Release",
@@ -9,8 +9,13 @@ param(
     [switch]$PackageOnly,
 
     [Parameter(Mandatory = $false)]
-    [switch]$CreateInstaller
+    [switch]$CreateInstaller = $true,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$SkipInstaller
 )
+
+if ($SkipInstaller) { $CreateInstaller = $false }
 
 $ErrorActionPreference = "Stop"
 $SolutionRoot = Split-Path -Parent $PSCommandPath
@@ -18,6 +23,12 @@ $ProjectDir = Join-Path $SolutionRoot "src\AcLayerStandardizer"
 $DistDir = Join-Path $SolutionRoot "dist"
 $BundleName = "AcLayerStandardizer.bundle"
 $BundleDir = Join-Path $SolutionRoot $BundleName
+
+# Single source of truth for the app version -- keep in sync with the
+# installer's #define MyAppVersion (installer/ACADLayerStandardizer.iss),
+# which reads this same string via the MYAPPVERSION env var below.
+$AppVersion = "ALPHA/0.1"
+$AppVersionSafe = $AppVersion -replace "/", "-"
 
 # Validate AutoCAD version
 if ($AcadVersion -ne "2026" -and $AcadVersion -ne "2027")
@@ -60,11 +71,13 @@ if (-not $PackageOnly)
     }
 }
 
-# Build installer if requested
+# Build installer (on by default, every build, so the installer never drifts
+# from the app -- pass -SkipInstaller or -CreateInstaller:$false to opt out)
+$InstallerBuilt = $false
 if ($CreateInstaller)
 {
     Write-Host ">> Building installer..." -ForegroundColor Yellow
-    
+
     # Find Inno Setup compiler
     $IsccPath = $null
     $PossiblePaths = @(
@@ -80,23 +93,25 @@ if ($CreateInstaller)
             break
         }
     }
-    
+
     if (-not $IsccPath)
     {
-        Write-Error "Inno Setup not found. Install it from https://jrsoftware.org/isinfo.php"
-        exit 1
+        Write-Warning "Inno Setup not found -- skipping installer build. Install from https://jrsoftware.org/isinfo.php to have build.ps1 keep the installer current automatically."
     }
-    
-    # Set environment variables for Inno Setup script
-    $env:MYAPPVERSION = "ALPHA/0.1"
-    $env:MYAPPACADVERSION = $AcadVersion
-    
-    $IssScript = Join-Path $SolutionRoot "installer\ACADLayerStandardizer.iss"
-    & $IsccPath $IssScript
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-    
-    $InstallerDest = Join-Path $DistDir "AcLayerStandardizer_$AcadVersion.exe"
-    Write-Host "  Installer: $InstallerDest" -ForegroundColor Green
+    else
+    {
+        # Set environment variables for Inno Setup script
+        $env:MYAPPVERSION = $AppVersion
+        $env:MYAPPTFM = $Tfm
+
+        $IssScript = Join-Path $SolutionRoot "installer\ACADLayerStandardizer.iss"
+        & $IsccPath $IssScript
+        if ($LASTEXITCODE -ne 0) { exit 1 }
+
+        $InstallerBuilt = $true
+        $InstallerDest = Join-Path $DistDir "AcLayerStandardizer_$AppVersionSafe.exe"
+        Write-Host "  Installer: $InstallerDest" -ForegroundColor Green
+    }
 }
 
 # Package
@@ -127,13 +142,13 @@ Copy-Item -Path (Join-Path $DistDir "PackageContents.xml") -Destination $BundleD
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Green
 Write-Host "  Bundle:  $BundleDir"
-if ($CreateInstaller)
+if ($InstallerBuilt)
 {
-    Write-Host "  Installer: $DistDir\AcLayerStandardizer_$AcadVersion.exe" -ForegroundColor Green
+    Write-Host "  Installer: $DistDir\AcLayerStandardizer_$AppVersionSafe.exe" -ForegroundColor Green
 }
 Write-Host ""
 Write-Host "Installation:" -ForegroundColor Cyan
-Write-Host "  Option 1: Run the installer (AcLayerStandardizer_$AcadVersion.exe)"
+Write-Host "  Option 1: Run the installer (AcLayerStandardizer_$AppVersionSafe.exe)"
 Write-Host "  Option 2: Copy '$BundleName' folder to:"
 Write-Host "     %APPDATA%\Autodesk\ApplicationPlugins\"
 Write-Host "  Restart AutoCAD $AcadVersion"

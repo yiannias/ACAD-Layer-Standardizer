@@ -33,6 +33,8 @@ public class EntryPoint : IExtensionApplication
             _ribbonTimer.Start();
         }
 
+        MenuSetup.Setup(config);
+
         System.Diagnostics.Debug.WriteLine("AcLayerStandardizer loaded.");
     }
 
