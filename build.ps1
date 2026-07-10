@@ -6,7 +6,10 @@ param(
     [string]$Configuration = "Release",
 
     [Parameter(Mandatory = $false)]
-    [switch]$PackageOnly
+    [switch]$PackageOnly,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$CreateInstaller
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +60,24 @@ if (-not $PackageOnly)
     }
 }
 
+# Build MSI installer if requested
+if ($CreateInstaller)
+{
+    Write-Host ">> Building MSI installer..." -ForegroundColor Yellow
+    $WixProject = Join-Path $SolutionRoot "installer\AcLayerStandardizer.Installer.wixproj"
+    dotnet build $WixProject -p:AcadVersion=$AcadVersion -p:Configuration=$Configuration
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+    
+    # Copy MSI to dist
+    $MsiSource = Join-Path $SolutionRoot "installer\bin\$Configuration\$Tfm\AcLayerStandardizer_$AcadVersion.msi"
+    $MsiDest = Join-Path $DistDir "AcLayerStandardizer_$AcadVersion.msi"
+    if (Test-Path $MsiSource)
+    {
+        Copy-Item -Path $MsiSource -Destination $MsiDest -Force
+        Write-Host "  MSI: $MsiDest" -ForegroundColor Green
+    }
+}
+
 # Package
 $OutputDir = Join-Path $ProjectDir "bin\$Configuration\$Tfm"
 Write-Host ">> Packaging from: $OutputDir" -ForegroundColor Yellow
@@ -82,21 +103,17 @@ Copy-Item -Path "$OutputDir\*" -Destination (Join-Path $BundleDir "build-output"
 # Copy manifest
 Copy-Item -Path (Join-Path $DistDir "PackageContents.xml") -Destination $BundleDir
 
-# Create ZIP
-$ZipPath = Join-Path $SolutionRoot "AcLayerStandardizer_${AcadVersion}_${Configuration}.zip"
-if (Test-Path $ZipPath) { Remove-Item -Path $ZipPath -Force }
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-[System.IO.Compression.ZipFile]::CreateFromDirectory($BundleDir, $ZipPath)
-
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Green
 Write-Host "  Bundle:  $BundleDir"
-Write-Host "  ZIP:     $ZipPath"
+if ($CreateInstaller)
+{
+    Write-Host "  MSI:     $DistDir\AcLayerStandardizer_$AcadVersion.msi" -ForegroundColor Green
+}
 Write-Host ""
 Write-Host "Installation:" -ForegroundColor Cyan
-Write-Host "  1. Extract the ZIP"
-Write-Host "  2. Copy '$BundleName' folder to:"
+Write-Host "  Option 1: Run the MSI installer"
+Write-Host "  Option 2: Copy '$BundleName' folder to:"
 Write-Host "     %APPDATA%\Autodesk\ApplicationPlugins\"
-Write-Host "  3. Restart AutoCAD $AcadVersion"
-Write-Host "  4. Run command: NETLOAD (or just use ACLAYERSTD.STD_MAPPINGS / LSTDR)"
+Write-Host "  Restart AutoCAD $AcadVersion"
 Write-Host ""
