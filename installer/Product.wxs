@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="ACAD Layer Standardizer"
+           Manufacturer="Chris Yiannias"
+           Version="1.0.0"
+           UpgradeCode="E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57"
+           InstallerVersion="500"
+           Compressed="yes"
+           InstallScope="perUser">
+
+    <SummaryInformation Description="ACAD Layer Standardizer - AutoCAD layer cleanup tool" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
+
+    <Feature Id="ProductFeature" Title="ACAD Layer Standardizer" Level="1">
+      <ComponentGroupRef Id="PluginFiles" />
+      <ComponentRef Id="ConfigDir" />
+      <ComponentRef Id="CuiFile" />
+    </Feature>
+
+    <UIRef Id="CustomUI" />
+
+    <Icon Id="LayerStandardizerIcon" SourceFile="$(sys.CURRENTDIR)assets\LayerStandardizer.ico" />
+    <Property Id="ARPPRODUCTICON" Value="LayerStandardizerIcon" />
+
+  </Package>
+
+  <Fragment>
+    <ComponentGroup Id="PluginFiles" Directory="PluginDir">
+      <Component Id="AcLayerStandardizerDll" Guid="3D5C22DE-4114-415E-80CD-B7B435A796B2">
+        <File Id="AcLayerStandardizer.dll"
+              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net8.0-windows\AcLayerStandardizer.dll"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="NodifyDll" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+        <File Id="Nodify.dll"
+              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net8.0-windows\Nodify.dll"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="PackageContentsXml" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+        <File Id="PackageContents.xml"
+              Source="$(sys.CURRENTDIR)..\dist\PackageContents.xml"
+              KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <StandardDirectory Id="AppDataFolder">
+      <Directory Id="AcLayerStandardizerDir" Name="AcLayerStandardizer">
+        <Directory Id="PluginDir" Name="Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle\Contents\Windows\64-bit" />
+        <Component Id="ConfigDir" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+          <CreateFolder />
+          <File Id="Config.json" Source="$(sys.CURRENTDIR)assets\config.json" KeyPath="yes" />
+        </Component>
+        <Component Id="CuiFile" Guid="D4E5F6A7-B8C9-0123-DEFA-234567890123">
+          <File Id="LayerStandardizer.cuix"
+                Source="$(sys.CURRENTDIR)assets\LayerStandardizer.cuix"
+                KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+  </Fragment>
+
+</Wix>
