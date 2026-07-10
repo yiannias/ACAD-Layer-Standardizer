@@ -39,3 +39,7 @@ bld/
 *.dll
 *.arx
 *.dbx
+
+## Build artifacts / Release
+AcLayerStandardizer.bundle/
+AcLayerStandardizer_*.zip

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ApplicationPackage SchemaVersion="1.0"
+    Name="ACAD Layer Standardizer"
+    Description="Analyzes DWG layers against a template DWG and maps them to a master standard layer set."
+    Author="Chris Yiannias"
+    ProductCode="{3D5C22DE-4114-415E-80CD-B7B435A796B2}"
+    UpgradeCode="{E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57}"
+    HelpFile=""
+    OnlineDocumentationUrl="">
+
+  <CompanyDetails Name="HirschMPG" />
+
+  <RuntimeRequirements OS="Win64" SeriesMax="R26" SeriesMin="R25" Platform="AutoCAD*" />
+
+  <Components>
+    <ComponentEntry
+        AppName="AcLayerStandardizer"
+        Version="1.0.0"
+        ModuleName="./Contents/Windows/64-bit/AcLayerStandardizer.dll">
+      <Commands GroupName="ACLAYERSTD">
+        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
+        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
+        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
+        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
+        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
+        <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
+        <Command Local="LSTDR" Global="LSTDR" />
+        <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
+        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+</ApplicationPackage>
