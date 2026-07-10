@@ -25,6 +25,7 @@
         <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
+        <Command Local="LSR" Global="LSR" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
         <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
