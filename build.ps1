@@ -69,7 +69,7 @@ if ($CreateInstaller)
     if ($LASTEXITCODE -ne 0) { exit 1 }
     
     # Copy MSI to dist
-    $MsiSource = Join-Path $SolutionRoot "installer\bin\$Configuration\$Tfm\AcLayerStandardizer_$AcadVersion.msi"
+    $MsiSource = Join-Path $SolutionRoot "installer\bin\$Configuration\AcLayerStandardizer_$AcadVersion.msi"
     $MsiDest = Join-Path $DistDir "AcLayerStandardizer_$AcadVersion.msi"
     if (Test-Path $MsiSource)
     {

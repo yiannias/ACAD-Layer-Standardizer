@@ -1,24 +1,19 @@
-<Project Sdk="WixToolset.Sdk/4.0.8">
+<Project Sdk="WixToolset.Sdk/5.0.0">
   <PropertyGroup>
     <OutputName>AcLayerStandardizer_$(AcadVersion)</OutputName>
     <InstallerPlatform>x64</InstallerPlatform>
     <DefaultLanguage>en-US</DefaultLanguage>
+    <WixSuppressIces>ICE64;ICE91</WixSuppressIces>
+    <SuppressValidation>true</SuppressValidation>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="WixToolset.UI.wixext" Version="4.0.8" />
+    <PackageReference Include="WixToolset.UI.wixext" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\src\AcLayerStandardizer\AcLayerStandardizer.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Include="Product.wxs" />
-    <Compile Include="UI.wxs" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="assets\LayerStandardizer.ico" />
-  </ItemGroup>
 </Project>

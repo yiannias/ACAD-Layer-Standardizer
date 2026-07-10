@@ -8,60 +8,61 @@
            UpgradeCode="E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57"
            InstallerVersion="500"
            Compressed="yes"
-           InstallScope="perUser">
+           Scope="perUser">
 
     <SummaryInformation Description="ACAD Layer Standardizer - AutoCAD layer cleanup tool" />
 
     <MajorUpgrade DowngradeErrorMessage="A newer version is already installed." />
 
+    <Icon Id="LayerStandardizerIcon" SourceFile="$(sys.CURRENTDIR)assets\LayerStandardizer.ico" />
+    <Property Id="ARPPRODUCTICON" Value="LayerStandardizerIcon" />
+
+    <StandardDirectory Id="AppDataFolder">
+      <Directory Id="AcLayerStandardizerDir" Name="AcLayerStandardizer">
+        <Directory Id="PluginDir" Name="Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle\Contents\Windows\64-bit" />
+      </Directory>
+    </StandardDirectory>
+
     <Feature Id="ProductFeature" Title="ACAD Layer Standardizer" Level="1">
       <ComponentGroupRef Id="PluginFiles" />
       <ComponentRef Id="ConfigDir" />
-      <ComponentRef Id="CuiFile" />
     </Feature>
 
-    <UIRef Id="CustomUI" />
-
-    <Icon Id="LayerStandardizerIcon" SourceFile="$(sys.CURRENTDIR)assets\LayerStandardizer.ico" />
-    <Property Id="ARPPRODUCTICON" Value="LayerStandardizerIcon" />
+    <ui:WixUI Id="WixUI_Minimal" />
 
   </Package>
 
   <Fragment>
     <ComponentGroup Id="PluginFiles" Directory="PluginDir">
       <Component Id="AcLayerStandardizerDll" Guid="3D5C22DE-4114-415E-80CD-B7B435A796B2">
+        <RegistryValue Root="HKCU" Key="Software\AcLayerStandardizer" Name="DllInstalled" Type="integer" Value="1" KeyPath="yes" />
         <File Id="AcLayerStandardizer.dll"
-              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net8.0-windows\AcLayerStandardizer.dll"
-              KeyPath="yes" />
+              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net10.0-windows\AcLayerStandardizer.dll" />
       </Component>
       <Component Id="NodifyDll" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890">
+        <RegistryValue Root="HKCU" Key="Software\AcLayerStandardizer" Name="NodifyInstalled" Type="integer" Value="1" KeyPath="yes" />
         <File Id="Nodify.dll"
-              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net8.0-windows\Nodify.dll"
-              KeyPath="yes" />
+              Source="$(sys.CURRENTDIR)..\src\AcLayerStandardizer\bin\Release\net10.0-windows\Nodify.dll" />
       </Component>
       <Component Id="PackageContentsXml" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901">
+        <RegistryValue Root="HKCU" Key="Software\AcLayerStandardizer" Name="PackageXmlInstalled" Type="integer" Value="1" KeyPath="yes" />
         <File Id="PackageContents.xml"
-              Source="$(sys.CURRENTDIR)..\dist\PackageContents.xml"
-              KeyPath="yes" />
+              Source="$(sys.CURRENTDIR)..\dist\PackageContents.xml" />
+      </Component>
+      <Component Id="CleanupPluginDir" Directory="PluginDir" Guid="E5F6A7B8-C9D0-1234-EFAB-345678901234">
+        <RegistryValue Root="HKCU" Key="Software\AcLayerStandardizer" Name="CleanupPlugin" Type="integer" Value="1" KeyPath="yes" />
+        <RemoveFile Id="RemovePluginDirFiles" Directory="PluginDir" Name="*.*" On="uninstall" />
       </Component>
     </ComponentGroup>
   </Fragment>
 
   <Fragment>
-    <StandardDirectory Id="AppDataFolder">
-      <Directory Id="AcLayerStandardizerDir" Name="AcLayerStandardizer">
-        <Directory Id="PluginDir" Name="Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle\Contents\Windows\64-bit" />
-        <Component Id="ConfigDir" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
-          <CreateFolder />
-          <File Id="Config.json" Source="$(sys.CURRENTDIR)assets\config.json" KeyPath="yes" />
-        </Component>
-        <Component Id="CuiFile" Guid="D4E5F6A7-B8C9-0123-DEFA-234567890123">
-          <File Id="LayerStandardizer.cuix"
-                Source="$(sys.CURRENTDIR)assets\LayerStandardizer.cuix"
-                KeyPath="yes" />
-        </Component>
-      </Directory>
-    </StandardDirectory>
+    <Component Id="ConfigDir" Directory="AcLayerStandardizerDir" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012">
+      <RegistryValue Root="HKCU" Key="Software\AcLayerStandardizer" Name="ConfigInstalled" Type="integer" Value="1" KeyPath="yes" />
+      <CreateFolder />
+      <File Id="Config.json" Source="$(sys.CURRENTDIR)assets\config.json" />
+      <RemoveFile Id="RemoveConfigDirFiles" Directory="AcLayerStandardizerDir" Name="*.*" On="uninstall" />
+    </Component>
   </Fragment>
 
 </Wix>
