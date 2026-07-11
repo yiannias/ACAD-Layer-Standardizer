@@ -12,6 +12,12 @@
 ; packaged at a time today; see PackageContents.xml for how to add a second
 ; ComponentEntry if both need to ship in one installer.
 #define MyAppTfm GetEnv('MYAPPTFM')
+; schemaVersion of the bundled assets\layer_dictionary.json, read by
+; build.ps1 (PowerShell has a real JSON parser; Pascal Script doesn't) --
+; baked in at compile time so ShouldInstallDictionary below can compare it
+; against an installed copy's schemaVersion without reading the (nonexistent
+; on the end user's machine) original source path at runtime.
+#define MyDictSchemaVersion GetEnv('MYDICTSCHEMAVERSION')
 
 [Setup]
 AppId={{E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57}
@@ -45,11 +51,21 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\AcLayerStandardizer.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
 Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\Nodify.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
+; config.json: plain app settings (paths, thresholds, checkbox state), not a
+; versioned content schema -- PluginConfig.Load() already tolerates missing
+; fields via C# property defaults on deserialize, so there's nothing here
+; that a silent "keep the user's file" ever loses. onlyifdoesntexist stays.
 Source: "assets\config.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion onlyifdoesntexist
-; onlyifdoesntexist: this is a user-editable starting dictionary (see the
-; file's own "description" field), not an app resource -- an upgrade must
-; never clobber a user's retuned categories/tokens/thresholds.
-Source: "assets\layer_dictionary.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion onlyifdoesntexist
+; layer_dictionary.json IS a user-editable, user-tunable content schema (see
+; the file's own "description" field) -- onlyifdoesntexist used to mean an
+; installed copy was NEVER updated, which is exactly how the 2026-07-11
+; sortGroup tier fields got stranded on an already-installed machine (the
+; new schema shipped in the repo, but the on-disk file just never changed).
+; ShouldInstallDictionary (see [Code] below) replaces the static flag with a
+; schemaVersion-gated prompt: fresh installs get it silently, upgrades only
+; get asked (and only overwritten, after a .bak backup) when the bundled
+; copy is actually newer than what's on disk.
+Source: "assets\layer_dictionary.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion; Check: ShouldInstallDictionary
 Source: "assets\LayerStandardizer.cuix"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion
 
 [Dirs]
@@ -83,6 +99,93 @@ begin
   SetWindowPos(H, -1, 0, 0, 0, 0, $0002 or $0001);
   SetWindowPos(H, -2, 0, 0, 0, 0, $0002 or $0001);
   SetForegroundWindow(H);
+end;
+
+// Extracts an integer JSON field's value via plain text search -- Pascal
+// Script has no JSON parser, and this only ever needs one scalar field
+// (schemaVersion) out of a file whose format we control, so a full parser
+// would be overkill. Looks for "FieldName" then the first run of digits
+// after it (skips the colon/whitespace in between). Returns DefaultValue if
+// the file can't be read or the field isn't found.
+function GetJsonIntField(const FilePath, FieldName: String; DefaultValue: Integer): Integer;
+var
+  RawContent: AnsiString;
+  Content, Needle, Digits: String;
+  P: Integer;
+begin
+  Result := DefaultValue;
+  // LoadStringFromFile's output param is specifically AnsiString (a type
+  // mismatch against the default Unicode String otherwise); JSON content
+  // here is plain ASCII, so the AnsiString->String conversion is lossless.
+  if not LoadStringFromFile(FilePath, RawContent) then
+    Exit;
+  Content := String(RawContent);
+
+  Needle := '"' + FieldName + '"';
+  P := Pos(Needle, Content);
+  if P = 0 then Exit;
+
+  P := P + Length(Needle);
+  while (P <= Length(Content)) and not ((Content[P] >= '0') and (Content[P] <= '9')) do
+    P := P + 1;
+
+  Digits := '';
+  while (P <= Length(Content)) and (Content[P] >= '0') and (Content[P] <= '9') do
+  begin
+    Digits := Digits + Content[P];
+    P := P + 1;
+  end;
+
+  if Digits <> '' then
+    Result := StrToIntDef(Digits, DefaultValue);
+end;
+
+var
+  DictCheckDone: Boolean;
+  DictCheckResult: Boolean;
+
+// [Files] Check function for layer_dictionary.json, replacing the old
+// static onlyifdoesntexist flag (see the [Files] section comment for why).
+// Cached behind DictCheckDone/DictCheckResult because Inno can invoke a
+// Check function more than once per file (e.g. recomputing install size on
+// wizard page changes) -- without caching, a user could see the prompt
+// twice, or worse, get backed up/overwritten twice, for one install run.
+function ShouldInstallDictionary(): Boolean;
+var
+  DestFile, BackupFile: String;
+  InstalledVersion: Integer;
+begin
+  if DictCheckDone then
+  begin
+    Result := DictCheckResult;
+    Exit;
+  end;
+
+  DestFile := ExpandConstant('{userappdata}\AcLayerStandardizer\layer_dictionary.json');
+
+  if not FileExists(DestFile) then
+    Result := True { fresh install, no prompt }
+  else
+  begin
+    InstalledVersion := GetJsonIntField(DestFile, 'schemaVersion', 0);
+
+    if {#MyDictSchemaVersion} <= InstalledVersion then
+      Result := False { installed copy is already current (or newer/custom) -- leave it alone, no prompt }
+    else if MsgBox('A newer version of the layer dictionary (used by the Target Filter panel) is available.' + #13#10#13#10 +
+      'Overwrite your current layer_dictionary.json with the updated one? Your existing file will be backed up first as layer_dictionary.json.bak.' + #13#10#13#10 +
+      'Choose No to keep your current file, including any customizations, as-is.',
+      mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      BackupFile := DestFile + '.bak';
+      FileCopy(DestFile, BackupFile, False);
+      Result := True;
+    end
+    else
+      Result := False;
+  end;
+
+  DictCheckDone := True;
+  DictCheckResult := Result;
 end;
 
 var

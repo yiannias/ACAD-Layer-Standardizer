@@ -105,6 +105,15 @@ if ($CreateInstaller)
         $env:MYAPPVERSION = $AppVersion
         $env:MYAPPTFM = $Tfm
 
+        # layer_dictionary.json's schemaVersion, baked into the installer at
+        # compile time so it can prompt to overwrite an installed dictionary
+        # only when the shipped one is actually newer (see ShouldInstallDictionary
+        # in the .iss) without needing runtime JSON parsing in Pascal Script.
+        # Read here (PowerShell) rather than in Inno's preprocessor because
+        # PowerShell already has a real JSON parser and the .iss doesn't.
+        $DictJsonPath = Join-Path $SolutionRoot "installer\assets\layer_dictionary.json"
+        $env:MYDICTSCHEMAVERSION = (Get-Content $DictJsonPath -Raw | ConvertFrom-Json).schemaVersion
+
         $IssScript = Join-Path $SolutionRoot "installer\ACADLayerStandardizer.iss"
         & $IsccPath $IssScript
         if ($LASTEXITCODE -ne 0) { exit 1 }

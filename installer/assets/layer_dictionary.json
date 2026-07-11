@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "description": "Maps layer-name tokens to smart-group tags for the mapping editor's Target-side node filters. This file is user-editable -- add, rename, or retune categories/tokens/thresholds for your own firm's layer standard. See docs/history or memory.md for the design rationale. A category marked \"exclusive\": true is evaluated first; any layer it matches is blocked from all other CONTENT tags (Floor Plan/Wall/Door/etc.) but still receives its discipline tag -- used for Annotative, so annotation never counts as plan content when filtering, while 'Architectural on' still shows A-ANNO layers. sortGroup (Discipline | General | Specific, default Specific) controls each toggle's tier: ordering/color in the panel, and how it covers layers (Discipline/General by plain tag membership, Specific via each layer's single most-specific tag).",
   "delimiter": "-",
   "fieldsScanned": 3,
