@@ -3,7 +3,7 @@
     Name="ACAD Layer Standardizer"
     Description="Analyzes DWG layers against a template DWG and maps them to a master standard layer set. Supports AutoCAD 2021 and newer."
     Author="Chris Yiannias"
-    Version="0.3.0"
+    Version="0.4.0"
     ProductCode="{3D5C22DE-4114-415E-80CD-B7B435A796B2}"
     UpgradeCode="{E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57}">
 
@@ -23,7 +23,7 @@
         AppType=".Net"
         LoadOnAutoCADStartup="True"
         LoadOnCommandInvocation="True"
-        Version="0.3.0"
+        Version="0.4.0"
         ModuleName="./Contents/R24/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
         <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
@@ -50,7 +50,7 @@
         AppType=".Net"
         LoadOnAutoCADStartup="True"
         LoadOnCommandInvocation="True"
-        Version="0.3.0"
+        Version="0.4.0"
         ModuleName="./Contents/R25/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
         <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
@@ -77,7 +77,7 @@
         AppType=".Net"
         LoadOnAutoCADStartup="True"
         LoadOnCommandInvocation="True"
-        Version="0.3.0"
+        Version="0.4.0"
         ModuleName="./Contents/R26/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
         <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
