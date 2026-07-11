@@ -504,11 +504,13 @@ public class LayerEditorViewModel : ObservableObject
     // Target is flexible/multi-column (chris's correction, 2026-07-10: the
     // "single column" call last round was a miscommunication -- Target will
     // always have far more items than Source, so it needs to flow into
-    // several columns to keep panning reasonably proportioned). Re-run every
-    // time visibility changes (Target Filter toggles, filtered connections,
-    // etc.), always one alphabetized sequence chunked into columns -- no
-    // connected-first clustering, since that conflicts with a single
-    // predictable alphabetical order.
+    // several columns to keep panning reasonably proportioned).
+    // Connected-first clustering (chris, 2026-07-10): targets with a
+    // currently-visible connection are placed FIRST, so they land in the
+    // column(s) nearest Source -- less scrolling/panning to drag a new
+    // mapping when most of the action is near an existing match. Each group
+    // (connected, then unconnected) is independently re-sorted alphabetically
+    // every time this runs, so the ordering never drifts from a stale state.
     // Column count/height rules: at most 5 columns (hard cap); each column
     // is as close as possible to the Source column's current height, with a
     // floor of 20 rows -- but if 5 columns still isn't enough to fit
@@ -517,8 +519,18 @@ public class LayerEditorViewModel : ObservableObject
     // height matching is the soft one.
     private void ArrangeTargetsInColumns()
     {
-        var targets = Nodes.Where(n => !n.IsSource && !n.IsHeader && n.IsVisible).OrderBy(n => n.Name).ToList();
-        if (targets.Count == 0) return;
+        var visibleTargets = Nodes.Where(n => !n.IsSource && !n.IsHeader && n.IsVisible).ToList();
+        if (visibleTargets.Count == 0) return;
+
+        var connected = visibleTargets
+            .Where(t => Connections.Any(c => c.Target == t && c.IsVisible))
+            .OrderBy(t => t.Name)
+            .ToList();
+        var unconnected = visibleTargets
+            .Where(t => !Connections.Any(c => c.Target == t && c.IsVisible))
+            .OrderBy(t => t.Name)
+            .ToList();
+        var targets = connected.Concat(unconnected).ToList();
 
         int sourceVisibleCount = Nodes.Count(n => n.IsSource && n.IsVisible);
         int maxColumnHeight = Math.Max(sourceVisibleCount, MinTargetColumnHeight);
