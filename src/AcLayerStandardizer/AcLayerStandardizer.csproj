@@ -1,10 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <!--
+    Multi-targeted across AutoCAD's .NET binary-compatibility eras. One DLL
+    per era, selected at load time by PackageContents.xml SeriesMin/SeriesMax:
+      net48            -> AutoCAD 2021-2024 (R24.0-R24.3), API refs 24.0.0
+      net8.0-windows   -> AutoCAD 2025-2026 (R25.0-R25.1), API refs 25.0.1
+      net10.0-windows  -> AutoCAD 2027     (R26.0),        API refs 26.0.0
+    Reference assemblies come from Autodesk's official AutoCAD.NET NuGet
+    packages (ExcludeAssets=runtime: reference-only, never shipped).
+  -->
   <PropertyGroup>
-    <AcadVersion Condition="'$(AcadVersion)' == ''">2026</AcadVersion>
-    <TargetFramework Condition="'$(AcadVersion)' == '2027'">net10.0-windows</TargetFramework>
-    <TargetFramework Condition="'$(AcadVersion)' != '2027'">net8.0-windows</TargetFramework>
+    <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
     <UseWPF>true</UseWPF>
+    <!-- Pin to C# 12 so net48 gets modern syntax and all eras compile the same source -->
+    <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget>
@@ -15,30 +24,27 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="AcDbMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\acdbmgd.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="AcCoreMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\accoremgd.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="AcMgd">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\acmgd.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="AdWindows">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\AdWindows.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Autodesk.AutoCAD.Interop">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\Autodesk.AutoCAD.Interop.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Autodesk.AutoCAD.Interop.Common">
-      <HintPath>C:\Program Files\Autodesk\AutoCAD $(AcadVersion)\Autodesk.AutoCAD.Interop.Common.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
+    <!-- net48's implicit-usings set includes System.Net.Http, which .NET
+         Framework only has via an extra assembly reference we don't need -->
+    <Using Remove="System.Net.Http" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="AutoCAD.NET" Version="24.0.0" ExcludeAssets="runtime" />
+    <!-- Runtime deps that are built into net8/net10 but not .NET Framework -->
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <!-- Compile-time polyfills (init/required/nullable attributes) for C# 12 on net48 -->
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
+    <!-- dynamic (COM late binding in MenuSetup) needs the runtime binder on .NET Framework -->
+    <Reference Include="Microsoft.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0-windows'">
+    <PackageReference Include="AutoCAD.NET" Version="25.0.1" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
+    <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>

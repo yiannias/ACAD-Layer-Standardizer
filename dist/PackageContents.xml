@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0"
     Name="ACAD Layer Standardizer"
-    Description="Analyzes DWG layers against a template DWG and maps them to a master standard layer set."
+    Description="Analyzes DWG layers against a template DWG and maps them to a master standard layer set. Supports AutoCAD 2021 and newer."
     Author="Chris Yiannias"
     Version="0.3.0"
     ProductCode="{3D5C22DE-4114-415E-80CD-B7B435A796B2}"
@@ -9,7 +9,67 @@
 
   <CompanyDetails Name="CGY" />
 
-  <Components Description="2027">
+  <!-- One Components block per AutoCAD .NET binary-compatibility era; the
+       Autoloader picks the block whose SeriesMin/SeriesMax bracket the
+       running release. Folder names match the era (R24/R25/R26).
+       AutoCAD 2020 and older (R23-) match no block: unsupported. -->
+
+  <!-- AutoCAD 2021-2024, .NET Framework 4.8 build -->
+  <Components Description="AutoCAD 2021-2024">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD|Civil3D|Map|ADT|ACADM|MEP|ACADE|Plant3D" SeriesMin="R24.0" SeriesMax="R24.3" SupportPath="./Contents/" />
+
+    <ComponentEntry
+        AppName="AcLayerStandardizer"
+        AppType=".Net"
+        LoadOnAutoCADStartup="True"
+        LoadOnCommandInvocation="True"
+        Version="0.3.0"
+        ModuleName="./Contents/R24/AcLayerStandardizer.dll">
+      <Commands GroupName="ACLAYERSTD">
+        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
+        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
+        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
+        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
+        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
+        <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
+        <Command Local="LSTDR" Global="LSTDR" />
+        <Command Local="LSR" Global="LSR" />
+        <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
+        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+
+  <!-- AutoCAD 2025-2026, .NET 8 build -->
+  <Components Description="AutoCAD 2025-2026">
+    <RuntimeRequirements OS="Win64" Platform="AutoCAD|Civil3D|Map|ADT|ACADM|MEP|ACADE|Plant3D" SeriesMin="R25.0" SeriesMax="R25.1" SupportPath="./Contents/" />
+
+    <ComponentEntry
+        AppName="AcLayerStandardizer"
+        AppType=".Net"
+        LoadOnAutoCADStartup="True"
+        LoadOnCommandInvocation="True"
+        Version="0.3.0"
+        ModuleName="./Contents/R25/AcLayerStandardizer.dll">
+      <Commands GroupName="ACLAYERSTD">
+        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
+        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
+        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
+        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
+        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
+        <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
+        <Command Local="LSTDR" Global="LSTDR" />
+        <Command Local="LSR" Global="LSR" />
+        <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
+        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
+      </Commands>
+    </ComponentEntry>
+  </Components>
+
+  <!-- AutoCAD 2027, .NET 10 build -->
+  <Components Description="AutoCAD 2027">
     <RuntimeRequirements OS="Win64" Platform="AutoCAD|Civil3D|Map|ADT|ACADM|MEP|ACADE|Plant3D" SeriesMin="R26.0" SeriesMax="R26.0" SupportPath="./Contents/" />
 
     <ComponentEntry
@@ -18,7 +78,7 @@
         LoadOnAutoCADStartup="True"
         LoadOnCommandInvocation="True"
         Version="0.3.0"
-        ModuleName="./Contents/Windows/64-bit/AcLayerStandardizer.dll">
+        ModuleName="./Contents/R26/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
         <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
         <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />

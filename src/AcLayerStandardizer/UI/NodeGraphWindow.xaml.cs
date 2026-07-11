@@ -46,7 +46,7 @@ public partial class NodeGraphWindow : Window
         Dictionary<string, string>? memoryMappings,
         List<Matching.MatchResult>? heuristicResults = null,
         HashSet<string>? emptyLayers = null,
-        Action<IReadOnlySet<string>>? purgeCallback = null,
+        Action<IReadOnlyCollection<string>>? purgeCallback = null,
         string sourceFileName = "",
         string templatePath = "",
         IReadOnlyDictionary<string, LayerProperties>? standardLayerProperties = null,
@@ -201,7 +201,9 @@ public partial class NodeGraphWindow : Window
             .ToList();
 
         Dictionary<string, string>? preserveMappings = preserveByName
-            ? new Dictionary<string, string>(_viewModel.CurrentMappings, StringComparer.OrdinalIgnoreCase)
+            // ToDictionary rather than the Dictionary ctor: net48 has no
+            // ctor overload taking IReadOnlyDictionary
+            ? _viewModel.CurrentMappings.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.OrdinalIgnoreCase)
             : null;
 
         var config = PluginConfig.Load();

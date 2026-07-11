@@ -5,13 +5,6 @@
 #define MyAppPublisher "CGY"
 #define MyAppURL "https://github.com/yiannias/ACAD-Layer-Standardizer"
 #define MyAppVersion GetEnv('MYAPPVERSION')
-; Target framework moniker of the build being packaged (e.g. net10.0-windows
-; for AutoCAD 2027, net8.0-windows for 2026/2025) -- must match whichever
-; -AcadVersion build.ps1 actually built, since AutoCAD 2027's .NET 10 host is
-; not binary-compatible with 2026/2025's .NET 8 host. Only one TFM is
-; packaged at a time today; see PackageContents.xml for how to add a second
-; ComponentEntry if both need to ship in one installer.
-#define MyAppTfm GetEnv('MYAPPTFM')
 ; schemaVersion of the bundled assets\layer_dictionary.json, read by
 ; build.ps1 (PowerShell has a real JSON parser; Pascal Script doesn't) --
 ; baked in at compile time so ShouldInstallDictionary below can compare it
@@ -41,15 +34,22 @@ Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\Contents\Windows\64-bit\AcLayerStandardizer.dll
+UninstallDisplayIcon={app}\Contents\R25\AcLayerStandardizer.dll
 WizardStyle=modern dark
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\AcLayerStandardizer.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
-Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\Nodify.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
+; One payload folder per AutoCAD .NET binary-compatibility era; AutoCAD's
+; Autoloader picks the folder matching the running release via
+; PackageContents.xml SeriesMin/SeriesMax. AutoCAD 2020 and older are NOT
+; supported. Wildcard is safe: the csproj marks AutoCAD reference
+; assemblies ExcludeAssets=runtime so they never reach the output dir, and
+; the net48 payload legitimately needs its System.Text.Json dep closure.
+Source: "..\src\AcLayerStandardizer\bin\Release\net48\*.dll"; DestDir: "{app}\Contents\R24"; Flags: ignoreversion
+Source: "..\src\AcLayerStandardizer\bin\Release\net8.0-windows\*.dll"; DestDir: "{app}\Contents\R25"; Flags: ignoreversion
+Source: "..\src\AcLayerStandardizer\bin\Release\net10.0-windows\*.dll"; DestDir: "{app}\Contents\R26"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
 ; config.json: plain app settings (paths, thresholds, checkbox state), not a
 ; versioned content schema -- PluginConfig.Load() already tolerates missing
@@ -375,7 +375,8 @@ begin
   InfoLbl.WordWrap := True;
   InfoLbl.AutoSize := True;
   InfoLbl.Font.Size := 10;
-  InfoLbl.Caption := 'ACAD Layer Standardizer analyzes DWG layers against a template and maps them to a master standard layer set.';
+  InfoLbl.Caption := 'ACAD Layer Standardizer analyzes DWG layers against a template and maps them to a master standard layer set.' + #13#10#13#10 +
+    'Supports AutoCAD 2021 and newer (including verticals such as Civil 3D). AutoCAD 2020 and older are not supported.';
 
   GitHubLink := TNewStaticText.Create(InfoPage);
   GitHubLink.Parent := InfoPage.Surface;

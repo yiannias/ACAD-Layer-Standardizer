@@ -1,6 +1,4 @@
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.Interop;
-using Autodesk.AutoCAD.Interop.Common;
 
 namespace AcLayerStandardizer.Core;
 
@@ -15,17 +13,20 @@ internal static class MenuSetup
     // acting as Enter.
     private const string MenuItemMacro = "\x03\x03LSR ";
 
+    // COM access is late-bound (dynamic) rather than via the versioned
+    // Autodesk.AutoCAD.Interop assemblies, so one body serves every
+    // AutoCAD release we target without per-version interop references.
     public static bool Setup(PluginConfig config)
     {
         if (!config.InstallMenu) return true;
 
         try
         {
-            var acadApp = (AcadApplication)Application.AcadApplication;
-            var baseGroup = acadApp.MenuGroups.Item(0);
+            dynamic acadApp = Application.AcadApplication;
+            dynamic baseGroup = acadApp.MenuGroups.Item(0);
 
-            AcadPopupMenu? popupMenu = null;
-            foreach (AcadPopupMenu existing in baseGroup.Menus)
+            dynamic? popupMenu = null;
+            foreach (dynamic existing in baseGroup.Menus)
             {
                 if (existing.Name == MenuTitle)
                 {
@@ -45,7 +46,7 @@ internal static class MenuSetup
                 // Self-heal: keep the item's macro current even if the menu
                 // group already existed from an earlier run (e.g. an older
                 // build that shipped a different macro string).
-                var item = popupMenu.Item(0);
+                dynamic item = popupMenu.Item(0);
                 if (item.Macro != MenuItemMacro)
                     item.Macro = MenuItemMacro;
             }

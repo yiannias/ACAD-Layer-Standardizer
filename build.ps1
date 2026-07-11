@@ -1,8 +1,5 @@
 param(
     [Parameter(Mandatory = $false)]
-    [string]$AcadVersion = "2027",
-
-    [Parameter(Mandatory = $false)]
     [string]$Configuration = "Release",
 
     [Parameter(Mandatory = $false)]
@@ -30,44 +27,46 @@ $BundleDir = Join-Path $SolutionRoot $BundleName
 $AppVersion = "ALPHA/0.3"
 $AppVersionSafe = $AppVersion -replace "/", "-"
 
-# Validate AutoCAD version
-if ($AcadVersion -ne "2026" -and $AcadVersion -ne "2027")
-{
-    Write-Error "AcadVersion must be 2026 or 2027. Got: $AcadVersion"
-    exit 1
-}
-
-# Determine target framework
-$Tfm = if ($AcadVersion -eq "2027") { "net10.0-windows" } else { "net8.0-windows" }
+# One payload per AutoCAD .NET binary-compatibility era. The csproj
+# multi-targets all three TFMs in a single build; the Autoloader picks the
+# right folder at runtime via PackageContents.xml SeriesMin/SeriesMax.
+# AutoCAD 2020 (R23) and older are NOT supported.
+$Eras = @(
+    @{ Folder = "R24"; Tfm = "net48";           Acad = "AutoCAD 2021-2024" },
+    @{ Folder = "R25"; Tfm = "net8.0-windows";  Acad = "AutoCAD 2025-2026" },
+    @{ Folder = "R26"; Tfm = "net10.0-windows"; Acad = "AutoCAD 2027" }
+)
 
 Write-Host "=== ACAD Layer Standardizer - Build & Package ===" -ForegroundColor Cyan
-Write-Host "  AutoCAD version: $AcadVersion"
-Write-Host "  Target framework: $Tfm"
-Write-Host "  Configuration:    $Configuration"
+Write-Host "  Version:       $AppVersion"
+Write-Host "  Configuration: $Configuration"
+foreach ($Era in $Eras)
+{
+    Write-Host ("  {0}: {1} ({2})" -f $Era.Folder, $Era.Acad, $Era.Tfm)
+}
 Write-Host ""
 
 if (-not $PackageOnly)
 {
     # Restore
     Write-Host ">> Restoring packages..." -ForegroundColor Yellow
-    dotnet restore $ProjectDir\AcLayerStandardizer.csproj -p:AcadVersion=$AcadVersion
+    dotnet restore $ProjectDir\AcLayerStandardizer.csproj
     if ($LASTEXITCODE -ne 0) { exit 1 }
 
-    # Build
-    Write-Host ">> Building..." -ForegroundColor Yellow
+    # Build (all target frameworks in one pass)
+    Write-Host ">> Building all targets..." -ForegroundColor Yellow
     dotnet build $ProjectDir\AcLayerStandardizer.csproj `
-        -p:AcadVersion=$AcadVersion `
         -p:Configuration=$Configuration `
         -p:InformationalVersion=$AppVersion `
         --no-restore
     if ($LASTEXITCODE -ne 0) { exit 1 }
 
-    # Run tests
+    # Run tests (all target frameworks)
     $TestProject = Join-Path $SolutionRoot "tests\AcLayerStandardizer.Tests\AcLayerStandardizer.Tests.csproj"
     if (Test-Path $TestProject)
     {
         Write-Host ">> Running tests..." -ForegroundColor Yellow
-        dotnet test $TestProject -p:AcadVersion=$AcadVersion --no-restore
+        dotnet test $TestProject
         if ($LASTEXITCODE -ne 0) { exit 1 }
     }
 }
@@ -103,7 +102,6 @@ if ($CreateInstaller)
     {
         # Set environment variables for Inno Setup script
         $env:MYAPPVERSION = $AppVersion
-        $env:MYAPPTFM = $Tfm
 
         # layer_dictionary.json's schemaVersion, baked into the installer at
         # compile time so it can prompt to overwrite an installed dictionary
@@ -124,9 +122,8 @@ if ($CreateInstaller)
     }
 }
 
-# Package
-$OutputDir = Join-Path $ProjectDir "bin\$Configuration\$Tfm"
-Write-Host ">> Packaging from: $OutputDir" -ForegroundColor Yellow
+# Package the loose bundle (dev-install alternative to the installer)
+Write-Host ">> Packaging bundle..." -ForegroundColor Yellow
 
 # Clean previous bundle
 if (Test-Path $BundleDir)
@@ -134,17 +131,17 @@ if (Test-Path $BundleDir)
     Remove-Item -Path $BundleDir -Recurse -Force
 }
 
-# Create bundle structure
-$TargetDir = Join-Path $BundleDir "Contents\Windows\64-bit"
-New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+foreach ($Era in $Eras)
+{
+    $OutputDir = Join-Path $ProjectDir "bin\$Configuration\$($Era.Tfm)"
+    $TargetDir = Join-Path $BundleDir "Contents\$($Era.Folder)"
+    New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
 
-# Copy DLLs
-Copy-Item -Path (Join-Path $OutputDir "AcLayerStandardizer.dll") -Destination $TargetDir
-Copy-Item -Path (Join-Path $OutputDir "Nodify.dll") -Destination $TargetDir
-
-# Copy build output (optional, for debugging)
-New-Item -ItemType Directory -Path (Join-Path $BundleDir "build-output") -Force | Out-Null
-Copy-Item -Path "$OutputDir\*" -Destination (Join-Path $BundleDir "build-output") -Include "*.pdb", "*.deps.json" -ErrorAction SilentlyContinue
+    # Everything in the output dir ships: the AutoCAD reference assemblies
+    # are ExcludeAssets=runtime in the csproj so they never land here, and
+    # the net48 payload legitimately needs its System.Text.Json dep closure.
+    Copy-Item -Path (Join-Path $OutputDir "*.dll") -Destination $TargetDir
+}
 
 # Copy manifest
 Copy-Item -Path (Join-Path $DistDir "PackageContents.xml") -Destination $BundleDir
@@ -161,5 +158,5 @@ Write-Host "Installation:" -ForegroundColor Cyan
 Write-Host "  Option 1: Run the installer (AcLayerStandardizer_$AppVersionSafe.exe)"
 Write-Host "  Option 2: Copy '$BundleName' folder to:"
 Write-Host "     %APPDATA%\Autodesk\ApplicationPlugins\"
-Write-Host "  Restart AutoCAD $AcadVersion"
+Write-Host "  Restart AutoCAD (2021 or newer)"
 Write-Host ""

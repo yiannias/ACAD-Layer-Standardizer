@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <AcadVersion Condition="'$(AcadVersion)' == ''">2026</AcadVersion>
-    <TargetFramework Condition="'$(AcadVersion)' == '2027'">net10.0-windows</TargetFramework>
-    <TargetFramework Condition="'$(AcadVersion)' != '2027'">net8.0-windows</TargetFramework>
+    <!-- Mirror the plugin's era targets so core logic is tested on every runtime it ships on -->
+    <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
+    <UseWPF>true</UseWPF>
+    <LangVersion>12</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -11,9 +12,20 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Using Remove="System.Net.Http" />
+    <!-- UseWPF switches to the WindowsDesktop implicit-usings set, which
+         drops System.IO that these tests rely on -->
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <PackageReference Include="PolySharp" Version="1.15.0" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>

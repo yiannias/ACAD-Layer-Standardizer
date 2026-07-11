@@ -573,9 +573,10 @@ public class LayerEditorViewModel : ObservableObject
         int sourceVisibleCount = Nodes.Count(n => n.IsSource && n.IsVisible);
         int maxColumnHeight = Math.Max(sourceVisibleCount, MinTargetColumnHeight);
 
-        int numColumns = Math.Clamp(
+        // Math.Min/Max instead of Math.Clamp: the latter doesn't exist on net48
+        int numColumns = Math.Min(Math.Max(
             (int)Math.Ceiling((double)targets.Count / maxColumnHeight),
-            1, MaxTargetColumns);
+            1), MaxTargetColumns);
         int perColumn = (int)Math.Ceiling((double)targets.Count / numColumns);
 
         double x = RightColX;
