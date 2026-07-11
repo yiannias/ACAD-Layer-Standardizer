@@ -54,23 +54,10 @@ public class SubtractDoubleConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
-// Background grid brush was static "wallpaper" -- didn't pan/zoom with the
-// node canvas (chris, 2026-07-10). Computes the pixel offset needed to shift
-// the tiled DrawingBrush's pattern in the opposite direction of a pan, at
-// the current zoom scale, so the grid appears to stay anchored to world
-// space instead of the screen.
-public class ViewportPanOffsetConverter : IMultiValueConverter
-{
-    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
-    {
-        if (values.Length < 2 || values[0] is not double zoom || values[1] is not double locComponent)
-            return 0.0;
-        return -locComponent * zoom;
-    }
-
-    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
-        => throw new NotSupportedException();
-}
+// (ViewportPanOffsetConverter used to live here: it hand-computed the grid
+// brush's pan offset from ViewportZoom/ViewportLocation. Removed 2026-07-11
+// when the grid brush's Transform was bound directly to the editor's own
+// ViewportTransform, which is the same math maintained by Nodify itself.)
 
 public class ColorStringToBrushConverter : IValueConverter
 {

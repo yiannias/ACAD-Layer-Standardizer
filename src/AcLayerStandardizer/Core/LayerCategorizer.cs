@@ -9,9 +9,14 @@ public class LayerCategorizationResult
     // (ADSK_*, DEFPOINTS, and other junk/system layers)
     public HashSet<string> AlwaysHidden { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-    // every tag actually present on >=1 layer after folding, in dictionary
-    // declaration order with virtual fallback/Misc buckets appended after
+    // every tag actually present on >=1 layer after folding, ordered
+    // Discipline group first, then General, then Specific, alphabetized
+    // within each group -- see LayerCategorizer.Classify
     public List<string> VisibleCategories { get; } = [];
+
+    // tag name -> "Discipline"/"General"/"Specific", for every tag in
+    // VisibleCategories (including virtual fallback/Misc buckets)
+    public Dictionary<string, string> SortGroupByTag { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 // Classifies a template's target/standard layer names into the smart-group
@@ -65,13 +70,22 @@ public static class LayerCategorizer
         }
 
         // Pass 2: non-exclusive categories, additive (a layer can carry
-        // several), skipping anything an exclusive category already claimed.
+        // several), skipping anything an exclusive category already
+        // claimed -- EXCEPT Discipline-tier categories, which tag claimed
+        // layers too. Exclusivity exists so annotation content never also
+        // counts as Floor Plan/Wall/etc. CONTENT when filtering, but an
+        // A-ANNO layer is still an Architectural layer: with the Target
+        // Filter's union semantics, "Architectural on" must show every A-
+        // layer including its annotation (chris, 2026-07-11 -- turning
+        // Architectural on showed only a handful of layers because
+        // Annotative had stripped the discipline tag from the rest).
         var nonExclusiveCats = dict.Categories.Where(c => !c.Exclusive).ToList();
         foreach (var cat in nonExclusiveCats)
         {
+            bool isDiscipline = string.Equals(cat.SortGroup, "Discipline", StringComparison.OrdinalIgnoreCase);
             foreach (var name in remaining)
             {
-                if (claimedExclusive.Contains(name)) continue;
+                if (claimedExclusive.Contains(name) && !isDiscipline) continue;
                 if (MatchesCategory(fieldsByLayer[name], cat, dict.FieldsScanned))
                     result.LayerTags[name].Add(cat.Name);
             }
@@ -108,18 +122,39 @@ public static class LayerCategorizer
             .SelectMany(t => t)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var orderedKnown = dict.Categories
-            .Select(c => c.Name)
-            .Where(allAssignedTags.Contains)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        // Explicit categories carry their own SortGroup. Virtual fallback
+        // buckets (e.g. "Engineering", "Floor Plan Misc") only exist as
+        // strings referenced via FallbackGroup, so they inherit the
+        // SortGroup of the first declared category that folds into them --
+        // this is what makes "Engineering" behave as an inclusive Discipline
+        // bucket automatically, with no separate declaration needed. The
+        // literal Misc catch-all (Pass 4) has no source category, so it's
+        // hardcoded to Specific.
+        var sortGroupByCategory = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cat in dict.Categories)
+            sortGroupByCategory[cat.Name] = cat.SortGroup;
+        foreach (var cat in dict.Categories)
+        {
+            if (string.IsNullOrEmpty(cat.FallbackGroup)) continue;
+            if (!sortGroupByCategory.ContainsKey(cat.FallbackGroup))
+                sortGroupByCategory[cat.FallbackGroup] = cat.SortGroup;
+        }
+        sortGroupByCategory[MiscCategory] = "Specific";
 
-        var extras = allAssignedTags
-            .Where(t => !orderedKnown.Contains(t, StringComparer.OrdinalIgnoreCase))
-            .OrderBy(t => t, StringComparer.OrdinalIgnoreCase);
+        string GroupOf(string tag) => sortGroupByCategory.TryGetValue(tag, out var g) ? g : "Specific";
+        int GroupRank(string group) => group switch
+        {
+            "Discipline" => 0,
+            "General" => 1,
+            _ => 2,
+        };
 
-        result.VisibleCategories.AddRange(orderedKnown);
-        result.VisibleCategories.AddRange(extras);
+        result.VisibleCategories.AddRange(allAssignedTags
+            .OrderBy(t => GroupRank(GroupOf(t)))
+            .ThenBy(t => t, StringComparer.OrdinalIgnoreCase));
+
+        foreach (var tag in result.VisibleCategories)
+            result.SortGroupByTag[tag] = GroupOf(tag);
 
         return result;
     }

@@ -12,6 +12,14 @@ public class LayerCategoryDefinition
     public bool Exclusive { get; set; }
     public string? FallbackGroup { get; set; }
 
+    // Which tier this category sits in for the Target Filter panel's
+    // ordering/color and filtering behavior: "Discipline"/"General" are
+    // inclusive (a node matches if it carries the tag at all), "Specific"
+    // is exclusive (a node matches only via its single rarest Specific tag,
+    // same as the original PrimaryTargetTag mechanism, just scoped). See
+    // LayerCategorizer.Classify and LayerEditorViewModel.IsTargetNodeVisible.
+    public string SortGroup { get; set; } = "Specific";
+
     // Exempts this category from the fold threshold entirely -- it shows as
     // its own toggle whenever it has >=1 real match, regardless of count.
     // For categories where identity matters more than volume (e.g. Life

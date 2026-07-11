@@ -2,6 +2,8 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -83,6 +85,17 @@ public partial class NodeGraphWindow : Window
         DataContext = _viewModel;
 
         Closing += OnWindowClosing;
+
+        // If the window loses focus while Space is held (alt-tab, a dialog,
+        // a context-menu popup taking keyboard focus), the Space keyup never
+        // reaches Window_PreviewKeyUp and left-click would stay bound to the
+        // pan gesture forever. Restore on deactivation; the window-level
+        // PreviewMouseDown handler covers the remaining stuck cases.
+        Deactivated += (_, _) =>
+        {
+            if (_leftPanEnabled)
+                SetPanGestureIncludesLeftClick(false);
+        };
 
         _viewModel.Connections.CollectionChanged += (_, _) =>
         {
@@ -344,8 +357,43 @@ public partial class NodeGraphWindow : Window
         Close();
     }
 
+    // Left-click delete runs at the WINDOW's preview level (wired in XAML on
+    // the Window element), not only on the Connection itself: window preview
+    // handlers fire before Nodify's editor-level input processing can touch
+    // the event, so no gesture recognizer, capture, or editor state machine
+    // can swallow the click first. The per-connection PreviewMouseDown
+    // handler below stays as a redundant second chance (it never
+    // double-fires: whichever runs first marks the event handled).
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Recovery for a stuck left-click pan gesture: Space keydown adds
+        // LeftClick to the editor's pan gesture, and if the matching keyup
+        // is lost (released while a context menu had keyboard focus, while
+        // the window was deactivated, while a dialog was up), every left
+        // click from then on starts a pan and node/connection interaction
+        // goes dead. Any mouse press without Space physically down restores
+        // the normal gesture set before the event proceeds.
+        if (_leftPanEnabled && !Keyboard.IsKeyDown(Key.Space))
+            SetPanGestureIncludesLeftClick(false);
+
+        if (e.ChangedButton != MouseButton.Left || Keyboard.IsKeyDown(Key.Space))
+            return;
+
+        var d = e.OriginalSource as DependencyObject;
+        while (d is not null && d is not Connection)
+            d = VisualTreeHelper.GetParent(d);
+
+        if (d is Connection { DataContext: LayerConnectionViewModel vm })
+        {
+            _viewModel.RemoveConnectionCommand.Execute(vm);
+            e.Handled = true;
+        }
+    }
+
     private void OnConnectionPreviewMouseDown(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != MouseButton.Left) return;
+
         var vm = (sender as DependencyObject) switch
         {
             Connection c => c.DataContext,
@@ -359,6 +407,108 @@ public partial class NodeGraphWindow : Window
         }
     }
 
+    // Right-click delete uses the NATIVE ContextMenu/ContextMenuOpening
+    // mechanism rather than a manual PreviewMouseDown/MouseUp popup: an
+    // earlier version built+opened the menu straight from a mouse-down
+    // handler, which fought Nodify's own right-click pan-gesture recognizer
+    // for mouse capture on every right-click and felt terrible. Note the
+    // element must carry a placeholder ContextMenu in XAML (it does; see
+    // the ConnectionTemplate) or this event never fires at all, and the
+    // handler must repopulate that existing menu's Items in place: swapping
+    // in a brand-new ContextMenu object here is unreliable because the
+    // ContextMenuService has already chosen which menu it is about to open.
+    private void OnConnectionContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        // Live keyboard check, not a stored flag: a stored "space is held"
+        // bool goes stale when the keyup is lost to a popup/deactivation,
+        // and a stale true here permanently suppressed connection menus.
+        if (Keyboard.IsKeyDown(Key.Space)) { e.Handled = true; return; } // defer to Space+RightClick pan
+
+        if ((sender as FrameworkElement)?.ContextMenu is not { } menu
+            || (sender as FrameworkElement)?.DataContext is not LayerConnectionViewModel vm)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        menu.Items.Clear();
+        var delete = new MenuItem { Header = "Delete Connection" };
+        delete.Click += (_, _) => _viewModel.RemoveConnectionCommand.Execute(vm);
+        menu.Items.Add(delete);
+    }
+
+    // AutoCAD-style shortcut so users don't have to make the trip to the
+    // side panel to toggle a filter: each side surfaces exactly the
+    // filters that already control its own visibility (Target Filter for
+    // target nodes, the Legend's match-type toggles for source nodes).
+    // StaysOpenOnClick on every item so several filters can be flipped in
+    // one right-click instead of reopening the menu each time. Same
+    // placeholder-menu/repopulate-in-place mechanics as the connection
+    // handler above.
+    private void OnNodeContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.ContextMenu is not { } menu
+            || (sender as FrameworkElement)?.DataContext is not LayerNodeViewModel { IsHeader: false } node)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        menu.Items.Clear();
+
+        if (node.IsSource)
+        {
+            AddCheckableItem(menu, "Exact Match", _viewModel, nameof(LayerEditorViewModel.IsExactNameVisible));
+            AddCheckableItem(menu, "Memory Match", _viewModel, nameof(LayerEditorViewModel.IsMemoryMatchVisible));
+            AddCheckableItem(menu, "Heuristic Match", _viewModel, nameof(LayerEditorViewModel.IsHeuristicMatchVisible));
+            AddCheckableItem(menu, "Manual Match", _viewModel, nameof(LayerEditorViewModel.IsManualMatchVisible));
+            AddCheckableItem(menu, "Unmatched", _viewModel, nameof(LayerEditorViewModel.IsUnmatchedVisible));
+        }
+        else
+        {
+            var allOnOff = new MenuItem { Header = "All On/Off", Command = _viewModel.ToggleAllTargetFiltersCommand, StaysOpenOnClick = true };
+            menu.Items.Add(allOnOff);
+            if (_viewModel.TargetFilters.Count > 0)
+                menu.Items.Add(new Separator());
+
+            foreach (var filter in _viewModel.TargetFilters)
+                AddCheckableItem(menu, filter.Name, filter, nameof(TargetFilterViewModel.IsChecked));
+        }
+    }
+
+    private static void AddCheckableItem(ContextMenu menu, string header, object source, string propertyPath)
+    {
+        var item = new MenuItem { Header = header, IsCheckable = true, StaysOpenOnClick = true };
+        item.SetBinding(MenuItem.IsCheckedProperty, new Binding(propertyPath) { Source = source, Mode = BindingMode.TwoWay });
+        menu.Items.Add(item);
+    }
+
+    // True while LeftClick has been added to the editor's pan gesture set
+    // (Space held). Kept only so the recovery paths know whether a restore
+    // is needed; every behavioral decision checks Keyboard.IsKeyDown live.
+    private bool _leftPanEnabled;
+
+    private void SetPanGestureIncludesLeftClick(bool includeLeftClick)
+    {
+        _leftPanEnabled = includeLeftClick;
+
+        var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
+        if (eg is null)
+        {
+            eg = new Nodify.Interactivity.EditorGestures();
+            Editor.InputGestures = eg;
+        }
+
+        eg.Editor.Pan.Value = includeLeftClick
+            ? new Nodify.Interactivity.AnyGesture(
+                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.LeftClick))
+            : new Nodify.Interactivity.AnyGesture(
+                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
+                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick));
+    }
+
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
@@ -368,34 +518,13 @@ public partial class NodeGraphWindow : Window
         }
 
         if (e.Key == Key.Space && !e.IsRepeat)
-        {
-            var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
-            if (eg is null)
-            {
-                eg = new Nodify.Interactivity.EditorGestures();
-                Editor.InputGestures = eg;
-            }
-            eg.Editor.Pan.Value = new Nodify.Interactivity.AnyGesture(
-                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
-                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick),
-                new Nodify.Interactivity.MouseGesture(MouseAction.LeftClick));
-        }
+            SetPanGestureIncludesLeftClick(true);
     }
 
     private void Window_PreviewKeyUp(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Space)
-        {
-            var eg = Editor.InputGestures as Nodify.Interactivity.EditorGestures;
-            if (eg is null)
-            {
-                eg = new Nodify.Interactivity.EditorGestures();
-                Editor.InputGestures = eg;
-            }
-            eg.Editor.Pan.Value = new Nodify.Interactivity.AnyGesture(
-                new Nodify.Interactivity.MouseGesture(MouseAction.MiddleClick),
-                new Nodify.Interactivity.MouseGesture(MouseAction.RightClick));
-        }
+            SetPanGestureIncludesLeftClick(false);
     }
 
     private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)

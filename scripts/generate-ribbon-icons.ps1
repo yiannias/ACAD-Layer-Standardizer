@@ -1,77 +1,91 @@
-# Generates the ribbon button icons (32x32 large, 16x16 small) from the
-# high-res master logo. Same transparent-background treatment as the
-# installer icons (see regenerate-installer-icons.ps1) but recolored to
-# white line art -- blue doesn't read against the dark ribbon.
+# Generates the ribbon button icons (32x32 large, 16x16 small).
+#
+# History: these used to be downscales of the full LayerStandardizer.png
+# logo (magnifying glass over a layer stack) -- good art, but far too busy
+# at ribbon sizes; at 16px it read as an unreadable blob (chris,
+# 2026-07-11). Now draws a purpose-made minimal glyph instead: the classic
+# stacked-layers diamond -- top layer filled solid (the "standard" layer),
+# the two below as open chevron outlines. White line art on transparent,
+# same treatment as before, since blue doesn't read against the dark
+# ribbon. Drawn at 512px with antialiasing, then downscaled.
+#
+# The installer icons (regenerate-installer-icons.ps1) still use the full
+# logo -- plenty of room at those sizes; only the ribbon glyph is
+# simplified.
 Add-Type -AssemblyName System.Drawing
 
-function Convert-ToTransparentBlue {
-    param(
-        [System.Drawing.Bitmap]$Src,
-        [double]$PlateLum,
-        [byte]$R = 70, [byte]$G = 130, [byte]$B = 180
-    )
-    $w = $Src.Width
-    $h = $Src.Height
-    $dst = New-Object System.Drawing.Bitmap $w, $h, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-
-    $rect = New-Object System.Drawing.Rectangle 0, 0, $w, $h
-    $srcData = $Src.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::ReadOnly, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-    $dstData = $dst.LockBits($rect, [System.Drawing.Imaging.ImageLockMode]::WriteOnly, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
-
-    $bytes = $w * $h * 4
-    $srcBuf = New-Object byte[] $bytes
-    [System.Runtime.InteropServices.Marshal]::Copy($srcData.Scan0, $srcBuf, 0, $bytes)
-    $dstBuf = New-Object byte[] $bytes
-
-    for ($i = 0; $i -lt $bytes; $i += 4) {
-        $bch = $srcBuf[$i]; $gch = $srcBuf[$i+1]; $rch = $srcBuf[$i+2]; $ach = $srcBuf[$i+3]
-        if ($ach -eq 0) {
-            $dstBuf[$i] = $B; $dstBuf[$i+1] = $G; $dstBuf[$i+2] = $R; $dstBuf[$i+3] = 0
-            continue
-        }
-        $lum = 0.3*$rch + 0.59*$gch + 0.11*$bch
-        $t = ($lum - $PlateLum) / (255 - $PlateLum)
-        if ($t -lt 0) { $t = 0 }
-        if ($t -gt 1) { $t = 1 }
-        $newAlpha = [byte]([Math]::Round($ach * $t))
-        $dstBuf[$i] = $B; $dstBuf[$i+1] = $G; $dstBuf[$i+2] = $R; $dstBuf[$i+3] = $newAlpha
-    }
-
-    [System.Runtime.InteropServices.Marshal]::Copy($dstBuf, 0, $dstData.Scan0, $bytes)
-    $Src.UnlockBits($srcData)
-    $dst.UnlockBits($dstData)
-    return $dst
-}
-
 $root = Split-Path -Parent (Split-Path -Parent $PSCommandPath)
-$masterPath = Join-Path $root "installer\assets\LayerStandardizer.png"
 $outDir = Join-Path $root "src\AcLayerStandardizer\Resources"
 New-Item -ItemType Directory -Force $outDir | Out-Null
 
-$master = [System.Drawing.Bitmap]::FromFile($masterPath)
-$plateCorner = $master.GetPixel(2, 2)
-$plateLum = 0.3*$plateCorner.R + 0.59*$plateCorner.G + 0.11*$plateCorner.B
+function New-LayerGlyph {
+    param(
+        [int]$Canvas = 512,
+        [int]$LayerCount = 3   # 3 for 32px, 2 keeps 16px from mushing
+    )
 
-$converted = Convert-ToTransparentBlue -Src $master -PlateLum $plateLum -R 255 -G 255 -B 255
-$master.Dispose()
+    $bmp = New-Object System.Drawing.Bitmap $Canvas, $Canvas, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $g = [System.Drawing.Graphics]::FromImage($bmp)
+    $g.Clear([System.Drawing.Color]::Transparent)
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 
-# Content bounding box, same crop as the installer icons.
-$cropRect = New-Object System.Drawing.Rectangle 232, 206, (1072-232+16), (1038-206+16)
-$content = $converted.Clone($cropRect, $converted.PixelFormat)
-$converted.Dispose()
+    $white = [System.Drawing.Color]::White
+    $brush = New-Object System.Drawing.SolidBrush $white
+    # ~2px stroke after downscale to 32; still a solid ~1px at 16.
+    $pen = New-Object System.Drawing.Pen $white, ($Canvas * 0.06)
+    $pen.LineJoin = [System.Drawing.Drawing2D.LineJoin]::Round
 
-foreach ($size in 32, 16) {
-    $bmp = New-Object System.Drawing.Bitmap $size, $size, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    $cx = $Canvas * 0.5
+    $halfW = $Canvas * 0.42
+    $halfH = $Canvas * 0.21
+
+    # Returned with the unary-comma trick so PowerShell's pipeline doesn't
+    # unroll the typed array into object[] (DrawPolygon then fails overload
+    # resolution).
+    function Get-Diamond([double]$cy) {
+        , [System.Drawing.PointF[]]@(
+            (New-Object System.Drawing.PointF $cx, ($cy - $halfH)),
+            (New-Object System.Drawing.PointF ($cx + $halfW), $cy),
+            (New-Object System.Drawing.PointF $cx, ($cy + $halfH)),
+            (New-Object System.Drawing.PointF ($cx - $halfW), $cy)
+        )
+    }
+
+    # Vertical spacing: chevrons peek out below the filled top layer.
+    $step = $Canvas * 0.19
+    $topCy = if ($LayerCount -eq 3) { $Canvas * 0.29 } else { $Canvas * 0.38 }
+
+    # Draw bottom-up so the filled top layer cleanly overlaps the outlines.
+    for ($i = $LayerCount - 1; $i -ge 1; $i--) {
+        $g.DrawPolygon($pen, [System.Drawing.PointF[]](Get-Diamond ($topCy + $step * $i)))
+    }
+    $g.FillPolygon($brush, [System.Drawing.PointF[]](Get-Diamond $topCy))
+    $g.DrawPolygon($pen, [System.Drawing.PointF[]](Get-Diamond $topCy))
+
+    $pen.Dispose(); $brush.Dispose(); $g.Dispose()
+    return $bmp
+}
+
+function Save-Downscaled {
+    param([System.Drawing.Bitmap]$Src, [int]$Size, [string]$Path)
+    $bmp = New-Object System.Drawing.Bitmap $Size, $Size, ([System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
     $g.Clear([System.Drawing.Color]::Transparent)
     $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $g.DrawImage($content, 0, 0, $size, $size)
+    $g.DrawImage($Src, 0, 0, $Size, $Size)
     $g.Dispose()
-    $out = Join-Path $outDir "ribbon$size.png"
-    $bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Save($Path, [System.Drawing.Imaging.ImageFormat]::Png)
     $bmp.Dispose()
-    Write-Output "Wrote $out"
+    Write-Output "Wrote $Path"
 }
-$content.Dispose()
+
+$glyph3 = New-LayerGlyph -LayerCount 3
+Save-Downscaled -Src $glyph3 -Size 32 -Path (Join-Path $outDir "ribbon32.png")
+$glyph3.Dispose()
+
+# 16px gets the 2-layer variant: three chevrons at 16px collapse into noise.
+$glyph2 = New-LayerGlyph -LayerCount 2
+Save-Downscaled -Src $glyph2 -Size 16 -Path (Join-Path $outDir "ribbon16.png")
+$glyph2.Dispose()

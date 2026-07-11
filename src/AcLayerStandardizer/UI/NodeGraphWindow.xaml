@@ -8,7 +8,8 @@
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI" FontSize="12"
         PreviewKeyDown="Window_PreviewKeyDown"
-        PreviewKeyUp="Window_PreviewKeyUp">
+        PreviewKeyUp="Window_PreviewKeyUp"
+        PreviewMouseDown="Window_PreviewMouseDown">
   <Window.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
@@ -20,7 +21,6 @@
       <local:ColorStringToBrushConverter x:Key="ColorStringToBrush" />
       <local:BooleanToOpacityConverter x:Key="BoolToOpacity" />
       <local:SubtractDoubleConverter x:Key="SubtractDouble" />
-      <local:ViewportPanOffsetConverter x:Key="ViewportPanOffset" />
 
       <!-- Shadow for floating panel -->
       <DropShadowEffect x:Key="PanelShadow"
@@ -317,46 +317,42 @@
 
     <!-- Nodify editor area -->
     <Grid x:Name="CanvasArea" Grid.Row="0" Background="#0e0e0e">
-      <!-- Was static "wallpaper" that never moved with the canvas (chris,
-           2026-07-10). Fill is inline (not a shared StaticResource) since a
-           Freezable shared resource can't carry a live-bound Transform;
-           Scale tracks zoom, Translate shifts the pattern opposite to
-           panning at the current zoom scale (ViewportPanOffsetConverter),
-           so the grid reads as part of world space rather than the screen.
-           The live-bound Transform keeps this brush unfrozen, so WPF
-           re-tessellates the tiled pattern every pan/zoom tick, which made
-           panning feel sluggish after this landed (chris, 2026-07-11).
-           60x60 tiles (was 24x24) cut the per-frame tile count by about
-           6x, which is the cheap lever here short of moving the transform
-           onto the visual itself. -->
+      <!-- Pan/zoom-tracking grid. History of failed approaches, so nobody
+           retries them: a static wallpaper (never moved with the canvas);
+           moving the transform onto the Rectangle's RenderTransform with
+           an oversized fixed Rectangle (grid vanished: the pan offset is
+           unbounded world-space px and pushes any finite rectangle
+           off-screen, unlike a brush transform which just re-phases the
+           infinite tile pattern); a pre-rasterized bitmap tile in a tiled
+           ImageBrush (invisible in practice: 1px hairlines at ~1.4%
+           effective alpha do not survive bitmap rescaling at non-1x zoom,
+           and CachingHint does nothing for ImageBrush anyway). Current
+           shape is the alpha-2 vector DrawingBrush that provably rendered
+           at every zoom level, with two changes: its Transform binds
+           straight to Nodify's own ViewportTransform (the exact transform
+           the editor applies to child controls: one shared transform
+           object, no converter churn, cannot drift out of sync with the
+           nodes), and RenderOptions.CachingHint=Cache (which the docs
+           scope to DrawingBrush/VisualBrush) caches the rasterized tile
+           in video memory and reuses it across transform changes (pans
+           unconditionally, zooms within the 0.5x..2x thresholds) instead
+           of re-tessellating the vector tile every tick, which was the
+           original sluggishness. -->
       <Rectangle x:Name="GridBackground" Opacity="0.15" IsHitTestVisible="False">
         <Rectangle.Fill>
-          <DrawingBrush Viewport="0,0,60,60" ViewportUnits="Absolute" TileMode="Tile">
-            <DrawingBrush.Transform>
-              <TransformGroup>
-                <ScaleTransform ScaleX="{Binding ViewportZoom, ElementName=Editor}"
-                                ScaleY="{Binding ViewportZoom, ElementName=Editor}" />
-                <TranslateTransform>
-                  <TranslateTransform.X>
-                    <MultiBinding Converter="{StaticResource ViewportPanOffset}">
-                      <Binding ElementName="Editor" Path="ViewportZoom" />
-                      <Binding ElementName="Editor" Path="ViewportLocation.X" />
-                    </MultiBinding>
-                  </TranslateTransform.X>
-                  <TranslateTransform.Y>
-                    <MultiBinding Converter="{StaticResource ViewportPanOffset}">
-                      <Binding ElementName="Editor" Path="ViewportZoom" />
-                      <Binding ElementName="Editor" Path="ViewportLocation.Y" />
-                    </MultiBinding>
-                  </TranslateTransform.Y>
-                </TranslateTransform>
-              </TransformGroup>
-            </DrawingBrush.Transform>
+          <DrawingBrush Viewport="0,0,60,60" ViewportUnits="Absolute" TileMode="Tile"
+                        Transform="{Binding ViewportTransform, ElementName=Editor}"
+                        RenderOptions.CachingHint="Cache"
+                        RenderOptions.CacheInvalidationThresholdMinimum="0.5"
+                        RenderOptions.CacheInvalidationThresholdMaximum="2.0">
             <DrawingBrush.Drawing>
               <DrawingGroup>
                 <GeometryDrawing Geometry="M 0,0 L 0,60 M 0,0 L 60,0">
                   <GeometryDrawing.Pen>
-                    <Pen Brush="#18ffffff" Thickness="1" />
+                    <!-- #30 alpha (was #18): grid confirmed working live but
+                         read too faint (chris, 2026-07-11) -- doubled line
+                         alpha rather than widening, keeps hairline look. -->
+                    <Pen Brush="#30ffffff" Thickness="1" />
                   </GeometryDrawing.Pen>
                 </GeometryDrawing>
               </DrawingGroup>
@@ -440,7 +436,17 @@
               </Grid>
 
               <nodify:StateNode IsConnected="True" Content="{Binding}"
-                                 Visibility="{Binding IsHeader, Converter={StaticResource InvBoolToVis}}">
+                                 Visibility="{Binding IsHeader, Converter={StaticResource InvBoolToVis}}"
+                                 ContextMenuOpening="OnNodeContextMenuOpening">
+                <!-- Placeholder menu, repopulated in OnNodeContextMenuOpening.
+                     It must exist here: WPF's ContextMenuService only raises
+                     ContextMenuOpening on elements that already HAVE a
+                     ContextMenu, so a handler that tries to create the menu
+                     inside that event without a placeholder never fires at
+                     all (the original right-click-does-nothing bug). -->
+                <nodify:StateNode.ContextMenu>
+                  <ContextMenu />
+                </nodify:StateNode.ContextMenu>
                 <nodify:StateNode.ContentTemplate>
                   <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
                     <TextBlock Text="{Binding Name}"
@@ -468,7 +474,15 @@
                                 ArrowSize="0,0"
                                 SourceOffset="0,0"
                                 TargetOffset="0,0"
-                                PreviewMouseDown="OnConnectionPreviewMouseDown" />
+                                PreviewMouseDown="OnConnectionPreviewMouseDown"
+                                ContextMenuOpening="OnConnectionContextMenuOpening">
+              <!-- Placeholder menu, repopulated in the Opening handler; see
+                   the StateNode.ContextMenu comment above for why it must
+                   pre-exist. -->
+              <nodify:Connection.ContextMenu>
+                <ContextMenu />
+              </nodify:Connection.ContextMenu>
+            </nodify:Connection>
           </DataTemplate>
         </nodify:NodifyEditor.ConnectionTemplate>
 
@@ -684,7 +698,7 @@
                 <ItemsControl.ItemTemplate>
                   <DataTemplate DataType="{x:Type local:TargetFilterViewModel}">
                     <ToggleButton Content="{Binding Name}"
-                                  Background="#666"
+                                  Background="{Binding GroupColor, Converter={StaticResource ColorStringToBrush}}"
                                   IsChecked="{Binding IsChecked}"
                                   Cursor="Hand"
                                   HorizontalAlignment="Stretch"

@@ -10,9 +10,22 @@ namespace AcLayerStandardizer.UI;
 // One toggle in the "Target Filter" panel -- mirrors the left-side legend's
 // toggles, but the set of them is computed per-template by LayerCategorizer
 // rather than being a fixed list.
-public class TargetFilterViewModel(string name, Action onChanged) : ObservableObject
+public class TargetFilterViewModel(string name, string sortGroup, Action onChanged) : ObservableObject
 {
     public string Name { get; } = name;
+    public string SortGroup { get; } = sortGroup;
+
+    // Tone-only grouping (chris: "a simple stack of buttons" -- no header
+    // text/dividers) -- Discipline blue, General teal-gray, Specific stays
+    // the original neutral gray so today's single-tier dictionaries look
+    // unchanged. Bound via the existing ColorStringToBrushConverter, same
+    // pattern as LayerConnectionViewModel.Stroke.
+    public string GroupColor => SortGroup switch
+    {
+        "Discipline" => "#4a7dc4",
+        "General" => "#4a8577",
+        _ => "#666",
+    };
 
     private bool _isChecked = true;
     public bool IsChecked
@@ -358,30 +371,36 @@ public class LayerEditorViewModel : ObservableObject
             }
         }
 
-        // Primary tag = the node's most specific group, judged by which of
-        // its tags has the fewest members in THIS template (population is a
-        // better specificity signal than any hardcoded hierarchy: "Wall"
-        // with ~15 members beats "Floor Plan" with ~130, which beats
-        // "Architectural" with ~300). Ties break alphabetically for
-        // determinism. See LayerNodeViewModel.PrimaryTargetTag for why
-        // filtering keys off one tag instead of the full set.
-        var tagCounts = standardModels
+        // Primary tag = the node's most specific SPECIFIC-group tag, judged
+        // by which of its Specific tags has the fewest members in THIS
+        // template (population is a better specificity signal than any
+        // hardcoded hierarchy). Scoped to Specific-group tags only --
+        // Discipline/General tags are inclusive and handled separately in
+        // IsTargetNodeVisible, so a node with zero Specific tags simply
+        // isn't constrained by that group (PrimaryTargetTag stays null).
+        // Ties break alphabetically for determinism.
+        var specificTagCounts = standardModels
             .Where(n => !n.IsAlwaysHiddenTarget)
-            .SelectMany(n => n.TargetTags)
+            .SelectMany(n => n.TargetTags.Where(t => result.SortGroupByTag.GetValueOrDefault(t, "Specific") == "Specific"))
             .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var node in standardModels)
         {
-            if (node.IsAlwaysHiddenTarget || node.TargetTags.Count == 0) continue;
-            node.PrimaryTargetTag = node.TargetTags
-                .OrderBy(t => tagCounts.TryGetValue(t, out var c) ? c : int.MaxValue)
+            if (node.IsAlwaysHiddenTarget) continue;
+            var specificTags = node.TargetTags
+                .Where(t => result.SortGroupByTag.GetValueOrDefault(t, "Specific") == "Specific")
+                .ToList();
+            if (specificTags.Count == 0) continue;
+
+            node.PrimaryTargetTag = specificTags
+                .OrderBy(t => specificTagCounts.TryGetValue(t, out var c) ? c : int.MaxValue)
                 .ThenBy(t => t, StringComparer.OrdinalIgnoreCase)
                 .First();
         }
 
         foreach (var category in result.VisibleCategories)
-            TargetFilters.Add(new TargetFilterViewModel(category, ApplyFilters));
+            TargetFilters.Add(new TargetFilterViewModel(category, result.SortGroupByTag.GetValueOrDefault(category, "Specific"), ApplyFilters));
 
         OnPropertyChanged(nameof(HasTargetFilters));
     }
@@ -445,17 +464,36 @@ public class LayerEditorViewModel : ObservableObject
         // No dictionary installed, or this layer got no tags at all (should
         // only happen if the dictionary was empty) -- default to visible
         // rather than silently hiding content.
-        if (TargetFilters.Count == 0 || node.PrimaryTargetTag is null) return true;
+        if (TargetFilters.Count == 0 || node.TargetTags.Count == 0) return true;
 
-        // Each node is controlled by exactly one toggle: its most specific
-        // group (PrimaryTargetTag -- see LayerNodeViewModel for why AND and
-        // OR over the full multi-tag set both failed in live testing).
+        // UNION semantics (chris, 2026-07-11, after live-testing the
+        // AND-across-tiers version and finding it useless in practice:
+        // "all off + Architectural on" showed ~5 layers instead of every
+        // A- layer, because every node also had to pass its General and
+        // Specific tiers). A checked toggle SHOWS every layer carrying its
+        // tag; a node is visible if ANY checked filter covers it. The tiers
+        // still differ in HOW they cover:
+        //  - Discipline/General filters cover a node through plain tag
+        //    membership (multi-membership is fine).
+        //  - A Specific filter covers a node only when it IS the node's
+        //    PrimaryTargetTag (its rarest Specific tag -- see
+        //    ApplyLayerDictionary), preserving the one-toggle-per-node
+        //    behavior within the Specific tier.
+        // Consequence to know about: with everything ON, unchecking one
+        // toggle only hides a node if NO other checked filter still covers
+        // it -- the isolate-something workflow is All Off + check what you
+        // want, which is exactly how chris uses it.
         foreach (var filter in TargetFilters)
         {
-            if (string.Equals(filter.Name, node.PrimaryTargetTag, StringComparison.OrdinalIgnoreCase))
-                return filter.IsChecked;
+            if (!filter.IsChecked) continue;
+
+            bool covers = filter.SortGroup == "Specific"
+                ? string.Equals(filter.Name, node.PrimaryTargetTag, StringComparison.OrdinalIgnoreCase)
+                : node.TargetTags.Contains(filter.Name);
+
+            if (covers) return true;
         }
-        return true; // primary tag has no toggle (shouldn't happen) -- fail visible
+        return false;
     }
 
     // Source stays a single alphabetized column always (chris's explicit

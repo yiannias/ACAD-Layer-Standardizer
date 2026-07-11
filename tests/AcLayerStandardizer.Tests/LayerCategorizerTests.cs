@@ -144,15 +144,20 @@ public class LayerCategorizerTests
     }
 
     [Fact]
-    public void Annotative_is_exclusive_even_when_a_matchAnywhere_tag_would_otherwise_apply()
+    public void Annotative_is_exclusive_for_content_tags_but_keeps_the_discipline_tag()
     {
         var dict = LoadShippedDictionary();
         var result = LayerCategorizer.Classify(RealLayers, dict);
 
         // A-ANNO-TAG-WALL would also match the cross-cutting "Wall" tag if
-        // Annotative weren't exclusive -- confirm it doesn't.
+        // Annotative weren't exclusive -- confirm it doesn't. The discipline
+        // tag survives, though: with union filtering, "Architectural on"
+        // must show every A- layer including its annotation content.
         var tags = result.LayerTags["A-ANNO-TAG-WALL"];
-        Assert.Equal(["Annotative"], tags);
+        Assert.Contains("Annotative", tags);
+        Assert.Contains("Architectural", tags);
+        Assert.DoesNotContain("Wall", tags);
+        Assert.Equal(2, tags.Count);
     }
 
     [Fact]
