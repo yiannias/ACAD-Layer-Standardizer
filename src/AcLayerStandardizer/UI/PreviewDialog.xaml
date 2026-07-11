@@ -4,7 +4,16 @@
         Title="Layer Standardization Preview"
         Width="640" Height="480"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Consolas" FontSize="12">
+        FontFamily="Consolas" FontSize="12"
+        Background="#1a1a1a"
+        Foreground="#e6e6e6">
+  <Window.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="pack://application:,,,/AcLayerStandardizer;component/UI/DarkTheme.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </Window.Resources>
   <Grid Margin="12">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto" />

@@ -13,6 +13,7 @@ public partial class PreviewDialog : Window
         List<string> unmatched)
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => WindowTheming.EnableDarkTitleBar(this);
 
         var vm = new PreviewViewModel(items, unmatched);
         DataContext = vm;

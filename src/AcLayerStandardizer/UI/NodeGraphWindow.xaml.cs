@@ -105,7 +105,7 @@ public partial class NodeGraphWindow : Window
 
         _initializing = false;
 
-        SourceInitialized += (_, _) => EnableDarkTitleBar();
+        SourceInitialized += (_, _) => WindowTheming.EnableDarkTitleBar(this);
         Editor.AddHandler(ItemContainer.LocationChangedEvent, new RoutedEventHandler(OnItemLocationChanged));
 
         // Viewport zoom/pan can only be applied once the editor has a real
@@ -314,16 +314,6 @@ public partial class NodeGraphWindow : Window
         CompositionTarget.Rendering += Tick;
     }
 
-    private void EnableDarkTitleBar()
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        var dark = 1;
-        _ = DwmSetWindowAttribute(hwnd, 20, ref dark, sizeof(int));
-    }
-
-    [DllImport("dwmapi.dll", PreserveSig = true)]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-
     private void UpdateStatus()
     {
         StatusText.Text = _viewModel.Connections.Count == 0
@@ -432,7 +422,7 @@ public partial class NodeGraphWindow : Window
         }
 
         menu.Items.Clear();
-        var delete = new MenuItem { Header = "Delete Connection" };
+        var delete = new MenuItem { Header = "Delete Connection", Style = (Style)FindResource("DarkMenuItem") };
         delete.Click += (_, _) => _viewModel.RemoveConnectionCommand.Execute(vm);
         menu.Items.Add(delete);
     }
@@ -466,19 +456,34 @@ public partial class NodeGraphWindow : Window
         }
         else
         {
-            var allOnOff = new MenuItem { Header = "All On/Off", Command = _viewModel.ToggleAllTargetFiltersCommand, StaysOpenOnClick = true };
+            var allOnOff = new MenuItem
+            {
+                Header = "All On/Off",
+                Command = _viewModel.ToggleAllTargetFiltersCommand,
+                StaysOpenOnClick = true,
+                Style = (Style)FindResource("DarkMenuItem"),
+            };
             menu.Items.Add(allOnOff);
             if (_viewModel.TargetFilters.Count > 0)
-                menu.Items.Add(new Separator());
+                menu.Items.Add(new Separator { Style = (Style)FindResource("DarkMenuSeparator") });
 
             foreach (var filter in _viewModel.TargetFilters)
                 AddCheckableItem(menu, filter.Name, filter, nameof(TargetFilterViewModel.IsChecked));
         }
     }
 
-    private static void AddCheckableItem(ContextMenu menu, string header, object source, string propertyPath)
+    // Styles set explicitly (not via the menu's ItemContainerStyle) because
+    // the menus mix MenuItems and Separators -- an ItemContainerStyle
+    // targeting MenuItem throws when applied to a Separator.
+    private void AddCheckableItem(ContextMenu menu, string header, object source, string propertyPath)
     {
-        var item = new MenuItem { Header = header, IsCheckable = true, StaysOpenOnClick = true };
+        var item = new MenuItem
+        {
+            Header = header,
+            IsCheckable = true,
+            StaysOpenOnClick = true,
+            Style = (Style)FindResource("DarkMenuItem"),
+        };
         item.SetBinding(MenuItem.IsCheckedProperty, new Binding(propertyPath) { Source = source, Mode = BindingMode.TwoWay });
         menu.Items.Add(item);
     }

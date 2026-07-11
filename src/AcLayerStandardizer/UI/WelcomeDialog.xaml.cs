@@ -16,6 +16,7 @@ public partial class WelcomeDialog : Window
     public WelcomeDialog()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => WindowTheming.EnableDarkTitleBar(this);
         _config = PluginConfig.Load();
         RefreshDisplay();
     }
@@ -44,7 +45,8 @@ public partial class WelcomeDialog : Window
 
         label.Text = Path.GetFileName(fullPath);
         label.FontStyle = FontStyles.Normal;
-        label.Foreground = System.Windows.Media.Brushes.Black;
+        // Gainsboro, not Black: this dialog is dark-themed now.
+        label.Foreground = System.Windows.Media.Brushes.Gainsboro;
         ToolTipService.SetToolTip(label, fullPath);
     }
 
