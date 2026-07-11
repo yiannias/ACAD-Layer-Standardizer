@@ -244,20 +244,47 @@ public partial class NodeGraphWindow : Window
     private static readonly DependencyProperty PrevLocationProperty =
         DependencyProperty.RegisterAttached("PrevLocation", typeof(Point), typeof(NodeGraphWindow));
 
-    // Node-reposition animation DISABLED (chris, 2026-07-10): while
-    // debugging the "toggles do nothing / lines point at empty canvas"
-    // report, the tween loop below is a prime interference suspect -- it
-    // rewrites node.Location every frame from captured starting positions,
-    // racing any concurrent ApplyFilters() layout pass and leaving
-    // nodes/anchors at positions the view model never computed. Nodes now
-    // jump instantly to their computed spot. The machinery is kept (unused)
-    // so the animation can be re-enabled deliberately once the visibility
-    // bug is found, rather than rewritten from memory.
+    // Tracks whether a container has EVER had a real Location captured, so
+    // its first-ever placement (window open, template switch) snaps
+    // instead of animating in from PrevLocation's Point() default (0,0) --
+    // that would otherwise look like every node flying in from the
+    // top-left corner on load.
+    private static readonly DependencyProperty HasPrevLocationProperty =
+        DependencyProperty.RegisterAttached("HasPrevLocation", typeof(bool), typeof(NodeGraphWindow));
+
+    // Re-enabled 2026-07-11 (was disabled 2026-07-10 while debugging
+    // "toggles do nothing / lines point at empty canvas" -- that bug's
+    // actual root cause turned out to be unrelated: ConnectionLineStyle
+    // silently not applying because implicit styles don't reach
+    // nodify:Connection, a Shape not a Control; see that style's own
+    // comment). The original race this guarded against was real, though,
+    // and still needs guarding against: StartLocationAnimation's own
+    // per-frame Location writes raise this SAME LocationChangedEvent,
+    // which without the suppress check below would make the tick loop
+    // retrigger itself with a new (wrong) animation every frame instead of
+    // running its own interpolation to completion.
     private void OnItemLocationChanged(object sender, RoutedEventArgs e)
     {
-        // Intentionally no-op beyond bookkeeping; see comment above.
-        if (e.OriginalSource is ItemContainer container && container.IsLoaded)
-            container.SetValue(PrevLocationProperty, container.Location);
+        if (e.OriginalSource is not ItemContainer container || !container.IsLoaded)
+            return;
+
+        var to = container.Location;
+
+        if (_suppressLocationAnimationEvents)
+        {
+            container.SetValue(PrevLocationProperty, to);
+            return;
+        }
+
+        bool hasPrev = (bool)container.GetValue(HasPrevLocationProperty);
+        var from = (Point)container.GetValue(PrevLocationProperty);
+        container.SetValue(PrevLocationProperty, to);
+        container.SetValue(HasPrevLocationProperty, true);
+
+        if (!hasPrev || from == to) return; // first placement, or no real movement: snap, don't animate
+
+        if (container.DataContext is LayerNodeViewModel node)
+            StartLocationAnimation(node, from, to, 0.22);
     }
 
     // Keyed by node so a second reposition request mid-animation retargets
