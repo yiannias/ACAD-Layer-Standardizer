@@ -27,6 +27,46 @@
                         BlurRadius="12"
                         ShadowDepth="3" />
 
+      <!-- Pill-shaped scrollbar (rounded track + rounded thumb), applied to
+           every ScrollBar in the window rather than just the Target Filter
+           panel's, since it's a design-system choice not a one-off. Only the
+           vertical case is styled; this app has no horizontal scrolling UI. -->
+      <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="10" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ScrollBar">
+              <Grid>
+                <Border CornerRadius="5" Background="#2a2a2a" />
+                <Track Name="PART_Track" IsDirectionReversed="True" Margin="2">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False" />
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="ScrollBar.PageDownCommand" Opacity="0" Focusable="False" />
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb>
+                      <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                          <Border x:Name="ThumbBorder" Background="#777" CornerRadius="3" />
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="ThumbBorder" Property="Background" Value="#999" />
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </Thumb.Template>
+                    </Thumb>
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <!-- Filter toggle button style with animated transitions -->
       <Style x:Key="FilterToggleButton" TargetType="ToggleButton">
         <Setter Property="Foreground" Value="White" />
@@ -178,35 +218,52 @@
             </ControlTemplate>
           </Setter.Value>
         </Setter>
+        <!-- Border hierarchy, weakest to strongest. Later triggers win when
+             more than one is active at once, so declaration order below IS
+             the priority order: Hover < Mapped < Selected. Selected uses an
+             accent (orange) unrelated to any match-type hue so it can never
+             be confused with a Heuristic-match connector/node (both used to
+             render as near-identical gold, #FFD700 vs #ffd740). -->
         <Style.Triggers>
           <DataTrigger Binding="{Binding IsSource}" Value="False">
             <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
           </DataTrigger>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter Property="BorderBrush" Value="#ccc" />
+            <Setter Property="BorderThickness" Value="1" />
+          </Trigger>
           <MultiDataTrigger>
             <MultiDataTrigger.Conditions>
               <Condition Binding="{Binding IsSource}" Value="False" />
               <Condition Binding="{Binding IsMapped}" Value="True" />
             </MultiDataTrigger.Conditions>
-            <Setter Property="BorderBrush" Value="#fff" />
-            <Setter Property="BorderThickness" Value="3" />
+            <Setter Property="BorderBrush" Value="#e0e0e0" />
+            <Setter Property="BorderThickness" Value="2" />
           </MultiDataTrigger>
           <DataTrigger Binding="{Binding IsSelected}" Value="True">
-            <Setter Property="BorderBrush" Value="#FFD700" />
+            <Setter Property="BorderBrush" Value="#d95926" />
             <Setter Property="BorderThickness" Value="3" />
           </DataTrigger>
-          <Trigger Property="IsMouseOver" Value="True">
-            <Setter Property="BorderBrush" Value="#fff" />
-            <Setter Property="BorderThickness" Value="2" />
-          </Trigger>
         </Style.Triggers>
       </Style>
 
-      <!-- Connection lines: color + dash are bound directly on the element via Stroke/StrokeDashCollection -->
-      <Style TargetType="nodify:Connection">
+      <!-- Connection line style. KEYED and referenced explicitly from the
+           ConnectionTemplate, NOT implicit: nodify:Connection derives from
+           Shape (not Control), and WPF does not apply implicit styles from
+           window resources to non-Control elements inside a DataTemplate.
+           The previous implicit version of this style silently never
+           applied, which is exactly why connections stopped hiding when
+           their nodes were filtered out ("lines going to nowhere" bug,
+           chris's screenshots 2026-07-10). Fade animation stays disabled;
+           hide/show is a plain instant Visibility binding. -->
+      <Style x:Key="ConnectionLineStyle" TargetType="nodify:Connection">
         <Setter Property="StrokeThickness" Value="2" />
+        <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
         <Style.Triggers>
+          <!-- Same danger red as the Purge button / Empty-layer highlight
+               toggle below, rather than a second unrelated red. -->
           <Trigger Property="IsMouseOver" Value="True">
-            <Setter Property="Stroke" Value="#ef5350" />
+            <Setter Property="Stroke" Value="#c62828" />
             <Setter Property="StrokeDashArray" Value="0" />
           </Trigger>
         </Style.Triggers>
@@ -297,39 +354,87 @@
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+            <Style.Triggers>
+              <!-- Header "containers" are explicitly sized to fence the
+                   current bounding box of their side's visible nodes
+                   (LayerEditorViewModel.ComputeContainerBounds), and sit
+                   behind real nodes (added first in the Nodes collection,
+                   plus a negative ZIndex here as a second guarantee) so
+                   they never obscure or intercept clicks meant for the
+                   actual layer nodes on top of them. -->
+              <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                <Setter Property="Width" Value="{Binding Size.Width}" />
+                <Setter Property="Height" Value="{Binding Size.Height}" />
+                <Setter Property="Panel.ZIndex" Value="-1" />
+              </DataTrigger>
+            </Style.Triggers>
           </Style>
         </nodify:NodifyEditor.ItemContainerStyle>
 
         <nodify:NodifyEditor.ItemTemplate>
           <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
-            <nodify:StateNode IsConnected="True" Content="{Binding}">
-              <nodify:StateNode.ContentTemplate>
-                <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
-                  <TextBlock Text="{Binding Name}"
-                             Foreground="#222"
-                             FontFamily="Fira Sans"
-                             FontSize="11"
-                             FontWeight="Medium"
-                             TextTrimming="CharacterEllipsis"
-                             HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
-                </DataTemplate>
-              </nodify:StateNode.ContentTemplate>
-            </nodify:StateNode>
+            <Grid>
+              <!-- Source/Target canvas "containers": chris wanted these as
+                   a light fence/window frame around the currently-visible
+                   nodes on each side, not a small fixed label. They pan and
+                   zoom with the canvas since they're regular items in
+                   the same Nodes collection (see LayerNodeViewModel.IsHeader).
+                   The big background fill is IsHitTestVisible=False so
+                   clicks/marquee-select pass through to the canvas in the
+                   "empty" parts of the fenced area; only the title bar strip
+                   is actually clickable. -->
+              <Grid Visibility="{Binding IsHeader, Converter={StaticResource BoolToVis}}">
+                <Border CornerRadius="10"
+                        Background="#14ffffff"
+                        BorderBrush="#555"
+                        BorderThickness="1.5"
+                        IsHitTestVisible="False" />
+                <Border VerticalAlignment="Top"
+                        Height="34"
+                        CornerRadius="10,10,0,0"
+                        Background="#33000000"
+                        Cursor="Hand"
+                        ToolTip="Target: click to select a different standard template"
+                        MouseLeftButtonUp="OnHeaderClick">
+                  <StackPanel Orientation="Horizontal" Margin="14,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#ccc" />
+                    <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="#999"
+                               Margin="10,0,0,0" VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <nodify:StateNode IsConnected="True" Content="{Binding}"
+                                 Visibility="{Binding IsHeader, Converter={StaticResource InvBoolToVis}}">
+                <nodify:StateNode.ContentTemplate>
+                  <DataTemplate DataType="{x:Type local:LayerNodeViewModel}">
+                    <TextBlock Text="{Binding Name}"
+                               Foreground="#222"
+                               FontFamily="Fira Sans"
+                               FontSize="11"
+                               FontWeight="Medium"
+                               TextTrimming="CharacterEllipsis"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+                  </DataTemplate>
+                </nodify:StateNode.ContentTemplate>
+              </nodify:StateNode>
+            </Grid>
           </DataTemplate>
         </nodify:NodifyEditor.ItemTemplate>
 
         <nodify:NodifyEditor.ConnectionTemplate>
           <DataTemplate DataType="{x:Type local:LayerConnectionViewModel}">
-            <nodify:Connection Source="{Binding Source.Anchor, Mode=OneWay}"
+            <nodify:Connection Style="{StaticResource ConnectionLineStyle}"
+                                Source="{Binding Source.Anchor, Mode=OneWay}"
                                 Target="{Binding Target.Anchor, Mode=OneWay}"
                                 Stroke="{Binding Stroke, Converter={StaticResource ColorStringToBrush}}"
                                 StrokeDashArray="{Binding StrokeDashCollection}"
                                 ArrowSize="0,0"
                                 SourceOffset="0,0"
                                 TargetOffset="0,0"
-                                PreviewMouseDown="OnConnectionPreviewMouseDown"
-                                Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+                                PreviewMouseDown="OnConnectionPreviewMouseDown" />
           </DataTemplate>
         </nodify:NodifyEditor.ConnectionTemplate>
 
@@ -352,8 +457,8 @@
               Padding="14,12"
               CornerRadius="8"
               Background="#882a2a2a"
-              BorderBrush="#999"
-              BorderThickness="3"
+              BorderBrush="#666"
+              BorderThickness="1"
               Panel.ZIndex="10"
               Effect="{StaticResource PanelShadow}">
         <StackPanel Orientation="Vertical">
@@ -366,7 +471,7 @@
                      Margin="0,0,0,10" />
 
           <ToggleButton Content="Exact Match"
-                        Background="#8bc34a"
+                        Background="#008300"
                         IsChecked="{Binding IsExactNameVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -374,7 +479,7 @@
                         Style="{StaticResource FilterToggleButton}" />
 
           <ToggleButton Content="Memory Match"
-                        Background="#448aff"
+                        Background="#3987e5"
                         IsChecked="{Binding IsMemoryMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -382,7 +487,7 @@
                         Style="{StaticResource FilterToggleButton}" />
 
           <ToggleButton Content="Heuristic Match"
-                        Background="#ffd740"
+                        Background="#c98500"
                         IsChecked="{Binding IsHeuristicMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -390,7 +495,7 @@
                         Style="{StaticResource FilterToggleButton}" />
 
           <ToggleButton Content="Manual Match"
-                        Background="#7c4dff"
+                        Background="#9085e9"
                         IsChecked="{Binding IsManualMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -470,6 +575,88 @@
           </StackPanel>
         </StackPanel>
       </Border>
+
+      <!-- Floating Target Filter panel (top-right), same visual weight as
+           the Legend panel, but every toggle is the same neutral grey
+           (checked = brighter, unchecked = dimmer, via FilterToggleButton's
+           existing opacity animation) since these are smart-group tags, not
+           match-type categories. The list is entirely dynamic: only
+           categories the current template's target layers actually
+           populate ever show up (see LayerEditorViewModel.ApplyLayerDictionary,
+           Core.LayerCategorizer), so an empty panel (no dictionary
+           installed, or nothing matched) stays hidden rather than showing
+           an empty box. -->
+      <Border Grid.Row="0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Stretch"
+              Margin="0,25,25,25"
+              Padding="14,12"
+              CornerRadius="8"
+              Background="#882a2a2a"
+              BorderBrush="#666"
+              BorderThickness="1"
+              Panel.ZIndex="10"
+              Visibility="{Binding HasTargetFilters, Converter={StaticResource BoolToVis}}"
+              Effect="{StaticResource PanelShadow}">
+        <Grid>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+          </Grid.RowDefinitions>
+
+          <StackPanel Grid.Row="0" Orientation="Vertical">
+            <TextBlock Text="Target Filter"
+                       FontSize="18" FontWeight="Bold"
+                       Foreground="#e6e6e6" />
+            <TextBlock Text="Visibility Toggle"
+                       FontSize="13"
+                       Foreground="#777"
+                       Margin="0,0,0,10" />
+
+            <!-- Special-cased with brand color (matches Apply & Remember)
+                 rather than the neutral grey of the per-category toggles,
+                 since it's a master action, not a category. -->
+            <Button Content="All On/Off"
+                    Command="{Binding ToggleAllTargetFiltersCommand}"
+                    Style="{StaticResource ModernButton}"
+                    Background="#4682b4"
+                    Foreground="White"
+                    HorizontalAlignment="Stretch"
+                    Height="30"
+                    Margin="0,0,0,10"
+                    Cursor="Hand">
+              <Button.Effect>
+                <DropShadowEffect Color="#4682b4" Opacity="0.35" BlurRadius="8" ShadowDepth="2" />
+              </Button.Effect>
+            </Button>
+          </StackPanel>
+
+          <!-- Stretch fills whatever room is left in the panel (bounded by
+               the window's own height via the outer Border's Stretch/Margin
+               above); once the toggle list is taller than that, the
+               ScrollViewer scrolls instead of the panel growing past the
+               window edge. Mouse-wheel scrolling while hovered is
+               ScrollViewer's default behavior, no extra wiring needed. -->
+          <ScrollViewer Grid.Row="1"
+                        VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding TargetFilters}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:TargetFilterViewModel}">
+                  <ToggleButton Content="{Binding Name}"
+                                Background="#666"
+                                IsChecked="{Binding IsChecked}"
+                                Cursor="Hand"
+                                HorizontalAlignment="Stretch"
+                                Height="30"
+                                Margin="0,0,0,5"
+                                Style="{StaticResource FilterToggleButton}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </Border>
     </Grid>
 
     <!-- Status bar + action buttons -->
@@ -504,11 +691,12 @@
                      VerticalAlignment="Center">
             Ready
           </TextBlock>
-          <TextBlock Foreground="#555"
+          <TextBlock x:Name="VersionText"
+                     Foreground="#555"
                      FontFamily="Fira Sans"
                      FontSize="15"
                      VerticalAlignment="Center"
-                     Margin="14,0,0,0">2026-07-09.v2 (ALPHA)</TextBlock>
+                     Margin="14,0,0,0" />
         </StackPanel>
 
         <Button Grid.Row="1" Grid.Column="1" Content="Apply"

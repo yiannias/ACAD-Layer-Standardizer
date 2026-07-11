@@ -32,6 +32,9 @@ public class MemoryStore
     {
         memory.LastModified = DateTime.UtcNow;
         var json = JsonSerializer.Serialize(memory, JsonOptions);
+        var dir = Path.GetDirectoryName(FilePath);
+        if (!string.IsNullOrEmpty(dir))
+            Directory.CreateDirectory(dir);
         File.WriteAllText(FilePath, json);
     }
 

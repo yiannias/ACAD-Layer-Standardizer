@@ -102,6 +102,15 @@ public static class MappingsCommand
                         catch { }
                     }
                     purgeTr.Commit();
+                },
+                sourceFileName: Path.GetFileName(doc.Name),
+                templatePath: config.TemplateDwgPath,
+                standardLayerProperties: standardLayers,
+                onTemplateChanged: newPath =>
+                {
+                    // Remember the switch for next launch too, not just this session.
+                    config.TemplateDwgPath = newPath;
+                    config.Save();
                 });
         }
         catch (System.Exception ex)
@@ -135,18 +144,25 @@ public static class MappingsCommand
             memory.Mappings.Clear();
             foreach (var kvp in resultMappings)
                 memory.Mappings[kvp.Key] = kvp.Value;
-            store.Save(memory);
-            var diff = memory.Mappings.Count - beforeCount;
-            if (diff != 0)
-                ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
-            else
-                ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
+            try
+            {
+                store.Save(memory);
+                var diff = memory.Mappings.Count - beforeCount;
+                if (diff != 0)
+                    ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
+                else
+                    ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage($"\nFailed to save translation memory to {store.FilePath}: {ex.Message}");
+            }
         }
 
         if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)
         {
             var result = StandardizeCommand.ApplyMappings(
-                doc.Database, resultMappings, standardLayers, dialog.PropertySettings);
+                doc.Database, resultMappings, dialog.StandardLayerProperties, dialog.PropertySettings);
             ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
             ed.WriteMessage($"\n  Properties synced: {result.Synced}");
             ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");

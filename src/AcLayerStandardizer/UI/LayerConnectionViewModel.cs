@@ -43,16 +43,16 @@ public class LayerConnectionViewModel : INotifyPropertyChanged
 
     public string Stroke => MatchSource switch
     {
-        ConnectionMatchSource.ExactName => "#8bc34a",
-        ConnectionMatchSource.Memory => "#448aff",
-        ConnectionMatchSource.Heuristic => "#ffd740",
-        ConnectionMatchSource.Manual => "#7c4dff",
-        _ => "#7c4dff",
+        ConnectionMatchSource.ExactName => "#008300",
+        ConnectionMatchSource.Memory => "#3987e5",
+        ConnectionMatchSource.Heuristic => "#c98500",
+        ConnectionMatchSource.Manual => "#9085e9",
+        _ => "#9085e9",
     };
 
     public DoubleCollection? StrokeDashCollection => MatchSource switch
     {
-        ConnectionMatchSource.Memory or ConnectionMatchSource.Heuristic => new DoubleCollection([4, 3]),
+        ConnectionMatchSource.Heuristic => new DoubleCollection([4, 3]),
         _ => null,
     };
 }

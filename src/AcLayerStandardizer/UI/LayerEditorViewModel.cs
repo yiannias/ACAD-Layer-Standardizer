@@ -2,9 +2,31 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Input;
+using AcLayerStandardizer.Core;
 using Nodify;
 
 namespace AcLayerStandardizer.UI;
+
+// One toggle in the "Target Filter" panel -- mirrors the left-side legend's
+// toggles, but the set of them is computed per-template by LayerCategorizer
+// rather than being a fixed list.
+public class TargetFilterViewModel(string name, Action onChanged) : ObservableObject
+{
+    public string Name { get; } = name;
+
+    private bool _isChecked = true;
+    public bool IsChecked
+    {
+        get => _isChecked;
+        set
+        {
+            if (_isChecked == value) return;
+            _isChecked = value;
+            OnPropertyChanged();
+            onChanged();
+        }
+    }
+}
 
 public class LayerEditorViewModel : ObservableObject
 {
@@ -15,15 +37,26 @@ public class LayerEditorViewModel : ObservableObject
     private const double LeftColX = 50;
     private const double RightColX = 550;
     private const double TargetColumnGap = 40;
+    private const int MaxTargetColumns = 5;
+    private const int MinTargetColumnHeight = 20;
+
+    // Padding around a header "container" box relative to the bounding box
+    // of the nodes it fences -- chris: "it sort of fences around the
+    // visible nodes with a light box," not the small fixed label it was
+    // before.
+    private const double HeaderPadding = 24;
+    private const double HeaderTitleBarHeight = 34;
 
     public ObservableCollection<LayerNodeViewModel> Nodes { get; } = [];
     public ObservableCollection<LayerConnectionViewModel> Connections { get; } = [];
+    public ObservableCollection<TargetFilterViewModel> TargetFilters { get; } = [];
 
     public PendingConnectionViewModel PendingConnection { get; }
 
     public ICommand RemoveConnectionCommand { get; }
     public ICommand DisconnectConnectorCommand { get; }
     public ICommand ToggleFilterCommand { get; }
+    public ICommand ToggleAllTargetFiltersCommand { get; }
 
     private ICommand _purgeUnusedCommand = new DelegateCommand<object>(_ => { });
     public ICommand PurgeUnusedCommand
@@ -157,15 +190,63 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
+    // Canvas-space labels (chris: "underlays below the nodes in space," not
+    // fixed screen chrome) -- created once, then just have their Subtitle
+    // pushed on file-name changes rather than being torn down/rebuilt.
+    private LayerNodeViewModel? _sourceHeader;
+    private LayerNodeViewModel? _targetHeader;
+
+    private string _sourceFileName = "";
+    public string SourceFileName
+    {
+        get => _sourceFileName;
+        set
+        {
+            SetProperty(ref _sourceFileName, value);
+            if (_sourceHeader is not null) _sourceHeader.Subtitle = value;
+        }
+    }
+
+    private string _targetFileName = "";
+    public string TargetFileName
+    {
+        get => _targetFileName;
+        set
+        {
+            SetProperty(ref _targetFileName, value);
+            if (_targetHeader is not null) _targetHeader.Subtitle = value;
+        }
+    }
+
     public LayerEditorViewModel(
         List<string> sourceLayers,
         List<string> standardLayers,
         Dictionary<string, string>? memoryMappings = null,
         List<Matching.MatchResult>? heuristicResults = null,
-        HashSet<string>? emptyLayers = null)
+        HashSet<string>? emptyLayers = null,
+        string sourceFileName = "",
+        string targetFileName = "")
     {
+        _sourceFileName = sourceFileName;
+        _targetFileName = targetFileName;
         var sourceModels = new List<LayerNodeViewModel>();
         var standardModels = new List<LayerNodeViewModel>();
+
+        // Placeholder Location/Size -- UpdateHeaderBounds (called via
+        // ApplyFilters at the end of this constructor) immediately
+        // recomputes both to actually fence the visible nodes.
+        _sourceHeader = new LayerNodeViewModel("Source", false, new Point(LeftColX, TopMargin))
+        {
+            IsHeader = true,
+            Subtitle = sourceFileName,
+        };
+        _targetHeader = new LayerNodeViewModel("Target", false, new Point(RightColX, TopMargin))
+        {
+            IsHeader = true,
+            Subtitle = targetFileName,
+        };
+        Nodes.Add(_sourceHeader);
+        Nodes.Add(_targetHeader);
 
         for (int i = 0; i < sourceLayers.Count; i++)
         {
@@ -182,9 +263,358 @@ public class LayerEditorViewModel : ObservableObject
             Nodes.Add(vm);
         }
 
+        ApplyLayerDictionary(standardModels);
+
         var sourceMap = sourceModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
         var standardMap = standardModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
 
+        RunMatchingTiers(sourceModels, sourceMap, standardMap, memoryMappings, heuristicResults);
+
+        if (emptyLayers is not null)
+        {
+            foreach (var node in Nodes)
+            {
+                if (node.IsSource && emptyLayers.Contains(node.Name))
+                    node.IsEmpty = true;
+            }
+        }
+
+        PendingConnection = new PendingConnectionViewModel(this, sourceMap, standardMap);
+
+        RemoveConnectionCommand = new DelegateCommand<LayerConnectionViewModel>(conn =>
+        {
+            if (conn is null) return;
+            conn.Source.IsMapped = false;
+            if (!Connections.Any(c => c != conn && c.Target == conn.Target))
+                conn.Target.IsMapped = false;
+            Connections.Remove(conn);
+        });
+
+        DisconnectConnectorCommand = new DelegateCommand<LayerNodeViewModel>(node =>
+        {
+            for (int i = Connections.Count - 1; i >= 0; i--)
+            {
+                var c = Connections[i];
+                if (c.Source == node || c.Target == node)
+                {
+                    c.Source.IsMapped = false;
+                    if (!Connections.Any(other => other != c && other.Target == c.Target))
+                        c.Target.IsMapped = false;
+                    Connections.RemoveAt(i);
+                }
+            }
+        });
+
+        ToggleFilterCommand = new DelegateCommand<ConnectionMatchSource>(source =>
+        {
+            switch (source)
+            {
+                case ConnectionMatchSource.ExactName: IsExactNameVisible = !IsExactNameVisible; break;
+                case ConnectionMatchSource.Memory: IsMemoryMatchVisible = !IsMemoryMatchVisible; break;
+                case ConnectionMatchSource.Heuristic: IsHeuristicMatchVisible = !IsHeuristicMatchVisible; break;
+                case ConnectionMatchSource.Manual: IsManualMatchVisible = !IsManualMatchVisible; break;
+                case ConnectionMatchSource.Unmatched: IsUnmatchedVisible = !IsUnmatchedVisible; break;
+            }
+        });
+
+        ToggleAllTargetFiltersCommand = new DelegateCommand<object>(_ =>
+        {
+            bool allOn = TargetFilters.All(f => f.IsChecked);
+            foreach (var f in TargetFilters)
+                f.IsChecked = !allOn;
+        });
+
+        // Covers every add/remove uniformly -- explicit connect (drag a new
+        // mapping), RemoveConnectionCommand, DisconnectConnectorCommand, and
+        // the initial construction below all funnel through here, so the
+        // "front line" reflow (item 3) reacts to every matching-activity
+        // change, not just Target Filter toggles.
+        Connections.CollectionChanged += (_, _) =>
+        {
+            ApplyFilters();
+        };
+
+        ApplyFilters();
+    }
+
+    private void ApplyLayerDictionary(List<LayerNodeViewModel> standardModels)
+    {
+        var dict = LayerDictionaryDefinition.Load();
+        if (dict.Categories.Count == 0) return; // no dictionary installed -- leave Target Filter empty, everything visible
+
+        var result = LayerCategorizer.Classify(standardModels.Select(n => n.Name), dict);
+
+        foreach (var node in standardModels)
+        {
+            if (result.AlwaysHidden.Contains(node.Name))
+            {
+                node.IsAlwaysHiddenTarget = true;
+                continue;
+            }
+            if (result.LayerTags.TryGetValue(node.Name, out var tags))
+            {
+                foreach (var tag in tags)
+                    node.TargetTags.Add(tag);
+            }
+        }
+
+        // Primary tag = the node's most specific group, judged by which of
+        // its tags has the fewest members in THIS template (population is a
+        // better specificity signal than any hardcoded hierarchy: "Wall"
+        // with ~15 members beats "Floor Plan" with ~130, which beats
+        // "Architectural" with ~300). Ties break alphabetically for
+        // determinism. See LayerNodeViewModel.PrimaryTargetTag for why
+        // filtering keys off one tag instead of the full set.
+        var tagCounts = standardModels
+            .Where(n => !n.IsAlwaysHiddenTarget)
+            .SelectMany(n => n.TargetTags)
+            .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var node in standardModels)
+        {
+            if (node.IsAlwaysHiddenTarget || node.TargetTags.Count == 0) continue;
+            node.PrimaryTargetTag = node.TargetTags
+                .OrderBy(t => tagCounts.TryGetValue(t, out var c) ? c : int.MaxValue)
+                .ThenBy(t => t, StringComparer.OrdinalIgnoreCase)
+                .First();
+        }
+
+        foreach (var category in result.VisibleCategories)
+            TargetFilters.Add(new TargetFilterViewModel(category, ApplyFilters));
+
+        OnPropertyChanged(nameof(HasTargetFilters));
+    }
+
+    public bool HasTargetFilters => TargetFilters.Count > 0;
+
+    private void ApplyFilters()
+    {
+        foreach (var node in Nodes)
+        {
+            if (node.IsHeader)
+            {
+                node.IsVisible = true; // always shown, never filtered
+                continue;
+            }
+
+            if (!node.IsSource)
+            {
+                node.IsVisible = IsTargetNodeVisible(node);
+                continue;
+            }
+
+            var conn = Connections.FirstOrDefault(c => c.Source == node);
+            ConnectionMatchSource matchType;
+
+            if (conn is null)
+                matchType = ConnectionMatchSource.Unmatched;
+            else
+                matchType = conn.MatchSource;
+
+            node.IsVisible = matchType switch
+            {
+                ConnectionMatchSource.ExactName => IsExactNameVisible,
+                ConnectionMatchSource.Memory => IsMemoryMatchVisible,
+                ConnectionMatchSource.Heuristic => IsHeuristicMatchVisible,
+                ConnectionMatchSource.Manual => IsManualMatchVisible,
+                ConnectionMatchSource.Unmatched => IsUnmatchedVisible,
+                _ => true,
+            };
+        }
+
+        foreach (var conn in Connections)
+        {
+            // A connection needs both ends visible -- previously only the
+            // source side was checked, so a connection whose target had been
+            // hidden by the Target Filter stayed drawn to a node that wasn't
+            // there anymore.
+            conn.IsVisible = conn.Source.IsVisible && conn.Target.IsVisible;
+        }
+
+        RepositionVisibleNodes();
+        ArrangeTargetsInColumns();
+        UpdateHeaderBounds();
+        UpdateNodeColors();
+    }
+
+    private bool IsTargetNodeVisible(LayerNodeViewModel node)
+    {
+        if (node.IsAlwaysHiddenTarget) return false;
+
+        // No dictionary installed, or this layer got no tags at all (should
+        // only happen if the dictionary was empty) -- default to visible
+        // rather than silently hiding content.
+        if (TargetFilters.Count == 0 || node.PrimaryTargetTag is null) return true;
+
+        // Each node is controlled by exactly one toggle: its most specific
+        // group (PrimaryTargetTag -- see LayerNodeViewModel for why AND and
+        // OR over the full multi-tag set both failed in live testing).
+        foreach (var filter in TargetFilters)
+        {
+            if (string.Equals(filter.Name, node.PrimaryTargetTag, StringComparison.OrdinalIgnoreCase))
+                return filter.IsChecked;
+        }
+        return true; // primary tag has no toggle (shouldn't happen) -- fail visible
+    }
+
+    // Source stays a single alphabetized column always (chris's explicit
+    // call, 2026-07-10) -- explicitly sorted here rather than relying on
+    // Nodes' insertion order (which happens to already be alphabetical
+    // today since callers pre-sort, but that's an assumption worth not
+    // depending on silently).
+    private void RepositionVisibleNodes()
+    {
+        var visibleSources = Nodes.Where(n => n.IsSource && n.IsVisible).OrderBy(n => n.Name).ToList();
+
+        for (int i = 0; i < visibleSources.Count; i++)
+        {
+            visibleSources[i].Location = new Point(LeftColX, TopMargin + i * NodeSpacing);
+        }
+    }
+
+    private void UpdateNodeColors()
+    {
+        foreach (var node in Nodes)
+        {
+            if (node.IsHeader) continue; // fixed appearance, not match-driven
+
+            if (node.IsSource)
+            {
+                var conn = Connections.FirstOrDefault(c => c.Source == node);
+                node.BackgroundColor = conn switch
+                {
+                    { MatchSource: ConnectionMatchSource.ExactName } => "#8bc34a",
+                    { MatchSource: ConnectionMatchSource.Memory } => "#448aff",
+                    { MatchSource: ConnectionMatchSource.Heuristic } => "#ffd740",
+                    { MatchSource: ConnectionMatchSource.Manual } => "#7c4dff",
+                    _ => "#424242",
+                };
+                if (node.IsEmpty && IsEmptyHighlighted)
+                    node.BackgroundColor = "#b71c1c";
+            }
+            else
+            {
+                bool inUse = Connections.Any(c => c.Target == node);
+                node.BackgroundColor = inUse ? "#4682b4" : "#424242";
+            }
+        }
+    }
+
+    // Target is flexible/multi-column (chris's correction, 2026-07-10: the
+    // "single column" call last round was a miscommunication -- Target will
+    // always have far more items than Source, so it needs to flow into
+    // several columns to keep panning reasonably proportioned). Re-run every
+    // time visibility changes (Target Filter toggles, filtered connections,
+    // etc.), always one alphabetized sequence chunked into columns -- no
+    // connected-first clustering, since that conflicts with a single
+    // predictable alphabetical order.
+    // Column count/height rules: at most 5 columns (hard cap); each column
+    // is as close as possible to the Source column's current height, with a
+    // floor of 20 rows -- but if 5 columns still isn't enough to fit
+    // everyone at that height, columns grow taller rather than adding a 6th
+    // column, since the column-count cap is the hard constraint and the
+    // height matching is the soft one.
+    private void ArrangeTargetsInColumns()
+    {
+        var targets = Nodes.Where(n => !n.IsSource && !n.IsHeader && n.IsVisible).OrderBy(n => n.Name).ToList();
+        if (targets.Count == 0) return;
+
+        int sourceVisibleCount = Nodes.Count(n => n.IsSource && n.IsVisible);
+        int maxColumnHeight = Math.Max(sourceVisibleCount, MinTargetColumnHeight);
+
+        int numColumns = Math.Clamp(
+            (int)Math.Ceiling((double)targets.Count / maxColumnHeight),
+            1, MaxTargetColumns);
+        int perColumn = (int)Math.Ceiling((double)targets.Count / numColumns);
+
+        double x = RightColX;
+        int idx = 0;
+        for (int c = 0; c < numColumns; c++)
+        {
+            double y = TopMargin;
+            for (int i = 0; i < perColumn && idx < targets.Count; i++, idx++)
+            {
+                targets[idx].Location = new Point(x, y);
+                y += NodeSpacing;
+            }
+            x += NodeWidth + TargetColumnGap;
+        }
+    }
+
+    // "The header is more like a Container... it sort of fences around the
+    // visible nodes with a light box" (chris, 2026-07-10) -- not a small
+    // fixed label anymore. Recomputes both header items' Location/Size to
+    // bound whatever's currently visible on their side, every time
+    // visibility/layout changes.
+    private void UpdateHeaderBounds()
+    {
+        if (_sourceHeader is not null)
+        {
+            var visible = Nodes.Where(n => n.IsSource && n.IsVisible).ToList();
+            var (loc, size) = ComputeContainerBounds(visible, LeftColX);
+            _sourceHeader.Location = loc;
+            _sourceHeader.Size = size;
+        }
+        if (_targetHeader is not null)
+        {
+            var visible = Nodes.Where(n => !n.IsSource && !n.IsHeader && n.IsVisible).ToList();
+            var (loc, size) = ComputeContainerBounds(visible, RightColX);
+            _targetHeader.Location = loc;
+            _targetHeader.Size = size;
+        }
+    }
+
+    private static (Point Location, Size Size) ComputeContainerBounds(List<LayerNodeViewModel> nodes, double emptyFallbackX)
+    {
+        // Empty side: shrink to a title-bar-sized box anchored at that
+        // side's own column X -- previously fell back to (0,0), which put
+        // the Target container's title on top of the Source area whenever
+        // every target was filtered out.
+        if (nodes.Count == 0)
+            return (new Point(emptyFallbackX - HeaderPadding, TopMargin - HeaderPadding - HeaderTitleBarHeight),
+                    new Size(NodeWidth + HeaderPadding * 2, HeaderTitleBarHeight + NodeHeight + HeaderPadding * 2));
+
+        double minX = nodes.Min(n => n.Location.X);
+        double minY = nodes.Min(n => n.Location.Y);
+        double maxX = nodes.Max(n => n.Location.X) + NodeWidth;
+        double maxY = nodes.Max(n => n.Location.Y) + NodeHeight;
+
+        var location = new Point(minX - HeaderPadding, minY - HeaderPadding - HeaderTitleBarHeight);
+        var size = new Size(
+            (maxX - minX) + HeaderPadding * 2,
+            (maxY - minY) + HeaderPadding * 2 + HeaderTitleBarHeight);
+        return (location, size);
+    }
+
+    public void RemoveEmptyLayers()
+    {
+        var empty = Nodes.Where(n => n.IsSource && n.IsEmpty).ToList();
+        foreach (var node in empty)
+        {
+            var conns = Connections.Where(c => c.Source == node || c.Target == node).ToList();
+            foreach (var c in conns)
+            {
+                c.Source.IsMapped = false;
+                if (!Connections.Any(other => other != c && other.Target == c.Target))
+                    c.Target.IsMapped = false;
+                Connections.Remove(c);
+            }
+            Nodes.Remove(node);
+        }
+        ApplyFilters();
+    }
+
+    // Shared between the constructor's initial load and SwitchTemplate --
+    // exact-name, then translation-memory, then heuristic matches, each
+    // tier skipping any source already claimed by an earlier one.
+    private void RunMatchingTiers(
+        List<LayerNodeViewModel> sourceModels,
+        Dictionary<string, LayerNodeViewModel> sourceMap,
+        Dictionary<string, LayerNodeViewModel> standardMap,
+        Dictionary<string, string>? memoryMappings,
+        List<Matching.MatchResult>? heuristicResults)
+    {
         // Tier 1: exact name matches — solid green
         foreach (var src in sourceModels)
         {
@@ -222,195 +652,67 @@ public class LayerEditorViewModel : ObservableObject
                 }
             }
         }
+    }
 
-        if (emptyLayers is not null)
+    // Rebuilds the entire Target side against a newly-picked template.
+    // Source nodes/empty-layer flags are untouched -- only standard/target
+    // nodes and every connection are torn down and rebuilt.
+    // preserveMappings (source name -> target name), when supplied, is laid
+    // on top of the fresh auto-match tiers afterward -- an explicit prior
+    // user mapping wins over whatever the auto tiers picked for that source,
+    // as long as its old target name still exists in the new template.
+    public void SwitchTemplate(
+        List<string> newStandardLayers,
+        Dictionary<string, string>? memoryMappings,
+        List<Matching.MatchResult>? heuristicResults,
+        Dictionary<string, string>? preserveMappings)
+    {
+        var oldTargets = Nodes.Where(n => !n.IsSource && !n.IsHeader).ToList();
+        foreach (var n in oldTargets)
+            Nodes.Remove(n);
+        Connections.Clear();
+        TargetFilters.Clear();
+
+        var sourceModels = Nodes.Where(n => n.IsSource).ToList();
+        foreach (var s in sourceModels)
+            s.IsMapped = false;
+
+        var standardModels = new List<LayerNodeViewModel>();
+        for (int i = 0; i < newStandardLayers.Count; i++)
         {
-            foreach (var node in Nodes)
-            {
-                if (node.IsSource && emptyLayers.Contains(node.Name))
-                    node.IsEmpty = true;
-            }
+            var vm = new LayerNodeViewModel(newStandardLayers[i], false, new Point(0, 0));
+            standardModels.Add(vm);
+            Nodes.Add(vm);
         }
 
-        PendingConnection = new PendingConnectionViewModel(this, sourceMap, standardMap);
+        ApplyLayerDictionary(standardModels);
 
-        RemoveConnectionCommand = new DelegateCommand<LayerConnectionViewModel>(conn =>
-        {
-            if (conn is null) return;
-            conn.Source.IsMapped = false;
-            if (!Connections.Any(c => c != conn && c.Target == conn.Target))
-                conn.Target.IsMapped = false;
-            Connections.Remove(conn);
-            ApplyFilters();
-        });
+        var sourceMap = sourceModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
+        var standardMap = standardModels.ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
 
-        DisconnectConnectorCommand = new DelegateCommand<LayerNodeViewModel>(node =>
+        RunMatchingTiers(sourceModels, sourceMap, standardMap, memoryMappings, heuristicResults);
+
+        if (preserveMappings is not null)
         {
-            for (int i = Connections.Count - 1; i >= 0; i--)
+            foreach (var kvp in preserveMappings)
             {
-                var c = Connections[i];
-                if (c.Source == node || c.Target == node)
+                if (!sourceMap.TryGetValue(kvp.Key, out var src)) continue;
+                if (!standardMap.TryGetValue(kvp.Value, out var tgt)) continue;
+
+                var existing = Connections.FirstOrDefault(c => c.Source == src);
+                if (existing is not null)
                 {
-                    c.Source.IsMapped = false;
-                    if (!Connections.Any(other => other != c && other.Target == c.Target))
-                        c.Target.IsMapped = false;
-                    Connections.RemoveAt(i);
+                    if (existing.Target == tgt) continue; // already correct
+                    existing.Source.IsMapped = false;
+                    if (!Connections.Any(c => c != existing && c.Target == existing.Target))
+                        existing.Target.IsMapped = false;
+                    Connections.Remove(existing);
                 }
-            }
-            ApplyFilters();
-        });
 
-        ToggleFilterCommand = new DelegateCommand<ConnectionMatchSource>(source =>
-        {
-            switch (source)
-            {
-                case ConnectionMatchSource.ExactName: IsExactNameVisible = !IsExactNameVisible; break;
-                case ConnectionMatchSource.Memory: IsMemoryMatchVisible = !IsMemoryMatchVisible; break;
-                case ConnectionMatchSource.Heuristic: IsHeuristicMatchVisible = !IsHeuristicMatchVisible; break;
-                case ConnectionMatchSource.Manual: IsManualMatchVisible = !IsManualMatchVisible; break;
-                case ConnectionMatchSource.Unmatched: IsUnmatchedVisible = !IsUnmatchedVisible; break;
-            }
-        });
-
-        Connections.CollectionChanged += (_, _) =>
-        {
-            UpdateNodeColors();
-        };
-
-        ArrangeTargetsInColumns();
-        ApplyFilters();
-    }
-
-    private void ApplyFilters()
-    {
-        foreach (var node in Nodes)
-        {
-            if (!node.IsSource)
-            {
-                node.IsVisible = true;
-                continue;
-            }
-
-            var conn = Connections.FirstOrDefault(c => c.Source == node);
-            ConnectionMatchSource matchType;
-
-            if (conn is null)
-                matchType = ConnectionMatchSource.Unmatched;
-            else
-                matchType = conn.MatchSource;
-
-            node.IsVisible = matchType switch
-            {
-                ConnectionMatchSource.ExactName => IsExactNameVisible,
-                ConnectionMatchSource.Memory => IsMemoryMatchVisible,
-                ConnectionMatchSource.Heuristic => IsHeuristicMatchVisible,
-                ConnectionMatchSource.Manual => IsManualMatchVisible,
-                ConnectionMatchSource.Unmatched => IsUnmatchedVisible,
-                _ => true,
-            };
-        }
-
-        foreach (var conn in Connections)
-        {
-            conn.IsVisible = conn.Source.IsVisible;
-        }
-
-        RepositionVisibleNodes();
-        UpdateNodeColors();
-    }
-
-    private void RepositionVisibleNodes()
-    {
-        var visibleSources = Nodes.Where(n => n.IsSource && n.IsVisible).ToList();
-
-        for (int i = 0; i < visibleSources.Count; i++)
-        {
-            visibleSources[i].Location = new Point(LeftColX, TopMargin + i * NodeSpacing);
-        }
-    }
-
-    private void UpdateNodeColors()
-    {
-        foreach (var node in Nodes)
-        {
-            if (node.IsSource)
-            {
-                var conn = Connections.FirstOrDefault(c => c.Source == node);
-                node.BackgroundColor = conn switch
-                {
-                    { MatchSource: ConnectionMatchSource.ExactName } => "#8bc34a",
-                    { MatchSource: ConnectionMatchSource.Memory } => "#448aff",
-                    { MatchSource: ConnectionMatchSource.Heuristic } => "#ffd740",
-                    { MatchSource: ConnectionMatchSource.Manual } => "#7c4dff",
-                    _ => "#424242",
-                };
-                if (node.IsEmpty && IsEmptyHighlighted)
-                    node.BackgroundColor = "#b71c1c";
-            }
-            else
-            {
-                bool inUse = Connections.Any(c => c.Target == node);
-                node.BackgroundColor = inUse ? "#4682b4" : "#424242";
+                Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.Manual));
             }
         }
-    }
 
-    private void ArrangeTargetsInColumns()
-    {
-        var targets = Nodes.Where(n => !n.IsSource).OrderBy(n => n.Name).ToList();
-        if (targets.Count == 0) return;
-
-        var connected = targets.Where(t => Connections.Any(c => c.Target == t)).ToList();
-        var unconnected = targets.Where(t => !Connections.Any(c => c.Target == t)).ToList();
-
-        double x = RightColX;
-
-        // Connected targets — first column, alphabetical
-        if (connected.Count > 0)
-        {
-            double y = TopMargin;
-            foreach (var node in connected)
-            {
-                node.Location = new Point(x, y);
-                y += NodeSpacing;
-            }
-            x += NodeWidth + TargetColumnGap;
-        }
-
-        // Unconnected targets — remaining columns, alphabetical
-        if (unconnected.Count == 0) return;
-
-        int numColumns = Math.Clamp((int)Math.Ceiling((double)unconnected.Count / 10.0), 2, 5);
-        int perColumn = (int)Math.Ceiling((double)unconnected.Count / numColumns);
-        int idx = 0;
-
-        for (int c = 0; c < numColumns; c++)
-        {
-            double y = TopMargin;
-            for (int i = 0; i < perColumn && idx < unconnected.Count; i++, idx++)
-            {
-                unconnected[idx].Location = new Point(x, y);
-                y += NodeSpacing;
-            }
-            x += NodeWidth + TargetColumnGap;
-        }
-    }
-
-    public void RemoveEmptyLayers()
-    {
-        var empty = Nodes.Where(n => n.IsSource && n.IsEmpty).ToList();
-        foreach (var node in empty)
-        {
-            var conns = Connections.Where(c => c.Source == node || c.Target == node).ToList();
-            foreach (var c in conns)
-            {
-                c.Source.IsMapped = false;
-                if (!Connections.Any(other => other != c && other.Target == c.Target))
-                    c.Target.IsMapped = false;
-                Connections.Remove(c);
-            }
-            Nodes.Remove(node);
-        }
         ApplyFilters();
     }
 

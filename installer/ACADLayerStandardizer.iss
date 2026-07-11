@@ -46,6 +46,10 @@ Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\AcLayerStandardizer.
 Source: "..\src\AcLayerStandardizer\bin\Release\{#MyAppTfm}\Nodify.dll"; DestDir: "{app}\Contents\Windows\64-bit"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
 Source: "assets\config.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion onlyifdoesntexist
+; onlyifdoesntexist: this is a user-editable starting dictionary (see the
+; file's own "description" field), not an app resource -- an upgrade must
+; never clobber a user's retuned categories/tokens/thresholds.
+Source: "assets\layer_dictionary.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion onlyifdoesntexist
 Source: "assets\LayerStandardizer.cuix"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion
 
 [Dirs]
@@ -59,6 +63,28 @@ Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName
 Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 
 [Code]
+// PrivilegesRequired=admin means every launch goes through UAC elevation,
+// and Windows frequently leaves an elevated process's window behind
+// whatever already had focus instead of bringing it forward -- a known
+// Windows quirk, not something Inno handles on its own. SetForegroundWindow
+// alone is unreliable here: Windows' anti-focus-stealing rules can silently
+// ignore it, especially right after a UAC elevation. Toggling the window
+// TOPMOST via SetWindowPos isn't subject to that restriction, so do both.
+function SetForegroundWindow(hWnd: LongInt): LongInt;
+  external 'SetForegroundWindow@user32.dll stdcall';
+function SetWindowPos(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags: LongInt): LongInt;
+  external 'SetWindowPos@user32.dll stdcall';
+
+// HWND_TOPMOST=-1, HWND_NOTOPMOST=-2, SWP_NOMOVE=$0002, SWP_NOSIZE=$0001
+// -- inlined as literals rather than named consts (Inno's Pascal Script
+// parser rejected a multi-entry const block here).
+procedure ForceWindowToFront(H: LongInt);
+begin
+  SetWindowPos(H, -1, 0, 0, 0, 0, $0002 or $0001);
+  SetWindowPos(H, -2, 0, 0, 0, 0, $0002 or $0001);
+  SetForegroundWindow(H);
+end;
+
 var
   InstallRibbon: Boolean;
   InstallMenu: Boolean;
@@ -143,6 +169,7 @@ begin
     BtnCancel.Cancel := True;
 
     Form.ActiveControl := BtnUpdate;
+    ForceWindowToFront(Form.Handle);
     Result := Form.ShowModal;
   finally
     Form.Free;
@@ -313,6 +340,9 @@ begin
   MenuCheck.Height := 20;
   MenuCheck.Caption := 'Install menu item (Custom Apps > Layer Standardizer)';
   MenuCheck.Checked := True;
+
+  WizardForm.BringToFront;
+  ForceWindowToFront(WizardForm.Handle);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -401,6 +431,7 @@ end;
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   ConfigDir: String;
+  LocalDir: String;
   ConfigFile: String;
   CuiFile: String;
   MemFile: String;
@@ -409,6 +440,7 @@ begin
   if CurUninstallStep = usUninstall then
   begin
     ConfigDir := ExpandConstant('{userappdata}\AcLayerStandardizer');
+    LocalDir := ExpandConstant('{localappdata}\AcLayerStandardizer');
 
     { Translation memory: default filename set by PluginConfig/EntryPoint.
       Keeping this name in sync with EntryPoint.cs's default is important —
@@ -424,11 +456,10 @@ begin
         DeleteFile(MemFile);
     end;
 
-    { UI preferences file: doesn't exist yet as of 2026-07-10 (no code writes
-      it), but stubbed here so uninstall handles it correctly the moment it's
-      introduced, without needing to touch the uninstaller again. Update the
-      filename here if/when the real feature picks a different name. }
-    UiPrefsFile := ConfigDir + '\ui_preferences.json';
+    { UI preferences (mapping-editor window size/zoom/pan): machine-specific,
+      so UserPreferences.cs writes it under LocalAppData rather than the
+      Roaming ConfigDir used for config.json/standards_memory.json. }
+    UiPrefsFile := LocalDir + '\ui_preferences.json';
     if FileExists(UiPrefsFile) then
     begin
       if MsgBox('Remove saved UI preferences file?' + #13#10#13#10 +
