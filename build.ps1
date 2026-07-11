@@ -27,7 +27,7 @@ $BundleDir = Join-Path $SolutionRoot $BundleName
 # Single source of truth for the app version -- keep in sync with the
 # installer's #define MyAppVersion (installer/ACADLayerStandardizer.iss),
 # which reads this same string via the MYAPPVERSION env var below.
-$AppVersion = "ALPHA/0.2"
+$AppVersion = "ALPHA/0.3"
 $AppVersionSafe = $AppVersion -replace "/", "-"
 
 # Validate AutoCAD version
