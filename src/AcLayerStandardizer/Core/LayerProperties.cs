@@ -36,5 +36,6 @@ public record LayerProperties
 public sealed record PropertyMatchSettings(
     bool MatchColor = true,
     bool MatchLinetype = true,
-    bool MatchLineweight = true
+    bool MatchLineweight = true,
+    bool MakeByLayer = false
 );

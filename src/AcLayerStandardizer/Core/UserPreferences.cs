@@ -16,6 +16,7 @@ public class UserPreferences
     public double MappingEditorZoom { get; set; } = 1.0;
     public double MappingEditorViewportX { get; set; }
     public double MappingEditorViewportY { get; set; }
+    public bool AnimationsEnabled { get; set; } = true;
 
     // Machine-specific (window size/position depend on the local monitor
     // setup), so this lives under LocalAppData rather than the Roaming

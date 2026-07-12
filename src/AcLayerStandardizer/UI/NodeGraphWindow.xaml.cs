@@ -66,7 +66,10 @@ public partial class NodeGraphWindow : Window
 
         _viewModel = new LayerEditorViewModel(
             sourceLayers, standardLayers, memoryMappings, heuristicResults, emptyLayers,
-            sourceFileName, Path.GetFileName(templatePath));
+            sourceFileName, Path.GetFileName(templatePath))
+        {
+            AreAnimationsEnabled = _preferences.AnimationsEnabled,
+        };
 
         if (purgeCallback is not null && emptyLayers is { Count: > 0 })
         {
@@ -83,6 +86,8 @@ public partial class NodeGraphWindow : Window
         }
 
         DataContext = _viewModel;
+
+        _viewModel.BeforeApplyFilters += SettleLocationAnimations;
 
         Closing += OnWindowClosing;
 
@@ -133,7 +138,8 @@ public partial class NodeGraphWindow : Window
     public PropertyMatchSettings PropertySettings => new(
         _viewModel.IsMatchColorEnabled,
         _viewModel.IsMatchLinetypeEnabled,
-        _viewModel.IsMatchLineweightEnabled
+        _viewModel.IsMatchLineweightEnabled,
+        _viewModel.IsMakeByLayerEnabled
     );
 
     // Reads the same $AppVersion string build.ps1 stamps into the assembly
@@ -147,6 +153,24 @@ public partial class NodeGraphWindow : Window
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
             ?.InformationalVersion;
         return string.IsNullOrEmpty(info) ? "" : info;
+    }
+
+    // Nodify itself doesn't change the cursor for its middle-click pan
+    // gesture, so the pointer stays an arrow the whole time you're
+    // panning -- switch it to a hand for the duration of the middle-button
+    // press, same as most canvas/map-style apps. Editor captures the mouse
+    // during the pan drag, so MouseUp still reaches this handler even if the
+    // button is released outside the editor's bounds.
+    private void OnEditorPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle)
+            Editor.Cursor = Cursors.Hand;
+    }
+
+    private void OnEditorPreviewMouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton == MouseButton.Middle)
+            Editor.Cursor = Cursors.Arrow;
     }
 
     // Shared by both the Source and Target canvas header labels (same
@@ -285,7 +309,7 @@ public partial class NodeGraphWindow : Window
 
         if (!hasPrev || from == to) return; // first placement, or no real movement: snap, don't animate
 
-        if (container.DataContext is LayerNodeViewModel node)
+        if (container.DataContext is LayerNodeViewModel node && _viewModel.AreAnimationsEnabled)
             StartLocationAnimation(node, from, to, 0.22);
     }
 
@@ -293,6 +317,30 @@ public partial class NodeGraphWindow : Window
     // the existing tween instead of stacking a duplicate one.
     private readonly Dictionary<LayerNodeViewModel, (DateTime Start, Point From, Point To, double Duration)> _activeLocationAnimations = new();
     private bool _suppressLocationAnimationEvents;
+
+    // Runs before every LayerEditorViewModel.ApplyFilters pass (wired via
+    // BeforeApplyFilters in the constructor). Snaps every still-tweening
+    // node straight to its in-flight target instead of leaving it mid-flight
+    // when a new filter/layout pass is about to recompute positions --
+    // otherwise RepositionVisibleNodes/ArrangeTargetsInColumns can compute
+    // the next layout off of a not-yet-settled position, and the two passes
+    // racing left a node's Location (and therefore its connections' Anchor)
+    // stuck partway, which is what made connections intermittently vanish
+    // or fail to draw while typing in the live text filter (each keystroke
+    // pause fires another ApplyFilters via the debounce timer). Clearing the
+    // dictionary is enough to stop each running Tick loop -- it already
+    // checks TryGetValue and unsubscribes itself when its entry is gone.
+    private void SettleLocationAnimations()
+    {
+        if (_activeLocationAnimations.Count == 0) return;
+
+        _suppressLocationAnimationEvents = true;
+        foreach (var (node, anim) in _activeLocationAnimations)
+            node.Location = anim.To;
+        _suppressLocationAnimationEvents = false;
+
+        _activeLocationAnimations.Clear();
+    }
 
     // Animates the ViewModel's actual Location (not a visual RenderTransform
     // on the container) so the connected line's anchor point -- bound to
@@ -600,6 +648,7 @@ public partial class NodeGraphWindow : Window
             _preferences.MappingEditorZoom = Editor.ViewportZoom;
             _preferences.MappingEditorViewportX = Editor.ViewportLocation.X;
             _preferences.MappingEditorViewportY = Editor.ViewportLocation.Y;
+            _preferences.AnimationsEnabled = _viewModel.AreAnimationsEnabled;
 
             _preferences.Save();
         }

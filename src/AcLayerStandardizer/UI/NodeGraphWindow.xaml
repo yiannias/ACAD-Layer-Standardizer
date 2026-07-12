@@ -22,6 +22,7 @@
       <local:ColorStringToBrushConverter x:Key="ColorStringToBrush" />
       <local:BooleanToOpacityConverter x:Key="BoolToOpacity" />
       <local:SubtractDoubleConverter x:Key="SubtractDouble" />
+      <local:StringEmptyToVisibilityConverter x:Key="StringEmptyToVis" />
 
       <!-- Shadow for floating panel -->
       <DropShadowEffect x:Key="PanelShadow"
@@ -372,7 +373,9 @@
                             MinWidth="1500" MinHeight="400"
                             AutoPanEdgeDistance="40"
                             AutoPanSpeed="30"
-                            Focusable="True">
+                            Focusable="True"
+                            PreviewMouseDown="OnEditorPreviewMouseDown"
+                            PreviewMouseUp="OnEditorPreviewMouseUp">
 
         <nodify:NodifyEditor.ItemContainerStyle>
           <Style TargetType="nodify:ItemContainer">
@@ -394,9 +397,31 @@
                    they never obscure or intercept clicks meant for the
                    actual layer nodes on top of them. -->
               <DataTrigger Binding="{Binding IsHeader}" Value="True">
+                <!-- Header containers must NOT feed their rendered size back
+                     into the ViewModel's Size (the base style's ActualSize
+                     OneWayToSource setter above is meant for real nodes, to
+                     drive connection anchors). Left in place, an early/bogus
+                     ActualSize during the very first layout pass overwrites
+                     Size with a near-zero value, collapsing the frame until
+                     something (e.g. a filter toggle) calls ApplyFilters
+                     again and recomputes it: the "frame doesn't draw until
+                     I click a filter" bug. Re-pointing ActualSize at Size
+                     One-Way here breaks that feedback loop. -->
+                <Setter Property="ActualSize" Value="{Binding Size, Mode=OneWay}" />
                 <Setter Property="Width" Value="{Binding Size.Width}" />
                 <Setter Property="Height" Value="{Binding Size.Height}" />
                 <Setter Property="Panel.ZIndex" Value="-1" />
+                <!-- Without this, a plain click anywhere inside the header's
+                     fenced area (not just its title bar) hit Nodify's own
+                     click-to-select handling for this ItemContainer, and
+                     since the header is a giant item spanning most of the
+                     visible canvas, Nodify selecting/focusing it could kick
+                     off its edge-triggered auto-pan, making the whole
+                     viewport visibly "dance" on an ordinary click (reported
+                     by chris even on the Source side, outside the actual
+                     Target-click trigger). Headers were never meant to be a
+                     selectable item in the first place. -->
+                <Setter Property="IsSelectable" Value="False" />
               </DataTrigger>
             </Style.Triggers>
           </Style>
@@ -421,19 +446,89 @@
                         BorderThickness="1.5"
                         IsHitTestVisible="False" />
                 <Border VerticalAlignment="Top"
-                        Height="34"
+                        Height="64"
                         CornerRadius="10,10,0,0"
                         Background="#33000000"
                         Cursor="Hand"
                         ToolTip="Target: click to select a different standard template"
                         MouseLeftButtonUp="OnHeaderClick">
-                  <StackPanel Orientation="Horizontal" Margin="14,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="#ccc" />
+                  <!-- Name/filename stacked vertically (was side-by-side):
+                       inline at mismatched font sizes made their baselines
+                       look uneven (worse with all-caps filenames), and there
+                       was no reason to be stingy with header height. -->
+                  <StackPanel Orientation="Vertical" Margin="14,8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" FontSize="24" FontWeight="Bold" Foreground="#ccc" />
                     <TextBlock Text="{Binding Subtitle}" FontSize="12" Foreground="#999"
-                               Margin="10,0,0,0" VerticalAlignment="Center"
+                               Margin="0,3,0,0"
                                TextTrimming="CharacterEllipsis" />
                   </StackPanel>
                 </Border>
+
+                <!-- Live text filter (Alpha 5): types into SourceFilterText/
+                     TargetFilterText on the window's LayerEditorViewModel,
+                     not this item's own LayerNodeViewModel, so it's bound
+                     via RelativeSource up to the Window, with the Source-vs-
+                     Target box picked by a DataTrigger on this item's Name
+                     (same technique OnHeaderClick already uses). Each is
+                     paired with a non-interactive placeholder TextBlock,
+                     shown only while its TextBox is empty (via an
+                     ElementName binding to the sibling TextBox's own Text). -->
+                <Grid VerticalAlignment="Top" Margin="14,64,14,0" Height="26">
+                  <Grid.Style>
+                    <Style TargetType="Grid">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Name}" Value="Source">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Grid.Style>
+                  <TextBox x:Name="SourceFilterBox"
+                           Padding="6,3"
+                           FontSize="12"
+                           Background="#22ffffff"
+                           Foreground="#eee"
+                           CaretBrush="#eee"
+                           BorderBrush="#555"
+                           BorderThickness="1"
+                           Text="{Binding DataContext.SourceFilterText,
+                                          RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                          UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Text="search / filter"
+                             FontSize="12" Foreground="#777"
+                             Margin="9,0,0,0" VerticalAlignment="Center"
+                             IsHitTestVisible="False"
+                             Visibility="{Binding Text, ElementName=SourceFilterBox, Converter={StaticResource StringEmptyToVis}}" />
+                </Grid>
+                <Grid VerticalAlignment="Top" Margin="14,64,14,0" Height="26">
+                  <Grid.Style>
+                    <Style TargetType="Grid">
+                      <Setter Property="Visibility" Value="Collapsed" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding Name}" Value="Target">
+                          <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Grid.Style>
+                  <TextBox x:Name="TargetFilterBox"
+                           Padding="6,3"
+                           FontSize="12"
+                           Background="#22ffffff"
+                           Foreground="#eee"
+                           CaretBrush="#eee"
+                           BorderBrush="#555"
+                           BorderThickness="1"
+                           Text="{Binding DataContext.TargetFilterText,
+                                          RelativeSource={RelativeSource AncestorType={x:Type Window}},
+                                          UpdateSourceTrigger=PropertyChanged}" />
+                  <TextBlock Text="search / filter"
+                             FontSize="12" Foreground="#777"
+                             Margin="9,0,0,0" VerticalAlignment="Center"
+                             IsHitTestVisible="False"
+                             Visibility="{Binding Text, ElementName=TargetFilterBox, Converter={StaticResource StringEmptyToVis}}" />
+                </Grid>
               </Grid>
 
               <nodify:StateNode IsConnected="True" Content="{Binding}"
@@ -499,7 +594,8 @@
       </nodify:NodifyEditor>
 
       <!-- Floating filter panel (top-left, legend + toggles) -->
-      <Border Grid.Row="0"
+      <Border x:Name="LegendPanel"
+              Grid.Row="0"
               HorizontalAlignment="Left"
               VerticalAlignment="Top"
               Margin="25,25,0,0"
@@ -509,9 +605,11 @@
               BorderBrush="#666"
               BorderThickness="1"
               Panel.ZIndex="10"
+              IsEnabled="{Binding AreFilterButtonsEnabled}"
+              Opacity="{Binding AreFilterButtonsEnabled, Converter={StaticResource BoolToOpacity}}"
               Effect="{StaticResource PanelShadow}">
         <StackPanel Orientation="Vertical">
-          <TextBlock Text="Legend"
+          <TextBlock Text="Source Drawing"
                      FontSize="18" FontWeight="Bold"
                      Foreground="#e6e6e6" />
           <TextBlock Text="Visibility Toggle"
@@ -594,7 +692,7 @@
           <!-- Property matching section -->
           <Rectangle Height="1" Fill="#555" Margin="0,10" />
 
-          <TextBlock Text="Property Matching"
+          <TextBlock Text="Layer Property Matching"
                      FontSize="13"
                      Foreground="#777"
                      Margin="0,0,0,8" />
@@ -622,6 +720,33 @@
             <ToggleButton Style="{StaticResource SlideToggle}"
                           IsChecked="{Binding IsMatchLineweightEnabled}" />
           </StackPanel>
+
+          <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+            <TextBlock Text="Make Elements ByLayer"
+                       Foreground="#aaa" FontSize="11"
+                       VerticalAlignment="Center" Width="100"
+                       TextWrapping="Wrap"
+                       ToolTip="Sets every element's color, linetype, lineweight, and transparency to ByLayer, overriding any per-element overrides. Applies to elements inside blocks and groups too." />
+            <ToggleButton Style="{StaticResource SlideToggle}"
+                          IsChecked="{Binding IsMakeByLayerEnabled}" />
+          </StackPanel>
+
+          <!-- Display section -->
+          <Rectangle Height="1" Fill="#555" Margin="0,10" />
+
+          <TextBlock Text="Display"
+                     FontSize="13"
+                     Foreground="#777"
+                     Margin="0,0,0,8" />
+
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="Animations"
+                       Foreground="#aaa" FontSize="11"
+                       VerticalAlignment="Center" Width="100"
+                       ToolTip="Animate nodes sliding into position as filters change. Turn off for instant repositioning." />
+            <ToggleButton Style="{StaticResource SlideToggle}"
+                          IsChecked="{Binding AreAnimationsEnabled}" />
+          </StackPanel>
         </StackPanel>
       </Border>
 
@@ -645,8 +770,11 @@
               BorderBrush="#666"
               BorderThickness="1"
               Panel.ZIndex="10"
+              Width="{Binding ActualWidth, ElementName=LegendPanel}"
               MaxHeight="{Binding ActualHeight, ElementName=CanvasArea, Converter={StaticResource SubtractDouble}, ConverterParameter=50}"
               Visibility="{Binding HasTargetFilters, Converter={StaticResource BoolToVis}}"
+              IsEnabled="{Binding AreFilterButtonsEnabled}"
+              Opacity="{Binding AreFilterButtonsEnabled, Converter={StaticResource BoolToOpacity}}"
               Effect="{StaticResource PanelShadow}">
         <Grid>
           <Grid.RowDefinitions>

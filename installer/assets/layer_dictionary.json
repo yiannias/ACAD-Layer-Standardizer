@@ -43,7 +43,7 @@
     { "name": "Casework",       "description": "Casework/millwork",                              "tokens": ["CASEWORK", "CAS"], "fallbackGroup": "Floor Plan Misc" },
     { "name": "Existing",       "description": "Existing-conditions content",                    "tokens": ["EXISTING"],  "fallbackGroup": "Floor Plan Misc" },
     { "name": "Finish",         "description": "Finish content",                                 "tokens": ["FINISH"],    "fallbackGroup": "Floor Plan Misc" },
-    { "name": "Furniture",      "description": "Furniture content (FF&E)",                       "tokens": ["FURNITURE", "FURN", "FRN"], "fallbackGroup": "Floor Plan Misc" },
+    { "name": "Furniture",      "description": "Furniture content (FF&E)",                       "tokens": ["FURNITURE", "FURN", "FRN"], "fallbackGroup": "Floor Plan Misc", "sortGroup": "General" },
     { "name": "Overhead",       "description": "Overhead/above-ceiling content",                 "tokens": ["OVERHEAD"],  "fallbackGroup": "Floor Plan Misc" },
 
     { "name": "Wall",   "description": "Wall content, matched anywhere in the layer name regardless of discipline/sheet type", "tokens": ["WALL", "WALLS"], "matchAnywhere": true, "sortGroup": "General" },

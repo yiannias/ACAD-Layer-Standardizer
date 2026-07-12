@@ -59,6 +59,17 @@ public class SubtractDoubleConverter : IValueConverter
 // when the grid brush's Transform was bound directly to the editor's own
 // ViewportTransform, which is the same math maintained by Nodify itself.)
 
+// Drives a placeholder TextBlock overlaid on a filter TextBox: visible only
+// while the box's own Text is empty.
+public class StringEmptyToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => string.IsNullOrEmpty(value as string) ? Visibility.Visible : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotSupportedException();
+}
+
 public class ColorStringToBrushConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

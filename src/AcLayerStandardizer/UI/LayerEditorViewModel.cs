@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Threading;
 using AcLayerStandardizer.Core;
 using Nodify;
 
@@ -58,7 +59,14 @@ public class LayerEditorViewModel : ObservableObject
     // visible nodes with a light box," not the small fixed label it was
     // before.
     private const double HeaderPadding = 24;
-    private const double HeaderTitleBarHeight = 34;
+    private const double HeaderTitleBarHeight = 64;
+
+    // Height of the live text-filter box docked directly under the title
+    // bar (Alpha 5) -- included in the header's total top-strip height so
+    // ComputeContainerBounds fences the actual visible content below it,
+    // not just below the title bar.
+    private const double HeaderFilterBoxHeight = 32;
+    private const double HeaderTopStripHeight = HeaderTitleBarHeight + HeaderFilterBoxHeight;
 
     public ObservableCollection<LayerNodeViewModel> Nodes { get; } = [];
     public ObservableCollection<LayerConnectionViewModel> Connections { get; } = [];
@@ -143,6 +151,133 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
+    // Live text filter (chris, Alpha 5 "big move"): typing in the box under
+    // the Source/Target frame headers narrows visible nodes to those whose
+    // name contains the typed string. Debounced rather than reapplying
+    // ApplyFilters on every keystroke -- redraw only once typing pauses, and
+    // grey out the toggle-button filters meanwhile (AreFilterButtonsEnabled)
+    // since the text filter and the toggle filters both drive the same
+    // IsVisible computation and mixing "still typing" state with a redraw
+    // mid-keystroke would be confusing.
+    private readonly DispatcherTimer _textFilterDebounce;
+    private bool _isTextFiltering;
+    public bool AreFilterButtonsEnabled => !_isTextFiltering;
+
+    private void OnTextFilterChanged()
+    {
+        if (!_isTextFiltering)
+        {
+            _isTextFiltering = true;
+            OnPropertyChanged(nameof(AreFilterButtonsEnabled));
+        }
+        _textFilterDebounce.Stop();
+        _textFilterDebounce.Start();
+    }
+
+    // While a text filter is active, it should surface every name match
+    // regardless of which toggle buttons are on/off (chris, 2026-07-12) --
+    // so typing snaps every relevant toggle to "on" (and greys them out via
+    // AreFilterButtonsEnabled) for the duration, then restores exactly the
+    // state they were in before typing started once the box is cleared back
+    // to empty. Snapshotting only on the empty-to-non-empty transition (not
+    // every keystroke) is what makes "restore" mean "before this search",
+    // not "one keystroke ago".
+    private bool[]? _sourceToggleSnapshot;
+    private Dictionary<TargetFilterViewModel, bool>? _targetToggleSnapshot;
+
+    private string _sourceFilterText = "";
+    public string SourceFilterText
+    {
+        get => _sourceFilterText;
+        set
+        {
+            if (_sourceFilterText == value) return;
+            bool wasEmpty = string.IsNullOrEmpty(_sourceFilterText);
+            bool isEmpty = string.IsNullOrEmpty(value);
+            _sourceFilterText = value;
+            OnPropertyChanged();
+
+            if (wasEmpty && !isEmpty)
+            {
+                _sourceToggleSnapshot =
+                [
+                    IsExactNameVisible, IsMemoryMatchVisible, IsHeuristicMatchVisible,
+                    IsManualMatchVisible, IsUnmatchedVisible,
+                ];
+                IsExactNameVisible = true;
+                IsMemoryMatchVisible = true;
+                IsHeuristicMatchVisible = true;
+                IsManualMatchVisible = true;
+                IsUnmatchedVisible = true;
+            }
+            else if (!wasEmpty && isEmpty && _sourceToggleSnapshot is { Length: 5 } snap)
+            {
+                IsExactNameVisible = snap[0];
+                IsMemoryMatchVisible = snap[1];
+                IsHeuristicMatchVisible = snap[2];
+                IsManualMatchVisible = snap[3];
+                IsUnmatchedVisible = snap[4];
+                _sourceToggleSnapshot = null;
+            }
+
+            OnTextFilterChanged();
+        }
+    }
+
+    private string _targetFilterText = "";
+    public string TargetFilterText
+    {
+        get => _targetFilterText;
+        set
+        {
+            if (_targetFilterText == value) return;
+            bool wasEmpty = string.IsNullOrEmpty(_targetFilterText);
+            bool isEmpty = string.IsNullOrEmpty(value);
+            _targetFilterText = value;
+            OnPropertyChanged();
+
+            if (wasEmpty && !isEmpty)
+            {
+                _targetToggleSnapshot = TargetFilters.ToDictionary(f => f, f => f.IsChecked);
+                foreach (var f in TargetFilters)
+                    f.IsChecked = true;
+            }
+            else if (!wasEmpty && isEmpty && _targetToggleSnapshot is { } snap)
+            {
+                foreach (var f in TargetFilters)
+                    if (snap.TryGetValue(f, out var was))
+                        f.IsChecked = was;
+                _targetToggleSnapshot = null;
+            }
+
+            OnTextFilterChanged();
+        }
+    }
+
+    // string.Contains(string, StringComparison) isn't available on net48
+    // (this project still targets it -- see AGENTS.md), hence IndexOf here.
+    private static bool MatchesTextFilter(string name, string filter) =>
+        string.IsNullOrWhiteSpace(filter) || name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+
+    // Global UI preference, not a per-mapping setting like the others below
+    // -- gates NodeGraphWindow.StartLocationAnimation (the node-position
+    // tween) and persists via UserPreferences.AnimationsEnabled, seeded from
+    // there by the window at construction (chris asked for an on/off switch
+    // 2026-07-12 but wasn't sure where it belonged; parked here in the
+    // Legend panel's own "Display" row since there's no other settings
+    // surface in this window yet).
+    private bool _areAnimationsEnabled = true;
+    public bool AreAnimationsEnabled
+    {
+        get => _areAnimationsEnabled;
+        set
+        {
+            if (_areAnimationsEnabled == value) return;
+            _areAnimationsEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
     private bool _isMatchColorEnabled = true;
     public bool IsMatchColorEnabled
     {
@@ -175,6 +310,22 @@ public class LayerEditorViewModel : ObservableObject
         {
             if (_isMatchLineweightEnabled == value) return;
             _isMatchLineweightEnabled = value;
+            OnPropertyChanged();
+        }
+    }
+
+    // Default off (chris, 2026-07-12): unlike Match Color/Linetype/Lineweight
+    // (which only sync the LAYER's own default properties), this rewrites
+    // every element's own per-entity overrides to ByLayer -- a much more
+    // invasive, one-way operation, so it shouldn't be on by default.
+    private bool _isMakeByLayerEnabled;
+    public bool IsMakeByLayerEnabled
+    {
+        get => _isMakeByLayerEnabled;
+        set
+        {
+            if (_isMakeByLayerEnabled == value) return;
+            _isMakeByLayerEnabled = value;
             OnPropertyChanged();
         }
     }
@@ -244,6 +395,15 @@ public class LayerEditorViewModel : ObservableObject
         _targetFileName = targetFileName;
         var sourceModels = new List<LayerNodeViewModel>();
         var standardModels = new List<LayerNodeViewModel>();
+
+        _textFilterDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _textFilterDebounce.Tick += (_, _) =>
+        {
+            _textFilterDebounce.Stop();
+            _isTextFiltering = false;
+            OnPropertyChanged(nameof(AreFilterButtonsEnabled));
+            ApplyFilters();
+        };
 
         // Placeholder Location/Size -- UpdateHeaderBounds (called via
         // ApplyFilters at the end of this constructor) immediately
@@ -407,8 +567,27 @@ public class LayerEditorViewModel : ObservableObject
 
     public bool HasTargetFilters => TargetFilters.Count > 0;
 
+    // Fired at the top of every ApplyFilters pass, before any Location gets
+    // reassigned -- NodeGraphWindow uses it to snap any still-running
+    // node-position tween straight to its target first (see
+    // NodeGraphWindow.SettleLocationAnimations). Without this, a filter
+    // change (including the debounced text filter) landing WHILE a previous
+    // pass's tween is still mid-flight lets RepositionVisibleNodes/
+    // ArrangeTargetsInColumns compute the new layout off of a node's
+    // currently-interpolated (not yet settled) position, and the two
+    // animations racing/compounding could leave a node's Anchor stuck
+    // between positions -- the reported "connections sometimes disappear or
+    // don't draw for newly added mappings while typing in the filter, fixed
+    // by toggling a filter again" bug. Toggling a filter "fixed" it only
+    // because that happened to trigger one more full pass; this makes every
+    // pass start from a clean, fully-settled state instead of relying on
+    // that.
+    public event Action? BeforeApplyFilters;
+
     private void ApplyFilters()
     {
+        BeforeApplyFilters?.Invoke();
+
         foreach (var node in Nodes)
         {
             if (node.IsHeader)
@@ -439,7 +618,7 @@ public class LayerEditorViewModel : ObservableObject
                 ConnectionMatchSource.Manual => IsManualMatchVisible,
                 ConnectionMatchSource.Unmatched => IsUnmatchedVisible,
                 _ => true,
-            };
+            } && MatchesTextFilter(node.Name, SourceFilterText);
         }
 
         foreach (var conn in Connections)
@@ -460,6 +639,7 @@ public class LayerEditorViewModel : ObservableObject
     private bool IsTargetNodeVisible(LayerNodeViewModel node)
     {
         if (node.IsAlwaysHiddenTarget) return false;
+        if (!MatchesTextFilter(node.Name, TargetFilterText)) return false;
 
         // No dictionary installed, or this layer got no tags at all (should
         // only happen if the dictionary was empty) -- default to visible
@@ -623,18 +803,18 @@ public class LayerEditorViewModel : ObservableObject
         // the Target container's title on top of the Source area whenever
         // every target was filtered out.
         if (nodes.Count == 0)
-            return (new Point(emptyFallbackX - HeaderPadding, TopMargin - HeaderPadding - HeaderTitleBarHeight),
-                    new Size(NodeWidth + HeaderPadding * 2, HeaderTitleBarHeight + NodeHeight + HeaderPadding * 2));
+            return (new Point(emptyFallbackX - HeaderPadding, TopMargin - HeaderPadding - HeaderTopStripHeight),
+                    new Size(NodeWidth + HeaderPadding * 2, HeaderTopStripHeight + NodeHeight + HeaderPadding * 2));
 
         double minX = nodes.Min(n => n.Location.X);
         double minY = nodes.Min(n => n.Location.Y);
         double maxX = nodes.Max(n => n.Location.X) + NodeWidth;
         double maxY = nodes.Max(n => n.Location.Y) + NodeHeight;
 
-        var location = new Point(minX - HeaderPadding, minY - HeaderPadding - HeaderTitleBarHeight);
+        var location = new Point(minX - HeaderPadding, minY - HeaderPadding - HeaderTopStripHeight);
         var size = new Size(
             (maxX - minX) + HeaderPadding * 2,
-            (maxY - minY) + HeaderPadding * 2 + HeaderTitleBarHeight);
+            (maxY - minY) + HeaderPadding * 2 + HeaderTopStripHeight);
         return (location, size);
     }
 

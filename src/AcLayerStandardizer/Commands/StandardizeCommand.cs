@@ -224,7 +224,7 @@ public static class StandardizeCommand
                         LineWeight = srcLtr.LineWeight.ToString(),
                         IsPlottable = srcLtr.IsPlottable,
                         Description = srcLtr.Description,
-                        TransferredEntityHandles = TransferEntities(db, tr, sourceId.Value, targetId),
+                        TransferredEntityHandles = TransferEntities(db, tr, sourceId.Value, targetId, propSettings?.MakeByLayer ?? false),
                     };
                     snapshot.ErasedLayers.Add(erased);
 
@@ -259,6 +259,12 @@ public static class StandardizeCommand
                     var wipLtr = (LayerTableRecord)tr.GetObject(sourceId.Value, OpenMode.ForWrite);
                     wipLtr.Name = target;
                     targetId = sourceId.Value;
+
+                    // Renamed layers keep the same ObjectId, so their entities
+                    // are never touched by TransferEntities (which only runs
+                    // for the merge/erase branch above) -- normalize here too.
+                    if (propSettings?.MakeByLayer ?? false)
+                        MakeEntitiesByLayer(db, tr, targetId);
                 }
 
                 if (standardLayers.TryGetValue(target, out var props))
@@ -448,7 +454,7 @@ public static class StandardizeCommand
             ? result
             : LineWeight.LineWeight000;
 
-    private static List<long> TransferEntities(Database db, Transaction tr, ObjectId sourceLayerId, ObjectId targetLayerId)
+    private static List<long> TransferEntities(Database db, Transaction tr, ObjectId sourceLayerId, ObjectId targetLayerId, bool makeByLayer = false)
     {
         var handles = new List<long>();
         var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
@@ -466,11 +472,48 @@ public static class StandardizeCommand
                     handles.Add(entId.Handle.Value);
                     ent.UpgradeOpen();
                     ent.LayerId = targetLayerId;
+                    if (makeByLayer)
+                        SetEntityByLayer(ent);
                 }
             }
         }
 
         return handles;
+    }
+
+    // Iterating every BlockTableRecord (model/paper space plus every block
+    // definition, skipping xrefs) rather than just model space is what makes
+    // this reach entities nested inside blocks -- AutoCAD "groups" have no
+    // separate entity storage of their own (a group is just a named
+    // selection of entities that already live in one of these spaces), so
+    // group members are covered by the same pass with no special-casing.
+    private static void MakeEntitiesByLayer(Database db, Transaction tr, ObjectId layerId)
+    {
+        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
+
+        foreach (ObjectId btrId in bt)
+        {
+            var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
+            if (btr.IsFromExternalReference || btr.IsFromOverlayReference) continue;
+
+            foreach (ObjectId entId in btr)
+            {
+                var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
+                if (ent is not null && ent.LayerId == layerId)
+                {
+                    ent.UpgradeOpen();
+                    SetEntityByLayer(ent);
+                }
+            }
+        }
+    }
+
+    private static void SetEntityByLayer(Entity ent)
+    {
+        ent.Color = Color.FromColorIndex(ColorMethod.ByLayer, 256);
+        ent.Linetype = "ByLayer";
+        ent.LineWeight = LineWeight.ByLayer;
+        ent.Transparency = new Transparency(TransparencyMethod.ByLayer);
     }
 
     private static void PrintResults(Editor ed, IReadOnlyList<MatchResult> results, IReadOnlyDictionary<string, LayerProperties> standardLayers)
