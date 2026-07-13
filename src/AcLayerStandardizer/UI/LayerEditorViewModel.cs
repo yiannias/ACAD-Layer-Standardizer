@@ -354,6 +354,13 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
+    // Every source layer name loaded into this session, matched or not --
+    // callers need this (not just CurrentMappings) to know which memory
+    // entries this session actually has an opinion about, so unrelated
+    // entries from other drawings aren't touched on save.
+    public IReadOnlyList<string> SourceLayerNames =>
+        Nodes.Where(n => n.IsSource && !n.IsHeader).Select(n => n.Name).ToList();
+
     // Canvas-space labels (chris: "underlays below the nodes in space," not
     // fixed screen chrome) -- created once, then just have their Subtitle
     // pushed on file-name changes rather than being torn down/rebuilt.

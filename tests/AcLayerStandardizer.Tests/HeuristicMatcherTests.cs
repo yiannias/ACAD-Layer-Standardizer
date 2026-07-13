@@ -20,10 +20,12 @@ public class HeuristicMatcherTests
     }
 
     [Fact]
-    public void Contains_match_returns_0_85()
+    public void Missing_discipline_code_still_matches_high()
     {
+        // "WALL" is missing L-WALL's discipline segment but is otherwise a
+        // full match on the remaining token -- should score very high.
         var sim = HeuristicMatcher.CalculateSimilarity("WALL", "L-WALL");
-        Assert.Equal(0.85, sim);
+        Assert.True(sim >= 0.9);
     }
 
     [Fact]
@@ -45,6 +47,45 @@ public class HeuristicMatcherTests
     {
         var sim = HeuristicMatcher.CalculateSimilarity("", "L-WALL");
         Assert.Equal(0.0, sim);
+    }
+
+    [Fact]
+    public void Extra_qualifier_segment_still_matches_high()
+    {
+        // Same discipline, same base word, just a more specific subtype --
+        // should score high even though the raw strings differ a lot.
+        var sim = HeuristicMatcher.CalculateSimilarity("A-DOOR", "A-DOOR-FULL");
+        Assert.True(sim >= 0.85);
+    }
+
+    [Fact]
+    public void Different_discipline_sharing_a_word_scores_low()
+    {
+        // Same trailing word, but S- vs A- are different namespaces --
+        // this used to get conflated by the old prefix-stripping logic.
+        var sim = HeuristicMatcher.CalculateSimilarity("S-WALL", "A-WALL");
+        Assert.True(sim < 0.5);
+    }
+
+    [Fact]
+    public void Word_composed_entirely_of_discipline_letters_matches_as_a_subset()
+    {
+        // Old StripCommonPrefixes did a char-class TrimStart('A','S','E','L','V','I','-','_'),
+        // which could eat an entire legitimate word like "AISLE" (A,I,S,L,E
+        // are all in that set) down to nothing before comparison. It should
+        // now be compared as an intact token, matching a name that legitimately
+        // shares it...
+        var sim = HeuristicMatcher.CalculateSimilarity("AISLE", "AISLE-WIDTH");
+        Assert.True(sim >= 0.85, $"expected AISLE vs AISLE-WIDTH to score high, got {sim}");
+    }
+
+    [Fact]
+    public void Word_composed_entirely_of_discipline_letters_does_not_falsely_match_unrelated_word()
+    {
+        // ...and NOT get collapsed to an empty/garbage string that happens
+        // to equal some other unrelated strip-set word.
+        var sim = HeuristicMatcher.CalculateSimilarity("AISLE", "SEAL");
+        Assert.True(sim < 0.5, $"expected AISLE vs SEAL to score low, got {sim}");
     }
 
     [Fact]
