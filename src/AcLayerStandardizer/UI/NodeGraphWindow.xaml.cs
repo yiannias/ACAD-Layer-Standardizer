@@ -627,6 +627,25 @@ public partial class NodeGraphWindow : Window
 
         if (e.Key == Key.Space && !e.IsRepeat)
             SetPanGestureIncludesLeftClick(true);
+
+        // Skipped while a TextBox has focus (the Source/Target live filter
+        // boxes) so Ctrl+Z/Ctrl+Y there keep doing the TextBox's own native
+        // text-undo instead of being hijacked by mapping undo/redo -- this
+        // handler runs at Window PreviewKeyDown, which tunnels in BEFORE the
+        // focused TextBox ever sees the key.
+        if (Keyboard.FocusedElement is not TextBox && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            if (e.Key == Key.Z)
+            {
+                _viewModel.Undo();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Y)
+            {
+                _viewModel.Redo();
+                e.Handled = true;
+            }
+        }
     }
 
     private void Window_PreviewKeyUp(object sender, KeyEventArgs e)

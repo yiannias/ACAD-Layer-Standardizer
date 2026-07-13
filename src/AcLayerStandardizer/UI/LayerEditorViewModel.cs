@@ -464,14 +464,23 @@ public class LayerEditorViewModel : ObservableObject
         RemoveConnectionCommand = new DelegateCommand<LayerConnectionViewModel>(conn =>
         {
             if (conn is null) return;
+            PushUndoSnapshot();
             conn.Source.IsMapped = false;
             if (!Connections.Any(c => c != conn && c.Target == conn.Target))
                 conn.Target.IsMapped = false;
             Connections.Remove(conn);
         });
 
+        // Pushes one undo snapshot per invocation, including calls Nodify
+        // itself makes directly (e.g. its native drag-a-connector-off
+        // gesture) rather than only the ones NodeGraphWindow's context menu
+        // makes -- a multi-select "Un-match (N)" therefore undoes as N
+        // separate Ctrl+Z steps rather than one, which is an acceptable
+        // trade for guaranteeing every mutation path is covered.
         DisconnectConnectorCommand = new DelegateCommand<LayerNodeViewModel>(node =>
         {
+            if (node is null || !Connections.Any(c => c.Source == node || c.Target == node)) return;
+            PushUndoSnapshot();
             for (int i = Connections.Count - 1; i >= 0; i--)
             {
                 var c = Connections[i];
@@ -825,8 +834,87 @@ public class LayerEditorViewModel : ObservableObject
         return (location, size);
     }
 
+    // Undo/redo (chris, Alpha 7): snapshots capture Connections as
+    // (source name, target name, match source) triples rather than object
+    // references, since a snapshot taken before a node is torn down (e.g.
+    // an earlier SwitchTemplate/RemoveEmptyLayers pass) would otherwise
+    // hold dangling LayerNodeViewModel references. Restoring re-resolves
+    // names against the CURRENT Nodes collection, so history is cleared
+    // outright by both of those structural operations below rather than
+    // risking a restore that silently drops entries whose nodes no longer
+    // exist.
+    private readonly Stack<List<(string Source, string Target, ConnectionMatchSource MatchSource)>> _undoStack = new();
+    private readonly Stack<List<(string Source, string Target, ConnectionMatchSource MatchSource)>> _redoStack = new();
+
+    public bool CanUndo => _undoStack.Count > 0;
+    public bool CanRedo => _redoStack.Count > 0;
+
+    private List<(string Source, string Target, ConnectionMatchSource MatchSource)> CaptureSnapshot() =>
+        Connections.Select(c => (c.Source.Name, c.Target.Name, c.MatchSource)).ToList();
+
+    // Called once by the caller BEFORE each user-initiated mapping change
+    // (connect, disconnect, un-match) -- callers that mutate several
+    // connections in one user gesture (multi-select un-match, multi-source
+    // drag-connect) call this once up front so the whole gesture undoes in
+    // a single Ctrl+Z, not one step per connection touched.
+    public void PushUndoSnapshot()
+    {
+        _undoStack.Push(CaptureSnapshot());
+        _redoStack.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    public void ClearHistory()
+    {
+        if (_undoStack.Count == 0 && _redoStack.Count == 0) return;
+        _undoStack.Clear();
+        _redoStack.Clear();
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    public void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+        _redoStack.Push(CaptureSnapshot());
+        RestoreSnapshot(_undoStack.Pop());
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    public void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+        _undoStack.Push(CaptureSnapshot());
+        RestoreSnapshot(_redoStack.Pop());
+        OnPropertyChanged(nameof(CanUndo));
+        OnPropertyChanged(nameof(CanRedo));
+    }
+
+    private void RestoreSnapshot(List<(string Source, string Target, ConnectionMatchSource MatchSource)> snapshot)
+    {
+        foreach (var node in Nodes)
+            if (!node.IsHeader) node.IsMapped = false;
+
+        Connections.Clear();
+
+        var sourceMap = Nodes.Where(n => n.IsSource && !n.IsHeader)
+            .ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
+        var targetMap = Nodes.Where(n => !n.IsSource && !n.IsHeader)
+            .ToDictionary(n => n.Name, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (sourceName, targetName, matchSource) in snapshot)
+        {
+            if (!sourceMap.TryGetValue(sourceName, out var src)) continue;
+            if (!targetMap.TryGetValue(targetName, out var tgt)) continue;
+            Connections.Add(new LayerConnectionViewModel(src, tgt, matchSource));
+        }
+    }
+
     public void RemoveEmptyLayers()
     {
+        ClearHistory();
         var empty = Nodes.Where(n => n.IsSource && n.IsEmpty).ToList();
         foreach (var node in empty)
         {
@@ -905,6 +993,7 @@ public class LayerEditorViewModel : ObservableObject
         List<Matching.MatchResult>? heuristicResults,
         Dictionary<string, string>? preserveMappings)
     {
+        ClearHistory();
         var oldTargets = Nodes.Where(n => !n.IsSource && !n.IsHeader).ToList();
         foreach (var n in oldTargets)
             Nodes.Remove(n);
@@ -997,6 +1086,7 @@ public class PendingConnectionViewModel
             else
                 sources.Add(_pendingSource); // ensure the dragged source is included
 
+            _editor.PushUndoSnapshot();
             foreach (var src in sources)
             {
                 if (_editor.Connections.Any(c => c.Source == src))
