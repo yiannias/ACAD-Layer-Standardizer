@@ -141,9 +141,20 @@ public static class MappingsCommand
         if (action is MappingEditorAction.ApplyAndSave)
         {
             var beforeCount = memory.Mappings.Count;
-            memory.Mappings.Clear();
-            foreach (var kvp in resultMappings)
-                memory.Mappings[kvp.Key] = kvp.Value;
+
+            // Only touch the source layers this session actually loaded and
+            // judged -- clearing the whole dictionary here used to wipe out
+            // every mapping remembered from other drawings, since
+            // resultMappings only ever covers layers present in *this*
+            // drawing. A layer the session loaded but left unmatched (e.g.
+            // explicitly un-matched) is forgotten; everything else survives.
+            foreach (var sourceLayer in dialog.SourceLayerNames)
+            {
+                if (resultMappings.TryGetValue(sourceLayer, out var target))
+                    memory.Mappings[sourceLayer] = target;
+                else
+                    memory.Mappings.Remove(sourceLayer);
+            }
             try
             {
                 store.Save(memory);

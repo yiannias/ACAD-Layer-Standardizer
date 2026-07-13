@@ -29,6 +29,7 @@ public partial class NodeGraphWindow : Window
     private bool _initializing = true;
 
     public IReadOnlyDictionary<string, string> ResultMappings => _viewModel.CurrentMappings;
+    public IReadOnlyList<string> SourceLayerNames => _viewModel.SourceLayerNames;
     public MappingEditorAction ResultAction { get; private set; }
 
     // Updated by SwitchTemplate; the caller (MappingsCommand) reads this
@@ -525,6 +526,31 @@ public partial class NodeGraphWindow : Window
 
         if (node.IsSource)
         {
+            // If the right-clicked node is part of a multi-selection, the
+            // action applies to the whole selection (standard Explorer-style
+            // behavior); otherwise it's scoped to just the clicked node.
+            var selectedSources = _viewModel.Nodes
+                .Where(n => n.IsSource && !n.IsHeader && n.IsSelected)
+                .ToList();
+            var unmatchTargets = node.IsSelected && selectedSources.Count > 1
+                ? selectedSources
+                : new List<LayerNodeViewModel> { node };
+
+            var unmatch = new MenuItem
+            {
+                Header = unmatchTargets.Count > 1 ? $"Un-match ({unmatchTargets.Count})" : "Un-match",
+                Style = (Style)FindResource("DarkMenuItem"),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x5A, 0x5A)),
+                IsEnabled = unmatchTargets.Any(n => n.IsMapped),
+            };
+            unmatch.Click += (_, _) =>
+            {
+                foreach (var n in unmatchTargets)
+                    _viewModel.DisconnectConnectorCommand.Execute(n);
+            };
+            menu.Items.Add(unmatch);
+            menu.Items.Add(new Separator { Style = (Style)FindResource("DarkMenuSeparator") });
+
             AddCheckableItem(menu, "Exact Match", _viewModel, nameof(LayerEditorViewModel.IsExactNameVisible));
             AddCheckableItem(menu, "Memory Match", _viewModel, nameof(LayerEditorViewModel.IsMemoryMatchVisible));
             AddCheckableItem(menu, "Heuristic Match", _viewModel, nameof(LayerEditorViewModel.IsHeuristicMatchVisible));
