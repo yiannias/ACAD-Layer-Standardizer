@@ -185,6 +185,40 @@
         </Setter>
       </Style>
 
+      <!-- Confidence threshold slider for the Heuristic sub-filter: thin
+           amber-accented track + circular thumb, styled to sit visually with
+           FilterToggleButton/SlideToggle rather than the WPF default look. -->
+      <Style x:Key="ConfidenceSlider" TargetType="Slider">
+        <Setter Property="Height" Value="20" />
+        <Setter Property="IsMoveToPointEnabled" Value="True" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="Slider">
+              <Grid VerticalAlignment="Center">
+                <Border Height="4" CornerRadius="2" Background="#555" />
+                <Track x:Name="PART_Track">
+                  <Track.DecreaseRepeatButton>
+                    <RepeatButton Command="Slider.DecreaseLarge" Opacity="0" Focusable="False" />
+                  </Track.DecreaseRepeatButton>
+                  <Track.IncreaseRepeatButton>
+                    <RepeatButton Command="Slider.IncreaseLarge" Opacity="0" Focusable="False" />
+                  </Track.IncreaseRepeatButton>
+                  <Track.Thumb>
+                    <Thumb Width="14" Height="14" Cursor="Hand">
+                      <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                          <Ellipse Fill="#c98500" Stroke="#e6e6e6" StrokeThickness="1" />
+                        </ControlTemplate>
+                      </Thumb.Template>
+                    </Thumb>
+                  </Track.Thumb>
+                </Track>
+              </Grid>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <!-- Layer node style: base dark, target nodes thicken border when mapped -->
       <Style TargetType="nodify:StateNode">
         <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
@@ -638,8 +672,23 @@
                         IsChecked="{Binding IsHeuristicMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
-                        Margin="0,0,0,5"
+                        Margin="0,0,0,2"
                         Style="{StaticResource FilterToggleButton}" />
+
+          <Grid Width="150" Margin="4,0,0,5">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Slider Grid.Column="0"
+                     Style="{StaticResource ConfidenceSlider}"
+                     Minimum="{x:Static local:LayerEditorViewModel.MinHeuristicConfidenceThreshold}"
+                     Maximum="{x:Static local:LayerEditorViewModel.MaxHeuristicConfidenceThreshold}"
+                     Value="{Binding HeuristicConfidenceThreshold, Mode=TwoWay}" />
+            <TextBlock Grid.Column="1" Foreground="#aaa" FontSize="11" Margin="6,0,0,0"
+                       VerticalAlignment="Center"
+                       Text="{Binding HeuristicConfidenceThreshold, StringFormat={}{0:P0}}" />
+          </Grid>
 
           <ToggleButton Content="Manual Match"
                         Background="#9085e9"
