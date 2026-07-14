@@ -151,6 +151,26 @@ public class LayerEditorViewModel : ObservableObject
         }
     }
 
+    // Screens Heuristic connections by the matcher's confidence score.
+    // Range is [0.6, 1.0] -- 0.6 is PluginConfig.HeuristicThreshold's default
+    // floor, i.e. the matcher never produces anything below it, so the
+    // slider's minimum means "show everything the matcher surfaced."
+    public const double MinHeuristicConfidenceThreshold = 0.6;
+    public const double MaxHeuristicConfidenceThreshold = 1.0;
+
+    private double _heuristicConfidenceThreshold = MinHeuristicConfidenceThreshold;
+    public double HeuristicConfidenceThreshold
+    {
+        get => _heuristicConfidenceThreshold;
+        set
+        {
+            if (_heuristicConfidenceThreshold == value) return;
+            _heuristicConfidenceThreshold = value;
+            OnPropertyChanged();
+            ApplyFilters();
+        }
+    }
+
     // Live text filter (chris, Alpha 5 "big move"): typing in the box under
     // the Source/Target frame headers narrows visible nodes to those whose
     // name contains the typed string. Debounced rather than reapplying
@@ -630,7 +650,7 @@ public class LayerEditorViewModel : ObservableObject
             {
                 ConnectionMatchSource.ExactName => IsExactNameVisible,
                 ConnectionMatchSource.Memory => IsMemoryMatchVisible,
-                ConnectionMatchSource.Heuristic => IsHeuristicMatchVisible,
+                ConnectionMatchSource.Heuristic => IsHeuristicMatchVisible && conn!.Confidence >= HeuristicConfidenceThreshold,
                 ConnectionMatchSource.Manual => IsManualMatchVisible,
                 ConnectionMatchSource.Unmatched => IsUnmatchedVisible,
                 _ => true,
@@ -974,7 +994,7 @@ public class LayerEditorViewModel : ObservableObject
                     && standardMap.TryGetValue(result.TargetLayer, out var tgt))
                 {
                     if (Connections.Any(c => c.Source == src)) continue;
-                    Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.Heuristic));
+                    Connections.Add(new LayerConnectionViewModel(src, tgt, ConnectionMatchSource.Heuristic, result.Confidence));
                 }
             }
         }
