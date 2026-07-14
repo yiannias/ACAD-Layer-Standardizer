@@ -52,6 +52,12 @@ public class HeuristicMatcher
         a = a.Trim().ToUpperInvariant();
         b = b.Trim().ToUpperInvariant();
 
+        // Bound xrefs rename layers "XREFFILE$LAYERNAME" (AutoCAD replaces the
+        // live-xref '|' delimiter with '$' on bind) -- match on the real layer
+        // name, ignoring the now-stale source-file prefix.
+        a = StripBoundPrefix(a);
+        b = StripBoundPrefix(b);
+
         if (a == b) return 1.0;
 
         var tokensA = Tokenize(a);
@@ -61,6 +67,12 @@ public class HeuristicMatcher
             return WholeStringSimilarity(a, b);
 
         return TokenSimilarity(tokensA, tokensB);
+    }
+
+    private static string StripBoundPrefix(string s)
+    {
+        var dollar = s.LastIndexOf('$');
+        return dollar >= 0 ? s[(dollar + 1)..] : s;
     }
 
     private static string[] Tokenize(string s) =>

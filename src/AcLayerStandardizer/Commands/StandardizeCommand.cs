@@ -423,7 +423,7 @@ public static class StandardizeCommand
 
     private static bool IsStandardizationCandidate(string name)
     {
-        return !Core.LayerHelper.IsSystemLayer(name) && name != "0";
+        return !Core.LayerHelper.ShouldSkip(name) && name != "0";
     }
 
     private static ObjectId? GetLayerId(LayerTable lt, Transaction tr, string name)

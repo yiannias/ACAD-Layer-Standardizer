@@ -699,7 +699,7 @@ public class LayerEditorViewModel : ObservableObject
     // depending on silently).
     private void RepositionVisibleNodes()
     {
-        var visibleSources = Nodes.Where(n => n.IsSource && n.IsVisible).OrderBy(n => n.Name).ToList();
+        var visibleSources = Nodes.Where(n => n.IsSource && n.IsVisible).OrderBy(n => n.Name, NaturalSortComparer.Instance).ToList();
 
         for (int i = 0; i < visibleSources.Count; i++)
         {
@@ -758,11 +758,11 @@ public class LayerEditorViewModel : ObservableObject
 
         var connected = visibleTargets
             .Where(t => Connections.Any(c => c.Target == t && c.IsVisible))
-            .OrderBy(t => t.Name)
+            .OrderBy(t => t.Name, NaturalSortComparer.Instance)
             .ToList();
         var unconnected = visibleTargets
             .Where(t => !Connections.Any(c => c.Target == t && c.IsVisible))
-            .OrderBy(t => t.Name)
+            .OrderBy(t => t.Name, NaturalSortComparer.Instance)
             .ToList();
         var targets = connected.Concat(unconnected).ToList();
 

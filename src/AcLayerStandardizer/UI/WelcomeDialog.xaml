@@ -22,6 +22,7 @@
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
       <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
     </Grid.RowDefinitions>
 
     <TextBlock Grid.Row="0" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,4">
@@ -33,7 +34,25 @@
        then open the visual mapping editor to connect your layers.
     </TextBlock>
 
-    <Border Grid.Row="2" BorderBrush="#444" BorderThickness="1" Padding="16" CornerRadius="4"
+    <StackPanel Grid.Row="2" Margin="0,0,0,20">
+      <TextBlock Foreground="#e53935" FontWeight="Bold" TextWrapping="Wrap" Margin="0,0,0,4">
+        THIS IS ALPHA SOFTWARE.
+      </TextBlock>
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Foreground="#e53935" FontWeight="Bold" Text="•" Margin="12,0,6,0" />
+        <TextBlock Foreground="#e53935" FontWeight="Bold" TextWrapping="Wrap" Text="DO NOT USE ON PRODUCTION WORK." />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Foreground="#e53935" FontWeight="Bold" Text="•" Margin="12,0,6,0" />
+        <TextBlock Foreground="#e53935" FontWeight="Bold" TextWrapping="Wrap" Text="BACK UP YOUR FILES BEFORE USING." />
+      </StackPanel>
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Foreground="#e53935" FontWeight="Bold" Text="•" Margin="12,0,6,0" />
+        <TextBlock Foreground="#e53935" FontWeight="Bold" TextWrapping="Wrap" Text="USE AT YOUR OWN RISK/DISCRETION." />
+      </StackPanel>
+    </StackPanel>
+
+    <Border Grid.Row="3" BorderBrush="#444" BorderThickness="1" Padding="16" CornerRadius="4"
             Background="#242424" Margin="0,0,0,16">
       <StackPanel>
         <!-- Reference File -->
@@ -66,13 +85,13 @@
       </StackPanel>
     </Border>
 
-    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center">
+    <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center">
       <Button Content="Open Visual Mappings Editor" Width="224" Height="34"
               FontSize="13" FontWeight="SemiBold"
               Click="OpenMappingsEditor_Click" />
     </StackPanel>
 
-    <TextBlock Grid.Row="4" x:Name="StatusLine" Foreground="#888"
+    <TextBlock Grid.Row="5" x:Name="StatusLine" Foreground="#888"
                Text="Tip: set a reference file first, then open the editor."
                Margin="0,16,0,0" TextWrapping="Wrap" />
   </Grid>
