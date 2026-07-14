@@ -17,7 +17,7 @@ public static class SideDatabase
         foreach (ObjectId id in lt)
         {
             var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!LayerHelper.IsSystemLayer(ltr.Name))
+            if (!LayerHelper.ShouldSkip(ltr.Name))
             {
                 layers[ltr.Name] = LayerProperties.FromLayerTableRecord(ltr, tr);
             }

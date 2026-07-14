@@ -61,10 +61,10 @@ public static class MappingsCommand
 
         var configThreshold = config.HeuristicThreshold;
 
-        var sortedSource = activeLayers.OrderBy(n => n).ToList();
+        var sortedSource = activeLayers.OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
         var sortedStandard = standardLayers.Keys
             .OrderBy(n => n == "0" ? 0 : 1)
-            .ThenBy(n => n)
+            .ThenBy(n => n, Core.NaturalSortComparer.Instance)
             .ToList();
 
         // Detect empty source layers
@@ -234,7 +234,7 @@ public static class MappingsCommand
         foreach (ObjectId id in lt)
         {
             var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!Core.LayerHelper.IsSystemLayer(ltr.Name))
+            if (!Core.LayerHelper.ShouldSkip(ltr.Name))
                 names.Add(ltr.Name);
         }
 

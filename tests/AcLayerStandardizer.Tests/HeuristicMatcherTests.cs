@@ -89,6 +89,29 @@ public class HeuristicMatcherTests
     }
 
     [Fact]
+    public void Bound_xref_prefix_is_stripped_before_matching()
+    {
+        // AutoCAD renames layers "XREFFILE$LAYERNAME" when an xref is bound;
+        // matching should ignore everything up to the last '$'.
+        var sim = HeuristicMatcher.CalculateSimilarity("A-OLD-BOUND-FILE$A-WALL-FULL", "A-WALL-FULL");
+        Assert.Equal(1.0, sim);
+    }
+
+    [Fact]
+    public void Bound_xref_prefix_stripped_on_both_sides()
+    {
+        var sim = HeuristicMatcher.CalculateSimilarity("FILE1$A-WALL", "FILE2$A-WALL");
+        Assert.Equal(1.0, sim);
+    }
+
+    [Fact]
+    public void No_dollar_sign_is_unaffected()
+    {
+        var sim = HeuristicMatcher.CalculateSimilarity("A-WALL", "A-WALL");
+        Assert.Equal(1.0, sim);
+    }
+
+    [Fact]
     public void HeuristicMatcher_finds_best_match()
     {
         var standards = new[] { "L-WALL", "A-ANNO-TEXT", "E-LITE", "V-PROP-LINE" };

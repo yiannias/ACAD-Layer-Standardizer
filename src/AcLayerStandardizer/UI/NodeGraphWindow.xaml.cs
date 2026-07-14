@@ -76,7 +76,7 @@ public partial class NodeGraphWindow : Window
         {
             _viewModel.PurgeUnusedCommand = new DelegateCommand<object>(_ =>
             {
-                var ordered = emptyLayers.OrderBy(n => n).ToList();
+                var ordered = emptyLayers.OrderBy(n => n, NaturalSortComparer.Instance).ToList();
                 var dialog = new PurgeConfirmDialog(emptyLayers.Count, ordered);
                 if (dialog.ShowDialog() != true)
                     return;
@@ -222,7 +222,7 @@ public partial class NodeGraphWindow : Window
 
         var sortedStandard = standardLayerProps.Keys
             .OrderBy(n => n == "0" ? 0 : 1)
-            .ThenBy(n => n)
+            .ThenBy(n => n, NaturalSortComparer.Instance)
             .ToList();
 
         Dictionary<string, string>? preserveMappings = preserveByName
