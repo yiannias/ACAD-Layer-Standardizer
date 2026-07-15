@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACAD Layer Standardizer</title>
+<meta name="description" content="An AutoCAD plug-in that maps existing drawing layers onto a layer standard, with pattern-matching suggestions and a visual mapping editor.">
+<style>
+  :root{
+    --bg:#0e1116; --bg-alt:#151a22; --panel:#1a2029; --border:#2a3140;
+    --text:#e6e9ef; --text-dim:#9aa4b2; --accent:#5b9dff; --accent-2:#7ee0a8;
+    --warn:#f2b84b; --danger:#ef6a6a; --mono:'Cascadia Code',ui-monospace,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: light){
+    :root{ --bg:#f5f6f8; --bg-alt:#ffffff; --panel:#ffffff; --border:#dde1e8;
+      --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; }
+  }
+  :root[data-theme="dark"]{ --bg:#0e1116; --bg-alt:#151a22; --panel:#1a2029; --border:#2a3140;
+    --text:#e6e9ef; --text-dim:#9aa4b2; --accent:#5b9dff; --accent-2:#7ee0a8; }
+  :root[data-theme="light"]{ --bg:#f5f6f8; --bg-alt:#ffffff; --panel:#ffffff; --border:#dde1e8;
+    --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; }
+
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.55;
+  }
+  .wrap{max-width:1040px; margin:0 auto; padding:0 24px;}
+  a{color:var(--accent);}
+
+  header.hero{
+    padding:72px 0 56px; border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, var(--bg-alt), var(--bg));
+  }
+  .eyebrow{
+    font-size:.8rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); font-weight:600; margin-bottom:14px;
+  }
+  h1{font-size:2.6rem; margin:0 0 14px; letter-spacing:-.02em;}
+  .tagline{font-size:1.15rem; color:var(--text-dim); max-width:640px; margin:0 0 28px;}
+  .cta-row{display:flex; gap:12px; flex-wrap:wrap;}
+  .btn{
+    display:inline-flex; align-items:center; gap:8px; padding:10px 18px;
+    border-radius:8px; font-weight:600; font-size:.95rem; text-decoration:none;
+    border:1px solid var(--border); transition:transform .12s ease, border-color .12s ease;
+  }
+  .btn:hover{transform:translateY(-1px); border-color:var(--accent);}
+  .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .btn.primary:hover{color:#fff;}
+  .btn.ghost{color:var(--text); background:transparent;}
+  .badges{margin-top:22px; display:flex; gap:8px; flex-wrap:wrap;}
+  .badge{
+    font-size:.75rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border);
+    color:var(--text-dim); font-family:var(--mono);
+  }
+
+  section{padding:56px 0;}
+  section.alt{background:var(--bg-alt); border-top:1px solid var(--border); border-bottom:1px solid var(--border);}
+  h2{font-size:1.6rem; margin:0 0 8px;}
+  .section-lead{color:var(--text-dim); max-width:640px; margin:0 0 32px;}
+
+  .feature-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:20px;}
+  .feature{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px;
+  }
+  .feature .icon{font-size:1.4rem; margin-bottom:10px; display:block;}
+  .feature h3{margin:0 0 6px; font-size:1.02rem;}
+  .feature p{margin:0; color:var(--text-dim); font-size:.92rem;}
+
+  /* --- mockup UI panels (placeholders, not real screenshots) --- */
+  .mock-note{
+    font-size:.78rem; color:var(--text-dim); text-align:center; margin:10px 0 0;
+    font-style:italic;
+  }
+  .mockup{
+    border:1px solid var(--border); border-radius:12px; overflow:hidden;
+    background:#12161d; box-shadow:0 10px 30px -12px rgba(0,0,0,.4);
+  }
+  .mockup .titlebar{
+    background:#1c212b; padding:8px 12px; display:flex; align-items:center; gap:8px;
+    border-bottom:1px solid var(--border); font-size:.78rem; color:#8b93a3; font-family:var(--mono);
+  }
+  .dot{width:9px; height:9px; border-radius:50%; background:#3b4250;}
+  .dot.r{background:#e0605a;} .dot.y{background:#e0b24a;} .dot.g{background:#4ac07a;}
+
+  .mockup-body{padding:16px;}
+  .grid-mock{
+    display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:12px; min-height:260px;
+  }
+  .col{
+    background:#171c24; border:1px solid #232a36; border-radius:8px; padding:10px;
+  }
+  .col h4{
+    margin:0 0 8px; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
+    color:#6b7382; font-weight:600;
+  }
+  .row{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    padding:6px 8px; border-radius:5px; margin-bottom:5px; font-family:var(--mono); font-size:.76rem;
+    background:#1e2530; border:1px solid transparent; color:#c7cede;
+  }
+  .row.matched{border-color:rgba(126,224,168,.35); color:#a9ecc4;}
+  .row.suggested{border-color:rgba(91,157,255,.35); color:#a9c8ff;}
+  .row.warn{border-color:rgba(242,184,75,.35); color:#f4d090;}
+  .row .tag{
+    font-size:.62rem; padding:1px 6px; border-radius:999px; background:#232b38; color:#8b93a3;
+  }
+  .row.matched .tag{background:rgba(126,224,168,.15); color:var(--accent-2);}
+  .row.suggested .tag{background:rgba(91,157,255,.15); color:var(--accent);}
+  .row.warn .tag{background:rgba(242,184,75,.15); color:var(--warn);}
+  .center-col{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; position:relative;}
+  .node{
+    width:100%; padding:8px 10px; border-radius:6px; background:#1e2530; border:1px solid #2a3140;
+    font-family:var(--mono); font-size:.74rem; color:#c7cede; position:relative;
+  }
+  .node::after{
+    content:''; position:absolute; right:-13px; top:50%; width:12px; height:1px; background:#3a4152;
+  }
+  .node:last-child::after{display:none;}
+  .toolbar-mock{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
+  .chip{
+    font-family:var(--mono); font-size:.72rem; padding:5px 10px; border-radius:6px;
+    background:#1e2530; border:1px solid #2a3140; color:#9aa4b2;
+  }
+  .chip.active{border-color:var(--accent); color:var(--accent);}
+
+  .steps{counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:16px;}
+  .steps li{
+    counter-increment:step; position:relative; padding:16px 16px 16px 56px;
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+  }
+  .steps li::before{
+    content:counter(step); position:absolute; left:16px; top:16px;
+    width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff;
+    font-weight:700; font-size:.85rem; display:flex; align-items:center; justify-content:center;
+  }
+  .steps h4{margin:0 0 4px; font-size:.98rem;}
+  .steps p{margin:0; color:var(--text-dim); font-size:.9rem;}
+
+  table.versions{width:100%; border-collapse:collapse; font-size:.9rem;}
+  table.versions th, table.versions td{
+    text-align:left; padding:9px 12px; border-bottom:1px solid var(--border);
+  }
+  table.versions th{color:var(--text-dim); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em;}
+  code{font-family:var(--mono); background:var(--bg-alt); padding:1px 6px; border-radius:4px; font-size:.88em;}
+
+  footer{padding:36px 0 60px; color:var(--text-dim); font-size:.85rem; text-align:center;}
+  footer a{color:var(--text-dim);}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">AutoCAD plug-in · Alpha</div>
+    <h1>ACAD Layer Standardizer</h1>
+    <p class="tagline">
+      A layer translator with a memory. Map messy, inconsistent drawing layers onto an
+      established layer standard — and let it learn your conventions as you go.
+    </p>
+    <div class="cta-row">
+      <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases">Download latest release</a>
+    </div>
+    <div class="badges">
+      <span class="badge">AutoCAD 2021–2027</span>
+      <span class="badge">Civil 3D · Map 3D · Plant 3D</span>
+      <span class="badge">Inno Setup installer</span>
+      <span class="badge">ALPHA</span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="section-lead">
+      Point it at a drawing and it reads every layer in use, then helps you map each one to your
+      standard naming scheme — remembering past decisions and suggesting matches for layers it has
+      never seen before, based on pattern matching against layers it has.
+    </p>
+    <div class="feature-grid">
+      <div class="feature">
+        <span class="icon">🧠</span>
+        <h3>Pattern-matching suggestions</h3>
+        <p>If "TEXT" is favored over "TXT", it suggests the mapping even on layers it's never encountered — heuristic, tokenized matching with a confidence score.</p>
+      </div>
+      <div class="feature">
+        <span class="icon">🗂️</span>
+        <h3>Running memory</h3>
+        <p>Mapping decisions persist across drawings and sessions, so the tool gets better at your standard the more you use it.</p>
+      </div>
+      <div class="feature">
+        <span class="icon">🕸️</span>
+        <h3>Visual node-graph editor</h3>
+        <p>See source and target layers as a connected graph, with clustering, zoom, and a filter panel to focus on what still needs mapping.</p>
+      </div>
+      <div class="feature">
+        <span class="icon">↩️</span>
+        <h3>Undo / redo</h3>
+        <p>Full Ctrl+Z / Ctrl+Y support in the mapping editor — experiment freely without fear of losing your place.</p>
+      </div>
+      <div class="feature">
+        <span class="icon">🔗</span>
+        <h3>Xref-aware</h3>
+        <p>Hides external-reference layers from the mapping view and correctly matches bound-layer names.</p>
+      </div>
+      <div class="feature">
+        <span class="icon">🎯</span>
+        <h3>Multi-select actions</h3>
+        <p>Select multiple layers at once to un-match, re-map, or clear in bulk instead of one at a time.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2>The mapping editor</h2>
+    <p class="section-lead">
+      Source layers on the left, your standard on the right, suggested and confirmed connections
+      in between. This is a mockup of the layout — real screenshots are coming soon.
+    </p>
+
+    <div class="mockup">
+      <div class="titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        &nbsp;Layer Standardizer — Mapping Editor
+      </div>
+      <div class="mockup-body">
+        <div class="toolbar-mock">
+          <span class="chip active">All</span>
+          <span class="chip">Unmapped</span>
+          <span class="chip">Suggested</span>
+          <span class="chip">Confirmed</span>
+          <span class="chip">Hide Xrefs ✓</span>
+        </div>
+        <div class="grid-mock">
+          <div class="col">
+            <h4>Drawing layers</h4>
+            <div class="row matched">A-WALL-EXTR <span class="tag">matched</span></div>
+            <div class="row suggested">TXT-NOTES <span class="tag">92%</span></div>
+            <div class="row suggested">DIM-1 <span class="tag">78%</span></div>
+            <div class="row warn">XREF$0$FLOOR <span class="tag">xref</span></div>
+            <div class="row">MISC-LAYER-7</div>
+            <div class="row matched">A-DOOR <span class="tag">matched</span></div>
+          </div>
+          <div class="center-col">
+            <div class="node">A-WALL-EXTR → WALLS-EXT</div>
+            <div class="node">TXT-NOTES → TEXT-GEN</div>
+            <div class="node">DIM-1 → DIMS</div>
+            <div class="node">A-DOOR → DOORS</div>
+          </div>
+          <div class="col">
+            <h4>Standard layers</h4>
+            <div class="row matched">WALLS-EXT <span class="tag">matched</span></div>
+            <div class="row suggested">TEXT-GEN <span class="tag">92%</span></div>
+            <div class="row suggested">DIMS <span class="tag">78%</span></div>
+            <div class="row matched">DOORS <span class="tag">matched</span></div>
+            <div class="row">EQUIP</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="mock-note">Illustrative mockup — not an actual screenshot of the application.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Basic usage</h2>
+    <p class="section-lead">A first pass at cleaning up a drawing's layers looks like this:</p>
+    <ol class="steps">
+      <li>
+        <h4>Install</h4>
+        <p>Run the installer — it detects your AutoCAD version(s) and deploys the matching build automatically via the Autoloader.</p>
+      </li>
+      <li>
+        <h4>Open the drawing</h4>
+        <p>With the drawing open in AutoCAD, launch the Layer Standardizer from the ribbon or type its command to open the mapping editor.</p>
+      </li>
+      <li>
+        <h4>Review suggested matches</h4>
+        <p>The tool compares existing layers against your standard and pre-fills high-confidence matches, flagged with a confidence score.</p>
+      </li>
+      <li>
+        <h4>Map the rest</h4>
+        <p>Connect any remaining layers by hand in the node graph, or use the filter panel to focus on unmapped layers only.</p>
+      </li>
+      <li>
+        <h4>Standardize</h4>
+        <p>Run the standardize command to apply the mapping — renaming and consolidating layers to match your standard.</p>
+      </li>
+      <li>
+        <h4>Reuse the memory</h4>
+        <p>The mapping decisions you made are remembered, so the next drawing you clean up gets smarter suggestions automatically.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2>Supported AutoCAD versions</h2>
+    <p class="section-lead">
+      One installer covers all supported releases — it ships a build for each AutoCAD .NET
+      compatibility era and AutoCAD automatically loads the right one.
+    </p>
+    <table class="versions">
+      <thead><tr><th>AutoCAD release</th><th>Runtime</th></tr></thead>
+      <tbody>
+        <tr><td>2021 – 2024</td><td><code>.NET Framework 4.8</code></td></tr>
+        <tr><td>2025 – 2026</td><td><code>.NET 8</code></td></tr>
+        <tr><td>2027</td><td><code>.NET 10</code></td></tr>
+      </tbody>
+    </table>
+    <p class="section-lead" style="margin-top:16px;">
+      Includes AutoCAD verticals (Civil 3D, Map 3D, Plant 3D). AutoCAD 2020 and older are not supported.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    Built for AutoCAD layer cleanup. Source on
+    <a href="https://github.com/yiannias/ACAD-Layer-Standardizer">GitHub</a> ·
+    Currently in alpha — expect rough edges.
+  </div>
+</footer>
+
+</body>
+</html>
