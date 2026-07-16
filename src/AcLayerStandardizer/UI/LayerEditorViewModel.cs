@@ -736,24 +736,39 @@ public class LayerEditorViewModel : ObservableObject
             if (node.IsSource)
             {
                 var conn = Connections.FirstOrDefault(c => c.Source == node);
-                node.BackgroundColor = conn switch
-                {
-                    { MatchSource: ConnectionMatchSource.ExactName } => "#8bc34a",
-                    { MatchSource: ConnectionMatchSource.Memory } => "#448aff",
-                    { MatchSource: ConnectionMatchSource.Heuristic } => "#ffd740",
-                    { MatchSource: ConnectionMatchSource.Manual } => "#7c4dff",
-                    _ => "#424242",
-                };
+                node.BackgroundColor = conn is null ? "#424242" : ColorForMatchSource(conn.MatchSource);
                 if (node.IsEmpty && IsEmptyHighlighted)
                     node.BackgroundColor = "#b71c1c";
             }
             else
             {
-                bool inUse = Connections.Any(c => c.Target == node);
-                node.BackgroundColor = inUse ? "#4682b4" : "#424242";
+                // A target can be reached by more than one connection (manual,
+                // heuristic, memory, etc. all pointed at the same standard
+                // layer) -- color it by whichever match type is most common
+                // among its incoming connections, not a single fixed hue.
+                var incoming = Connections.Where(c => c.Target == node).ToList();
+                node.BackgroundColor = incoming.Count == 0
+                    ? "#424242"
+                    : ColorForMatchSource(incoming
+                        .GroupBy(c => c.MatchSource)
+                        .OrderByDescending(g => g.Count())
+                        .First().Key);
             }
         }
     }
+
+    // Kept in sync with the Legend panel's toggle-button colors in
+    // NodeGraphWindow.xaml (Exact/Memory/Heuristic/Manual Match) -- node and
+    // button for a given match type must always be the same hue (chris,
+    // beta-1 polish pass).
+    private static string ColorForMatchSource(ConnectionMatchSource matchSource) => matchSource switch
+    {
+        ConnectionMatchSource.ExactName => "#8bc34a",
+        ConnectionMatchSource.Memory => "#4682b4",
+        ConnectionMatchSource.Heuristic => "#ffd740",
+        ConnectionMatchSource.Manual => "#7c4dff",
+        _ => "#424242",
+    };
 
     // Target is flexible/multi-column (chris's correction, 2026-07-10: the
     // "single column" call last round was a miscommunication -- Target will

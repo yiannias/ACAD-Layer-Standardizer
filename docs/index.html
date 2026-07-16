@@ -28,6 +28,7 @@
   }
   .wrap{max-width:1040px; margin:0 auto; padding:0 24px;}
   a{color:var(--accent);}
+  .signature-link{display:inline-block; font-size:1.1rem; text-decoration:none;}
 
   header.hero{
     padding:72px 0 56px; border-bottom:1px solid var(--border);
@@ -38,7 +39,9 @@
     color:var(--accent); font-weight:600; margin-bottom:14px;
   }
   h1{font-size:2.6rem; margin:0 0 14px; letter-spacing:-.02em;}
-  .tagline{font-size:1.15rem; color:var(--text-dim); max-width:640px; margin:0 0 28px;}
+  .hero-lockup{display:flex; align-items:center; gap:28px; margin:0 0 28px;}
+  .hero-logo{flex:none; display:block; width:150px; height:auto;}
+  .tagline{font-size:1.15rem; color:var(--text-dim); max-width:500px; margin:0;}
   .cta-row{display:flex; gap:12px; flex-wrap:wrap;}
   .btn{
     display:inline-flex; align-items:center; gap:8px; padding:10px 18px;
@@ -60,18 +63,26 @@
   h2{font-size:1.6rem; margin:0 0 8px;}
   .section-lead{color:var(--text-dim); max-width:640px; margin:0 0 32px;}
 
-  .feature-grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:20px;}
-  .feature{
-    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px;
+  .feature-list{
+    list-style:none; margin:0; padding:0; display:grid; gap:18px 40px; grid-template-columns:1fr;
   }
-  .feature .icon{font-size:1.4rem; margin-bottom:10px; display:block;}
-  .feature h3{margin:0 0 6px; font-size:1.02rem;}
-  .feature p{margin:0; color:var(--text-dim); font-size:.92rem;}
+  @media (min-width:700px){ .feature-list{grid-template-columns:1fr 1fr;} }
+  .feature-list li{
+    padding-left:24px; position:relative; border-bottom:1px solid var(--border); padding-bottom:18px;
+  }
+  .feature-list li:last-child{border-bottom:none; padding-bottom:0;}
+  @media (min-width:700px){
+    .feature-list li:nth-last-child(-n+2){border-bottom:none; padding-bottom:0;}
+  }
+  .feature-list li::before{
+    content:'—'; position:absolute; left:0; top:0; color:var(--accent); font-weight:700;
+  }
+  .feature-list h3{margin:0 0 4px; font-size:1.02rem;}
+  .feature-list p{margin:0; color:var(--text-dim); font-size:.92rem;}
 
-  /* --- mockup UI panels (placeholders, not real screenshots) --- */
+  /* --- screenshot frame + gallery --- */
   .mock-note{
     font-size:.78rem; color:var(--text-dim); text-align:center; margin:10px 0 0;
-    font-style:italic;
   }
   .mockup{
     border:1px solid var(--border); border-radius:12px; overflow:hidden;
@@ -83,47 +94,83 @@
   }
   .dot{width:9px; height:9px; border-radius:50%; background:#3b4250;}
   .dot.r{background:#e0605a;} .dot.y{background:#e0b24a;} .dot.g{background:#4ac07a;}
+  .mockup img{display:block; width:100%; height:auto;}
 
-  .mockup-body{padding:16px;}
-  .grid-mock{
-    display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:12px; min-height:260px;
+  .chapter{margin-bottom:44px;}
+  .chapter:last-child{margin-bottom:0;}
+  .chapter-title{
+    font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
+    color:var(--accent); margin:0 0 16px; display:flex; align-items:center; gap:8px;
   }
-  .col{
-    background:#171c24; border:1px solid #232a36; border-radius:8px; padding:10px;
+
+  .gallery{
+    column-count:1; column-gap:32px;
   }
-  .col h4{
-    margin:0 0 8px; font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
-    color:#6b7382; font-weight:600;
+  @media (min-width:640px){ .gallery{column-count:2;} }
+  @media (min-width:980px){ .gallery{column-count:3;} }
+  .gallery.paired{
+    column-count:1; display:grid; grid-template-columns:1fr; gap:32px;
   }
-  .row{
-    display:flex; align-items:center; justify-content:space-between; gap:6px;
-    padding:6px 8px; border-radius:5px; margin-bottom:5px; font-family:var(--mono); font-size:.76rem;
-    background:#1e2530; border:1px solid transparent; color:#c7cede;
+  @media (min-width:640px){ .gallery.paired{grid-template-columns:1fr 1fr;} }
+  .gallery.paired .shot{margin:0;}
+
+  .doc-section{margin:0 0 40px;}
+  .doc-section:last-child{margin-bottom:0;}
+  .subsection-title{font-size:1.05rem; font-weight:700; margin:0 0 8px; color:var(--text);}
+  .subsection-lead{color:var(--text-dim); font-size:.92rem; max-width:640px; margin:0 0 24px;}
+  .doc-row{display:grid; grid-template-columns:1fr; gap:28px; margin:0 0 24px; align-items:start;}
+  @media (min-width:640px){ .doc-row.split{grid-template-columns:1fr 1fr;} }
+  .doc-figure{margin:0; cursor:zoom-in;}
+  .doc-figure img{display:block; max-width:100%; width:auto; height:auto;}
+  .doc-figure figcaption{margin-top:10px; font-size:.9rem; color:var(--text-dim); max-width:320px;}
+  .doc-figure.centered{text-align:center;}
+  .doc-figure.centered img{margin:0 auto;}
+  .doc-figure.centered figcaption{margin-left:auto; margin-right:auto;}
+  .doc-figure.narrow{max-width:380px; margin:0 auto;}
+  .doc-figure.narrow figcaption{max-width:none; white-space:nowrap;}
+  .doc-divider{border:none; border-top:1px solid var(--border); margin:40px 0;}
+
+  .callout-row{display:flex; align-items:center; gap:24px; margin-bottom:28px; flex-wrap:wrap;}
+  .callout-row:last-child{margin-bottom:0;}
+  .callout-row .shot{flex:0 0 auto; width:280px; margin:0;}
+  .callout-box{
+    color:var(--text); font-size:.95rem; line-height:1.5; flex:1 1 240px; max-width:420px;
   }
-  .row.matched{border-color:rgba(126,224,168,.35); color:#a9ecc4;}
-  .row.suggested{border-color:rgba(91,157,255,.35); color:#a9c8ff;}
-  .row.warn{border-color:rgba(242,184,75,.35); color:#f4d090;}
-  .row .tag{
-    font-size:.62rem; padding:1px 6px; border-radius:999px; background:#232b38; color:#8b93a3;
+  .callout-stack{display:flex; flex-direction:column; gap:12px; flex:1 1 240px; max-width:420px;}
+  .callout-stack .callout-box{flex:0 0 auto;}
+  .callout-stack .shot{width:220px; margin:0;}
+  .shot{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    overflow:hidden; cursor:zoom-in; text-align:left; padding:0; font:inherit; color:inherit;
+    display:flex; flex-direction:column; align-items:stretch; width:100%; margin:0 0 32px;
+    break-inside:avoid; position:relative;
   }
-  .row.matched .tag{background:rgba(126,224,168,.15); color:var(--accent-2);}
-  .row.suggested .tag{background:rgba(91,157,255,.15); color:var(--accent);}
-  .row.warn .tag{background:rgba(242,184,75,.15); color:var(--warn);}
-  .center-col{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; position:relative;}
-  .node{
-    width:100%; padding:8px 10px; border-radius:6px; background:#1e2530; border:1px solid #2a3140;
-    font-family:var(--mono); font-size:.74rem; color:#c7cede; position:relative;
+  .shot .frame{
+    width:100%; padding:16px; display:flex; align-items:center; justify-content:center;
+    background:#0c0f14;
   }
-  .node::after{
-    content:''; position:absolute; right:-13px; top:50%; width:12px; height:1px; background:#3a4152;
+  .shot img{display:block; max-width:100%; width:auto; height:auto; border-radius:6px;}
+  .shot figcaption{padding:12px 14px 16px; font-size:.82rem; color:var(--text-dim);}
+  .shot:hover{border-color:var(--accent);}
+
+  .lightbox{
+    position:fixed; inset:0; background:rgba(6,8,12,.9); display:none;
+    align-items:center; justify-content:center; padding:5vh 4vw; z-index:100;
   }
-  .node:last-child::after{display:none;}
-  .toolbar-mock{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}
-  .chip{
-    font-family:var(--mono); font-size:.72rem; padding:5px 10px; border-radius:6px;
-    background:#1e2530; border:1px solid #2a3140; color:#9aa4b2;
+  .lightbox.open{display:flex;}
+  .lightbox figure{margin:0; max-width:min(1100px,92vw); max-height:90vh; display:flex; flex-direction:column; align-items:center; gap:10px;}
+  .lightbox img{max-width:100%; max-height:78vh; width:auto; height:auto; object-fit:contain; border-radius:8px; border:1px solid var(--border);}
+  .lightbox figcaption{color:#dfe3ea; font-size:.9rem; text-align:center;}
+  .lightbox .lb-close{
+    position:absolute; top:18px; right:24px; background:transparent; border:none; color:#fff;
+    font-size:1.6rem; cursor:pointer; line-height:1;
   }
-  .chip.active{border-color:var(--accent); color:var(--accent);}
+  .lightbox .lb-nav{
+    position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.2); color:#fff; width:40px; height:40px; border-radius:50%;
+    font-size:1.2rem; cursor:pointer;
+  }
+  .lightbox .lb-prev{left:18px;} .lightbox .lb-next{right:18px;}
 
   .steps{counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:16px;}
   .steps li{
@@ -144,6 +191,7 @@
   }
   table.versions th{color:var(--text-dim); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em;}
   code{font-family:var(--mono); background:var(--bg-alt); padding:1px 6px; border-radius:4px; font-size:.88em;}
+  code.cmd{color:#fff; font-weight:700;}
 
   footer{padding:36px 0 60px; color:var(--text-dim); font-size:.85rem; text-align:center;}
   footer a{color:var(--text-dim);}
@@ -153,24 +201,37 @@
 
 <header class="hero">
   <div class="wrap">
-    <div class="eyebrow">AutoCAD plug-in · Alpha</div>
+    <div class="eyebrow">AutoCAD plug-in · Beta</div>
     <h1>ACAD Layer Standardizer</h1>
-    <p class="tagline">
-      A layer translator with a memory. Map messy, inconsistent drawing layers onto an
-      established layer standard — and let it learn your conventions as you go.
-    </p>
+    <div class="hero-lockup">
+      <img class="hero-logo" src="assets/logo.png" alt="ACAD Layer Standardizer logo — a hammer breaking apart a stack of layers">
+      <p class="tagline">
+        A layer translator with a memory. Map messy, inconsistent drawing layers onto an
+        established layer standard — and let it learn your conventions as you go.
+      </p>
+    </div>
     <div class="cta-row">
-      <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer">View on GitHub</a>
-      <a class="btn ghost" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases">Download latest release</a>
+      <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases">Download latest release</a>
+      <a class="btn ghost" href="https://github.com/yiannias/ACAD-Layer-Standardizer">View on GitHub</a>
     </div>
     <div class="badges">
       <span class="badge">AutoCAD 2021–2027</span>
-      <span class="badge">Civil 3D · Map 3D · Plant 3D</span>
-      <span class="badge">Inno Setup installer</span>
-      <span class="badge">ALPHA</span>
+      <span class="badge">BETA</span>
+      <span class="badge">Free &amp; Open Source</span>
     </div>
   </div>
 </header>
+
+<section class="alt">
+  <div class="wrap">
+    <div class="mockup">
+      <a href="assets/screenshots/overview.jpg" class="lb-trigger" data-caption="Full mapping editor — source layers, target standard, and the live match graph in one view.">
+        <img src="assets/screenshots/overview.jpg" alt="ACAD Layer Standardizer mapping editor showing source drawing layers connected to standard target layers by color-coded match lines">
+      </a>
+    </div>
+    <p class="mock-note">Green = exact match, blue = memory match, amber (dashed) = heuristic suggestion, purple = manual match.</p>
+  </div>
+</section>
 
 <section>
   <div class="wrap">
@@ -180,92 +241,175 @@
       standard naming scheme — remembering past decisions and suggesting matches for layers it has
       never seen before, based on pattern matching against layers it has.
     </p>
-    <div class="feature-grid">
-      <div class="feature">
-        <span class="icon">🧠</span>
-        <h3>Pattern-matching suggestions</h3>
-        <p>If "TEXT" is favored over "TXT", it suggests the mapping even on layers it's never encountered — heuristic, tokenized matching with a confidence score.</p>
-      </div>
-      <div class="feature">
-        <span class="icon">🗂️</span>
-        <h3>Running memory</h3>
-        <p>Mapping decisions persist across drawings and sessions, so the tool gets better at your standard the more you use it.</p>
-      </div>
-      <div class="feature">
-        <span class="icon">🕸️</span>
-        <h3>Visual node-graph editor</h3>
-        <p>See source and target layers as a connected graph, with clustering, zoom, and a filter panel to focus on what still needs mapping.</p>
-      </div>
-      <div class="feature">
-        <span class="icon">↩️</span>
+    <ul class="feature-list">
+      <li>
+        <h3>Suggests matches it's never seen</h3>
+        <p>If "TEXT" is favored over "TXT" elsewhere in your standard, it suggests that mapping automatically, with a confidence score you control.</p>
+      </li>
+      <li>
+        <h3>Remembers your decisions</h3>
+        <p>Once you confirm a mapping, it's saved. The next drawing you clean up gets smarter suggestions automatically.</p>
+      </li>
+      <li>
+        <h3>Visual mapping editor</h3>
+        <p>Source and target layers side by side, connected by lines you can draw, review, or remove — with search and filtering to focus on what's left.</p>
+      </li>
+      <li>
         <h3>Undo / redo</h3>
-        <p>Full Ctrl+Z / Ctrl+Y support in the mapping editor — experiment freely without fear of losing your place.</p>
-      </div>
-      <div class="feature">
-        <span class="icon">🔗</span>
-        <h3>Xref-aware</h3>
-        <p>Hides external-reference layers from the mapping view and correctly matches bound-layer names.</p>
-      </div>
-      <div class="feature">
-        <span class="icon">🎯</span>
-        <h3>Multi-select actions</h3>
-        <p>Select multiple layers at once to un-match, re-map, or clear in bulk instead of one at a time.</p>
-      </div>
-    </div>
+        <p>Full Ctrl+Z / Ctrl+Y support while mapping, so you can experiment freely without losing your place.</p>
+      </li>
+      <li>
+        <h3>Handles external references correctly</h3>
+        <p>Hides xref layers from the mapping view and matches bound-layer names the way you'd expect.</p>
+      </li>
+      <li>
+        <h3>Bulk actions</h3>
+        <p>Select multiple layers at once to un-match, re-map, or clear them in bulk instead of one at a time.</p>
+      </li>
+    </ul>
   </div>
 </section>
 
-<section class="alt">
+<section>
   <div class="wrap">
-    <h2>The mapping editor</h2>
-    <p class="section-lead">
-      Source layers on the left, your standard on the right, suggested and confirmed connections
-      in between. This is a mockup of the layout — real screenshots are coming soon.
-    </p>
+    <h2>App Details</h2>
+    <p class="section-lead" style="max-width:none; white-space:nowrap;">A walkthrough of the workflow, straight from the current build. Click any image to zoom in.</p>
 
-    <div class="mockup">
-      <div class="titlebar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        &nbsp;Layer Standardizer — Mapping Editor
+    <div class="chapter">
+      <h3 class="chapter-title">Getting started</h3>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-screen.jpg" data-caption="Launch screen: point it at your reference file and layer memory, then open the editor.">
+          <div class="frame"><img src="assets/screenshots/launch-screen.jpg" alt="Layer Standardizer launch dialog with reference file and memory file pickers"></div>
+        </figure>
+        <div class="callout-box">Launch: set your reference standard and memory file</div>
       </div>
-      <div class="mockup-body">
-        <div class="toolbar-mock">
-          <span class="chip active">All</span>
-          <span class="chip">Unmapped</span>
-          <span class="chip">Suggested</span>
-          <span class="chip">Confirmed</span>
-          <span class="chip">Hide Xrefs ✓</span>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-menu-ribbon.jpg" data-caption="Docked to its own ribbon tab and Add-ins menu after install.">
+          <div class="frame"><img src="assets/screenshots/launch-menu-ribbon.jpg" alt="AutoCAD ribbon showing the Layer Standardizer add-in tab"></div>
+        </figure>
+        <div class="callout-box">Docks into the AutoCAD ribbon as its own add-in</div>
+      </div>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-cli.jpg" data-caption="Or launch it straight from the AutoCAD command line with LSR.">
+          <div class="frame"><img src="assets/screenshots/launch-cli.jpg" alt="AutoCAD command line with the LSR command typed"></div>
+        </figure>
+        <div class="callout-box">Or launch from the command line with <code class="cmd">LSR</code></div>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <h3 class="chapter-title">How matches are made</h3>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/exact-match.jpg" data-caption="Exact matches (green) are wired up automatically — no name normalization needed.">
+          <div class="frame"><img src="assets/screenshots/exact-match-crop.jpg" alt="Editor view showing green exact-match connections between identically named layers"></div>
+        </figure>
+        <div class="callout-box">Exact matches connect automatically</div>
+      </div>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-overview.jpg" data-caption="Memory matches (blue) recall mappings you've confirmed on past drawings.">
+          <div class="frame"><img src="assets/screenshots/memory-match-crop.jpg" alt="Editor view showing blue memory-match connections recalled from prior sessions"></div>
+        </figure>
+        <div class="callout-box">Memory matches recall past mapping decisions</div>
+      </div>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-confidence.jpg" data-caption="Heuristic matches (amber, dashed) are suggested by tokenized name similarity, gated by a confidence slider.">
+          <div class="frame"><img src="assets/screenshots/heuristic-match-crop.jpg" alt="Editor view showing amber dashed heuristic-match suggestions"></div>
+        </figure>
+        <div class="callout-stack">
+          <div class="callout-box">Heuristic suggestions, gated by a confidence slider</div>
+          <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-confidence.jpg" data-caption="The confidence slider controls how aggressive heuristic suggestions are.">
+            <div class="frame"><img src="assets/screenshots/heuristic-slider-crop.jpg" alt="Heuristic Match toggle with an 84% confidence slider"></div>
+          </figure>
         </div>
-        <div class="grid-mock">
-          <div class="col">
-            <h4>Drawing layers</h4>
-            <div class="row matched">A-WALL-EXTR <span class="tag">matched</span></div>
-            <div class="row suggested">TXT-NOTES <span class="tag">92%</span></div>
-            <div class="row suggested">DIM-1 <span class="tag">78%</span></div>
-            <div class="row warn">XREF$0$FLOOR <span class="tag">xref</span></div>
-            <div class="row">MISC-LAYER-7</div>
-            <div class="row matched">A-DOOR <span class="tag">matched</span></div>
-          </div>
-          <div class="center-col">
-            <div class="node">A-WALL-EXTR → WALLS-EXT</div>
-            <div class="node">TXT-NOTES → TEXT-GEN</div>
-            <div class="node">DIM-1 → DIMS</div>
-            <div class="node">A-DOOR → DOORS</div>
-          </div>
-          <div class="col">
-            <h4>Standard layers</h4>
-            <div class="row matched">WALLS-EXT <span class="tag">matched</span></div>
-            <div class="row suggested">TEXT-GEN <span class="tag">92%</span></div>
-            <div class="row suggested">DIMS <span class="tag">78%</span></div>
-            <div class="row matched">DOORS <span class="tag">matched</span></div>
-            <div class="row">EQUIP</div>
-          </div>
+      </div>
+      <div class="callout-row">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-unlink.jpg" data-caption="Any connection can be unlinked by clicking on the link, right clicking, and with undo/redo (Ctrl-Z, Ctrl-Y).">
+          <div class="frame"><img src="assets/screenshots/heuristic-match-unlink.jpg" alt="Delete Connection tooltip shown when clicking a match line"></div>
+        </figure>
+        <div class="callout-box">Any connection can be unlinked by clicking on the link, right clicking, and with undo/redo (Ctrl-Z, Ctrl-Y)</div>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <h3 class="chapter-title">Teaching it your standard</h3>
+      <div class="gallery">
+        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-manual-heuristic.jpg" data-caption="A first manual/heuristic pass — filtering &quot;txt&quot; on both sides to connect the odd ones out by hand.">
+          <div class="frame"><img src="assets/screenshots/memory-match-manual-heuristic.jpg" alt="Filtered view narrowed to layers containing txt, with manual connections being drawn"></div>
+          <figcaption>Filter both sides and connect the odd ones by hand</figcaption>
+        </figure>
+        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-apply-remember.jpg" data-caption="&quot;Apply &amp; Remember&quot; commits the mapping and writes it to memory for next time.">
+          <div class="frame"><img src="assets/screenshots/memory-match-apply-remember.jpg" alt="Apply and Apply and Remember buttons in the mapping editor"></div>
+          <figcaption>"Apply &amp; Remember" commits and saves to memory</figcaption>
+        </figure>
+        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-remembered.jpg" data-caption="Next time, the same layers resolve automatically as memory matches.">
+          <div class="frame"><img src="assets/screenshots/memory-match-remembered.jpg" alt="Previously manual connections now shown as automatic blue memory matches"></div>
+          <figcaption>Next drawing, the same layers resolve automatically</figcaption>
+        </figure>
+      </div>
+    </div>
+
+    <div class="chapter">
+      <h3 class="chapter-title">Filtering &amp; cleanup</h3>
+
+      <div class="doc-section">
+        <h4 class="subsection-title">Filtering Layers</h4>
+        <p class="subsection-lead">Navigating the app with hundreds of visible layers can be a pain, so there are several ways to filter the list to just what you're looking for.</p>
+
+        <div class="doc-row split">
+          <figure class="doc-figure centered lb-trigger" data-full="assets/screenshots/source-match-filter.jpg" data-caption="The Source side lets you choose which kind of match you want to review.">
+            <img src="assets/screenshots/source-match-filter-crop.jpg" alt="Source Drawing panel with visibility toggles for Exact, Memory, Heuristic, Manual, and Unmatched layers">
+            <figcaption>The "Source" side lets you choose which kind of match you want to review</figcaption>
+          </figure>
+          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/target-filters.jpg" data-caption="The Target side lets you filter to specific layer groups and types.">
+            <img src="assets/screenshots/target-filters-crop.jpg" alt="Target Filter panel with discipline and category visibility toggles">
+            <figcaption>The "Target" side lets you filter to specific layer groups and types</figcaption>
+          </figure>
+        </div>
+
+        <div class="doc-row">
+          <figure class="doc-figure centered narrow lb-trigger" data-full="assets/screenshots/filter-search-source.jpg" data-caption="You can also type in partial names to get even more specific.">
+            <img src="assets/screenshots/filter-search-source-crop.jpg" alt="Source search box filtered to the text 'text'">
+            <figcaption>You can also filter by typing partial names</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <hr class="doc-divider">
+
+      <div class="doc-section">
+        <h4 class="subsection-title">Cleaning Up</h4>
+        <div class="doc-row">
+          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/empty-layers-panel.jpg" data-caption="Identifying and purging out empty layers is easy.">
+            <img src="assets/screenshots/empty-layers-panel.jpg" alt="Empty Layers panel with Highlight and Purge buttons">
+            <figcaption>Identifying and purging out empty layers is easy</figcaption>
+          </figure>
+        </div>
+      </div>
+
+      <hr class="doc-divider">
+
+      <div class="doc-section">
+        <h4 class="subsection-title">Layer Standard Application</h4>
+        <div class="doc-row">
+          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/layer-property-matching.jpg" data-caption="You can choose to just correct layer names or apply standards more deeply.">
+            <img src="assets/screenshots/layer-property-matching.jpg" alt="Layer Property Matching panel with Match Color, Match Linetype, Match Lineweight, and Make Elements ByLayer toggles">
+            <figcaption>You can choose to just correct layer names or apply standards more deeply</figcaption>
+          </figure>
         </div>
       </div>
     </div>
-    <p class="mock-note">Illustrative mockup — not an actual screenshot of the application.</p>
   </div>
 </section>
+
+<div class="lightbox" id="lightbox">
+  <button class="lb-close" id="lbClose" aria-label="Close">&times;</button>
+  <button class="lb-nav lb-prev" id="lbPrev" aria-label="Previous">&#8249;</button>
+  <button class="lb-nav lb-next" id="lbNext" aria-label="Next">&#8250;</button>
+  <figure>
+    <img id="lbImg" src="" alt="">
+    <figcaption id="lbCaption"></figcaption>
+  </figure>
+</div>
 
 <section>
   <div class="wrap">
@@ -321,13 +465,81 @@
   </div>
 </section>
 
+<section>
+  <div class="wrap">
+    <h2>Why this exists</h2>
+    <p class="section-lead">
+      This is a personal project — I built it to solve my own layer-cleanup headaches, not as a
+      commercial product. It's free to use, and I'm happy to share it with any other AutoCAD user
+      who's dealt with the same problem.
+    </p>
+    <p class="section-lead">
+      If you try it and hit a bug, have an idea for a feature, or just want to say what did or
+      didn't work for you, I'd genuinely like to hear about it.<br><br>
+      <a class="signature-link" href="mailto:yiannias@gmail.com?subject=Layer%20Standardizer%20feedback">yiannias@gmail.com</a>
+    </p>
+  </div>
+</section>
+
 <footer>
   <div class="wrap">
     Built for AutoCAD layer cleanup. Source on
     <a href="https://github.com/yiannias/ACAD-Layer-Standardizer">GitHub</a> ·
-    Currently in alpha — expect rough edges.
+    Feedback: <a href="mailto:yiannias@gmail.com">yiannias@gmail.com</a> ·
+    Currently in beta — expect rough edges.
   </div>
 </footer>
 
+<script>
+(function(){
+  var triggers = Array.prototype.slice.call(document.querySelectorAll('.lb-trigger'));
+  var items = triggers.map(function(el){
+    return {
+      src: el.getAttribute('data-full') || el.getAttribute('href') || el.querySelector('img').src,
+      caption: el.getAttribute('data-caption') || ''
+    };
+  });
+  var lightbox = document.getElementById('lightbox');
+  var lbImg = document.getElementById('lbImg');
+  var lbCaption = document.getElementById('lbCaption');
+  var current = 0;
+
+  function show(i){
+    current = (i + items.length) % items.length;
+    lbImg.src = items[current].src;
+    lbImg.alt = items[current].caption;
+    lbCaption.textContent = items[current].caption;
+  }
+  function open(i){
+    show(i);
+    lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  triggers.forEach(function(el, i){
+    el.addEventListener('click', function(e){
+      e.preventDefault();
+      open(i);
+    });
+  });
+
+  document.getElementById('lbClose').addEventListener('click', close);
+  document.getElementById('lbPrev').addEventListener('click', function(){ show(current - 1); });
+  document.getElementById('lbNext').addEventListener('click', function(){ show(current + 1); });
+  lightbox.addEventListener('click', function(e){
+    if (e.target === lightbox) close();
+  });
+  document.addEventListener('keydown', function(e){
+    if (!lightbox.classList.contains('open')) return;
+    if (e.key === 'Escape') close();
+    if (e.key === 'ArrowLeft') show(current - 1);
+    if (e.key === 'ArrowRight') show(current + 1);
+  });
+})();
+</script>
 </body>
 </html>

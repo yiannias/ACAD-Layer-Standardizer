@@ -217,7 +217,8 @@ public static class MappingsCommand
         foreach (var id in emptyIds)
         {
             var ltr = (LayerTableRecord)tr2.GetObject(id, OpenMode.ForRead);
-            emptyNames.Add(ltr.Name);
+            if (!Core.LayerHelper.ShouldSkip(ltr.Name))
+                emptyNames.Add(ltr.Name);
         }
         tr2.Commit();
 

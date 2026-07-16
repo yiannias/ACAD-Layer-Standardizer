@@ -258,10 +258,13 @@
         </Setter>
         <!-- Border hierarchy, weakest to strongest. Later triggers win when
              more than one is active at once, so declaration order below IS
-             the priority order: Hover < Mapped < Selected. Selected uses an
-             accent (orange) unrelated to any match-type hue so it can never
-             be confused with a Heuristic-match connector/node (both used to
-             render as near-identical gold, #FFD700 vs #ffd740). -->
+             the priority order: Hover < Mapped < Selected. Mapped (the white
+             frame) applies to BOTH sides now, not just Target: an "active"
+             node is any node with a live connection, source or target alike
+             (chris, beta-1 polish pass). Selected uses an accent (orange)
+             unrelated to any match-type hue so it can never be confused with
+             a Heuristic-match connector/node (both used to render as
+             near-identical gold, #FFD700 vs #ffd740). -->
         <Style.Triggers>
           <DataTrigger Binding="{Binding IsSource}" Value="False">
             <Setter Property="Background" Value="{Binding BackgroundColor, Converter={StaticResource ColorStringToBrush}}" />
@@ -270,14 +273,10 @@
             <Setter Property="BorderBrush" Value="#ccc" />
             <Setter Property="BorderThickness" Value="1" />
           </Trigger>
-          <MultiDataTrigger>
-            <MultiDataTrigger.Conditions>
-              <Condition Binding="{Binding IsSource}" Value="False" />
-              <Condition Binding="{Binding IsMapped}" Value="True" />
-            </MultiDataTrigger.Conditions>
+          <DataTrigger Binding="{Binding IsMapped}" Value="True">
             <Setter Property="BorderBrush" Value="#e0e0e0" />
             <Setter Property="BorderThickness" Value="2" />
-          </MultiDataTrigger>
+          </DataTrigger>
           <DataTrigger Binding="{Binding IsSelected}" Value="True">
             <Setter Property="BorderBrush" Value="#d95926" />
             <Setter Property="BorderThickness" Value="3" />
@@ -652,7 +651,7 @@
                      Margin="0,0,0,10" />
 
           <ToggleButton Content="Exact Match"
-                        Background="#008300"
+                        Background="#8bc34a"
                         IsChecked="{Binding IsExactNameVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -660,7 +659,7 @@
                         Style="{StaticResource FilterToggleButton}" />
 
           <ToggleButton Content="Memory Match"
-                        Background="#3987e5"
+                        Background="#4682b4"
                         IsChecked="{Binding IsMemoryMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
@@ -668,7 +667,7 @@
                         Style="{StaticResource FilterToggleButton}" />
 
           <ToggleButton Content="Heuristic Match"
-                        Background="#c98500"
+                        Background="#ffd740"
                         IsChecked="{Binding IsHeuristicMatchVisible}"
                         Cursor="Hand"
                         Width="150" Height="30"
