@@ -1,4 +1,4 @@
-# AutoACD Layer Standardizer
+# AutoCAD Layer Standardizer
 A tool to help AutoCAD layer cleanup
 
 ### 🌐 [Visit the project website](https://yiannias.github.io/ACAD-Layer-Standardizer/) for screenshots, a full walkthrough, and the download link.
