@@ -45,7 +45,3 @@ AcLayerStandardizer.bundle/
 AcLayerStandardizer_*.zip
 dist/*.exe
 dist/*.msi
-
-## Internal development
-.claude/
-AGENTS.md
