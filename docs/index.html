@@ -42,7 +42,9 @@
   .hero-lockup{display:flex; align-items:center; gap:28px; margin:0 0 28px;}
   .hero-logo{flex:none; display:block; width:150px; height:auto;}
   .tagline{font-size:1.15rem; color:var(--text-dim); max-width:500px; margin:0;}
-  .cta-row{display:flex; gap:12px; flex-wrap:wrap;}
+  .cta-row{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;}
+  .cta-primary{display:flex; flex-direction:column; align-items:flex-start; gap:8px;}
+  .release-meta{color:var(--text-dim); font-size:.85rem;}
   .btn{
     display:inline-flex; align-items:center; gap:8px; padding:10px 18px;
     border-radius:8px; font-weight:600; font-size:.95rem; text-decoration:none;
@@ -211,7 +213,10 @@
       </p>
     </div>
     <div class="cta-row">
-      <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases">Download latest release</a>
+      <div class="cta-primary">
+        <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases/latest/download/AcLayerStandardizer_BETA-1.0.exe">Download latest release</a>
+        <span class="release-meta">Version Beta-1.0 — Released 7/16/2026</span>
+      </div>
       <a class="btn ghost" href="https://github.com/yiannias/ACAD-Layer-Standardizer">View on GitHub</a>
     </div>
     <div class="badges">
