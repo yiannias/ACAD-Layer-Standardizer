@@ -45,3 +45,8 @@ AcLayerStandardizer.bundle/
 AcLayerStandardizer_*.zip
 dist/*.exe
 dist/*.msi
+
+## Rust
+target/
+rust/**/target/
+

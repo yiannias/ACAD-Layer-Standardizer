@@ -1,0 +1,155 @@
+pub mod levenshtein;
+pub mod matching;
+pub mod categorization;
+pub mod memory;
+
+pub use levenshtein::levenshtein_distance;
+pub use matching::{HeuristicMatcher, MemoryMatcher, MatchingEngine, MatchResult, MatchSource};
+pub use categorization::{LayerCategorizer, LayerCategoryDefinition, LayerDictionaryDefinition, LayerCategorizationResult};
+pub use memory::{MemoryStore, TranslationMemory};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn get_shipped_dictionary() -> LayerDictionaryDefinition {
+        // Find installer/assets/layer_dictionary.json
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.pop(); // crates
+        path.pop(); // rust
+        path.pop(); // ACAD-Layer-Standardizer
+        path.push("installer");
+        path.push("assets");
+        path.push("layer_dictionary.json");
+
+        assert!(path.exists(), "layer_dictionary.json must exist at {:?}", path);
+        let content = fs::read_to_string(&path).expect("failed to read layer_dictionary.json");
+        serde_json::from_str(&content).expect("failed to parse layer_dictionary.json")
+    }
+
+    const REAL_LAYERS: &[&str] = &[
+        "0", "DEFPOINTS", "A-GRID", "A-ANNO-SYM-CALLOUT", "A-DT-6", "X-SCRATCH",
+        "A-DT-253", "A-DT-1", "A-DT-2", "A-DT-4", "A-DT-5", "X-GUIDES",
+        "A-DT-HATCH-251", "A-WIPEOUT", "A-DOOR-SWNG", "A-FL-EXT-GL-GLASS",
+        "A-FL-EXT-GL-SILL", "A-TLBLK-BKGND", "A-TLBLK-TEXT-WHT", "A-TLBLK-HA_LOGO",
+        "A-ANNO-TTLB", "A-TLBLK", "A-TLBLK-TEXT", "0-COL-AMENITY", "0-COL-CORE",
+        "0-COL-CXT", "0-COL-GRASS", "0-COL-OFFICE", "0-COL-PARKING", "0-COL-RETAIL",
+        "0-COL-RETAIL_DD", "0-COL-STREET", "0-COL-UNIT_A", "0-COL-UNIT_B",
+        "0-COL-UNIT_C", "0-COL-UNIT_CIRC", "0-COL-WATER", "A-ANNO-DIM",
+        "A-ANNO-DIM-UNIT", "A-ANNO-DWG_TTL", "A-ANNO-LIFESAFETY",
+        "A-ANNO-LIFESAFETY-1HR", "A-ANNO-LIFESAFETY-2HR", "A-ANNO-LIFESAFETY-3HR",
+        "A-ANNO-LIFESAFETY-4HR", "A-ANNO-LIFESAFETY-TRAVEL",
+        "A-ANNO-LIFESAFETY-TRAVEL-D", "A-ANNO-LIFESAFETY-TRAVEL-S",
+        "A-ANNO-NOT_IN_CONTRACT", "A-ANNO-REV-01-CLOUD", "A-ANNO-REV-01-NOTE",
+        "A-ANNO-REV-TAG", "A-ANNO-SYM", "A-ANNO-SYM-MATCHLINE", "A-ANNO-TAG-DOOR",
+        "A-ANNO-TAG-ELEVATION", "A-ANNO-TAG-FINISH", "A-ANNO-TAG-ROOM",
+        "A-ANNO-TAG-WALL", "A-ANNO-TAG-WINDOW", "A-ANNO-TEXT-PRESENTATION",
+        "A-ANNO-TEXT-PRESENTATION-U", "A-AREA", "A-AREA-BOMA", "A-AREA-COMMERCIAL",
+        "A-AREA-FAR-ELEV_STAIR", "A-AREA-FAR-MECH_ACCESSORY",
+        "A-AREA-FAR-NOT_INCLUDED", "A-AREA-FAR-PARK_LOADING", "A-AREA-GREEN_ROOF",
+        "A-AREA-LIGHTVENT", "A-AREA-MEP", "A-AREA-NOTE", "A-AREA-RETAIL",
+        "A-AREA-RETAIL-NET", "A-CL-CEILING_TILE", "A-CL-ELECTRICAL", "A-CL-HEADER",
+        "A-CL-LIGHT_FIXTURE", "A-CL-LIGHT_FIXTURE-ALT", "A-CL-LIGHT_SWITCHING",
+        "A-CL-MECH", "A-CL-OPENING", "A-CL-SOFFIT", "A-CL-SOFFIT-HATCH", "A-DEMO",
+        "A-DEMO-DOOR", "A-DEMO-ELEC", "A-DEMO-EQUIPMENT", "A-DEMO-GL",
+        "A-DEMO-HATCH", "A-DEMO-ITEM", "A-DEMO-MECH", "A-DEMO-OPENING",
+        "A-DEMO-PLUMB", "A-DEMO-WALL", "A-DT-1-HID", "A-DT-2-HID", "A-DT-251",
+        "A-DT-251-HID", "A-DT-252", "A-DT-252-HID", "A-DT-253-HID", "A-DT-254",
+        "A-DT-255", "A-DT-3", "A-DT-3-HID", "A-DT-4-HID", "A-DT-5-HID",
+        "A-DT-6-HID", "A-DT-7", "A-DT-BLOCK", "A-DT-HATCH", "A-DT-HATCH-252",
+        "A-DT-HATCH-253", "A-DT-HATCH-255", "A-DT-MAT-AWB", "A-DT-MAT-EXIST",
+        "A-DT-MAT-MEMBRANE_FLASHING", "A-DT-MAT-METAL_FLASHING", "A-DT-MAT-STRUCT",
+        "A-FL-ADA-CLEARANCE", "A-FL-ADA-GRAB_BAR", "A-FL-ADA-GRAB_BAR-FUTURE",
+        "A-FL-ADA-SCRATCH", "A-FL-APPLIANCE", "A-FL-APPLIANCE_BELOW",
+        "A-FL-CASEWORK", "A-FL-CASEWORK-HIDDEN", "A-FL-CASEWORK-OVERHEAD",
+        "A-FL-DOOR", "A-FL-EQUIPMENT", "A-FL-EXT-ABOVE", "A-FL-EXT-BELOW",
+        "A-FL-EXT-DOOR", "A-FL-EXT-GL-FRAME", "A-FL-EXT-GL-OPERATION",
+        "A-FL-EXT-WALL", "A-FL-EXT-WALL-COMPONENT", "A-FL-EXT-WALL-COMPONENT-IN",
+        "A-FL-EXT-WALL-HATCH", "A-FL-FINISH", "A-FL-FURNITURE",
+        "A-FL-FURNITURE-NIC", "A-FL-INT_GL-FRAME", "A-FL-INT_GL-GLASS", "A-FL-MEP",
+        "A-FL-MEP-CLEARANCE", "A-FL-MEP-EQUIPMENT", "A-FL-MEP-FIXTURE",
+        "A-FL-MEP-RISER", "A-FL-OVERHEAD", "A-FL-PARKING-NUMBERING",
+        "A-FL-PARKING-SPACE", "A-FL-PARKING-SPACE-BIKE", "A-FL-PARKING-STRIPE",
+        "A-FL-PARKING-STRIPE-BIKE", "A-FL-UNIT-APPLIANCE",
+        "A-FL-UNIT-APPLIANCE_BELOW", "A-FL-UNIT-CASEWORK",
+        "A-FL-UNIT-CASEWORK-HIDDEN", "A-FL-UNIT-CASEWORK-OVERHEA",
+        "A-FL-UNIT-DOOR", "A-FL-UNIT-EQUIPMENT", "A-FL-UNIT-FINISH",
+        "A-FL-UNIT-FURNITURE", "A-FL-UNIT-FURNITURE-NIC", "A-FL-UNIT-MEP-FIXTURES",
+        "A-FL-UNIT-WALL", "A-FL-VT-CHUTE-LAUNDRY", "A-FL-VT-CHUTE-TRASH",
+        "A-FL-VT-ELEVATOR", "A-FL-VT-ELEVATOR-CLEARANCE",
+        "A-FL-VT-ELEVATOR-COMPONENT", "A-FL-VT-ESCALATOR",
+        "A-FL-VT-ESCALATOR-COMPONEN", "A-FL-VT-STAIR", "A-FL-VT-STAIR-ARA",
+        "A-FL-VT-STAIR-CLEARANCE", "A-FL-VT-STAIR-HID", "A-FL-VT-STAIR-RAIL",
+        "A-FL-VT-STAIR-SYMBOL", "A-FL-WALL", "A-FL-WALL-COMPONENT",
+        "A-FL-WALL-COMPONENT-INSULA", "A-FL-WALL-COMPONENT-TILE",
+        "A-FL-WALL-DEMISING", "A-FL-WALL-HATCH", "A-FL-WALL-PARTIAL",
+        "A-FL-WALL-RATED", "A-GRID-DIMENSION", "A-GRID-INSIDE", "A-GRID-SYMBOL",
+        "A-SP-BUILDING", "A-SP-BUILDING-HATCH", "A-SP-CURB", "A-SP-CURB-BELOW",
+        "A-SP-CURB-INTERNAL", "A-SP-CONTEXT-BUILDINGS", "A-SP-CONTEXT-CTA",
+        "A-SP-CONTEXT-HATCH", "A-SP-CONTEXT-TREES", "A-SP-FENCE",
+        "A-SP-LS-GROUNDCOVER", "A-SP-LS-PLANT", "A-SP-LS-TREES",
+        "A-SP-PARKING-SPACE", "A-SP-PARKING-SPACE-BIKE", "A-SP-PARKING-STRIPE",
+        "A-SP-PARKING-STRIPE-BIKE", "A-SP-PROP", "A-SP-PROP-PARCEL",
+        "A-SP-PROP-SETBACKS", "A-SP-ROAD-CENTER", "A-SP-ROAD-CURB",
+        "A-SP-ROAD-CURB-PATT", "A-SP-ROAD-SIDEWALK", "A-SP-SIGN",
+        "A-SP-TURNING_RADIUS", "A-SP-WALL", "A-TLBLK-PLOTSTAMP", "A-TLBLK-SEAL",
+        "A-TLBLK-TEXT-ORG", "S-FL-BEAM", "S-FL-BEAM-CENTER", "S-FL-BEAM-FLANGE",
+        "S-FL-BELOW", "S-FL-COL", "S-FL-COL-CONC", "S-FL-COL-CONC-HATCH",
+        "S-FL-COL-STEEL", "S-FL-COL-STEEL-HATCH", "S-FL-FIREPROOFING",
+        "S-FL-MISC_METALS", "S-FL-OVERHEAD", "S-FL-SLAB_EDGE", "X-BLOCKS",
+        "X-BLOCKS-UNIT", "X-REF", "X-REF-GRID", "X-SCRATCH-COORD_NOTES-GENE",
+        "X-SCRATCH-COORD_NOTES-INTE", "X-SCRATCH-COORD_NOTES-MECH",
+        "X-SCRATCH-COORD_NOTES-PLUM", "X-SCRATCH-COORD_NOTES-STRU", "X-VIEWPORT",
+        "A-SP-SITE-CURB-BELOW", "A-SP-SITE-CURB-INTERNAL",
+        "ADSK_ASSOC_ENTITY_BACKUPS", "A-FL-PLUMBING_FIXTURE", "0-BLOCK",
+        "A-FL-CAS-BELOW", "A-FL-ADA", "A-AREA-NET", "A-AREA-GROSS",
+        "ADSK_CONSTRAINTS", "A-ANNO-TEXT", "A-ANNO-VPRT", "A-ANNO-NONPLOT",
+        "A-TLBLK-TEXT-BLK", "A-SECT-C", "A-FL-VT-PARKING_RAMP",
+        "A-FL-VT-LOADING_RAMP", "A-FL-VT-PARKING_RAMP-BELOW", "A-DT-HATCH-254",
+        "A-FL-OVERHEAD-CEILING_FAN", "A-FL-EXISTING-WALL", "A-FL-EXISTING-EXT",
+        "A-FL-EXISTING-EXT-DEMO", "A-FL-EXISTING-WALL-DEMO", "A-ANNO-TEXT-DEMO",
+        "C-BLDG-N", "A-FL-VT-STAIR-OVERHEAD", "A-SP-EQUIPMENT", "A-SP-HATCH",
+        "A-FL-BELOW", "A-FL-EDGE", "0-IMAGE", "0-LOGO", "0-SURVEY",
+        "A-ANNO-REVISION_CLOUDS-01", "A-ANNO-REVISION_CLOUDS-02",
+        "A-ANNO-REVISION_CLOUDS-03", "A-ANNO-REVISION_CLOUDS-04",
+        "A-ANNO-REVISION_CLOUDS-05", "A-ANNO-REVISION_CLOUDS-06",
+        "A-ANNO-REVISION_CLOUDS-07", "A-ANNO-REVISION_CLOUDS-08",
+        "A-ANNO-REVISION_CLOUDS-09", "A-ANNO-REVISION_CLOUDS-10",
+        "A-ANNO-REVISION_CLOUDS-11", "A-ANNO-REVISION_CLOUDS-12",
+        "A-ANNO-REVISION_CLOUDS-13", "A-ANNO-REVISION_CLOUDS-14",
+        "A-ANNO-REVISION_CLOUDS-15", "A-ANNO-REVISION_CLOUDS-16",
+        "A-ANNO-REVISION_CLOUDS-17", "A-ANNO-REVISION_CLOUDS-18",
+        "A-ANNO-REVISION_CLOUDS-19", "A-ANNO-REVISION_CLOUDS-20",
+        "A-FL-ROOF-DRAIN", "A-FL-ROOF-EQUIPMENT", "A-FL-ROOF-FEATURES-MAJOR",
+        "A-FL-ROOF-FEATURES-MINOR", "A-FL-ROOF-GEOMETRY", "A-FL-ROOF-PAVERS",
+        "A-FL-EQUIPMENT-FITNESS", "A-FL-EQUIPMENT-MISC", "A-FL-FINISH-PATTERN",
+        "A-FL-FINISH-PATTERN-FLOOR", "A-FL-FINISH-PATTERN-TILE", "A-FL-WALL-FINISH",
+        "A-ANNO-DIM-EXT_WALL", "A-ANNO-DIM-SITE", "A-ANNO-DIM-PARKING",
+        "A-ANNO-TEXT-UNIT_INFO", "A-ANNO-TEXT-UNIT_TYPE", "A-SP-ROAD-MARKINGS",
+        "A-SP-ROAD-FEATURES", "A-ANNO-TEXT-ROAD", "A-SP-CONTEXT-UTILITIES",
+        "A-SP-ENTOURAGE", "A-SP-PARKING-VEHICLES", "A-FL-ENTOURAGE", "0___1",
+    ];
+
+    #[test]
+    fn test_categorizer_on_real_layers() {
+        let dict = get_shipped_dictionary();
+        let res = LayerCategorizer::classify(REAL_LAYERS.iter().copied(), &dict);
+
+        // System layers should be hidden
+        assert!(res.always_hidden.contains("DEFPOINTS"));
+        assert!(res.always_hidden.contains("0___1"));
+        assert!(res.always_hidden.contains("ADSK_ASSOC_ENTITY_BACKUPS"));
+
+        // Annotation should be classified
+        assert!(res.layer_tags.get("A-ANNO-DIM").unwrap().contains("Annotative"));
+        // Architectural discipline
+        assert!(res.layer_tags.get("A-FL-WALL").unwrap().contains("Architectural"));
+        // Structural discipline
+        assert!(res.layer_tags.get("S-FL-BEAM").unwrap().contains("Structural"));
+
+        // Visible categories should have items
+        assert!(!res.visible_categories.is_empty());
+    }
+}
