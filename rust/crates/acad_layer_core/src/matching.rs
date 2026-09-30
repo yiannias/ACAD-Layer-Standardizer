@@ -10,6 +10,7 @@ pub enum MatchSource {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct MatchResult {
     pub source_layer: String,
     pub target_layer: Option<String>,
