@@ -35,6 +35,15 @@ public class EntryPoint : IExtensionApplication
 
         MenuSetup.Setup(config);
 
+        try
+        {
+            IpcBridgeServer.Start();
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Failed to start IPC Bridge Server: {ex.Message}");
+        }
+
         System.Diagnostics.Debug.WriteLine("AcLayerStandardizer loaded.");
     }
 
@@ -56,6 +65,12 @@ public class EntryPoint : IExtensionApplication
 
     public void Terminate()
     {
+        try
+        {
+            IpcBridgeServer.Stop();
+        }
+        catch { }
+
         _ribbonTimer?.Stop();
         _ribbonTimer = null;
     }

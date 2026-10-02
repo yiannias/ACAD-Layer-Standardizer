@@ -1,11 +1,13 @@
-use std::collections::HashSet;
-use serde::{Deserialize, Serialize};
 use crate::levenshtein::levenshtein_distance;
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MatchSource {
+    Exact,
     Memory,
     Heuristic,
+    Manual,
     Unmatched,
 }
 
@@ -325,6 +327,10 @@ mod tests {
     #[test]
     fn word_composed_entirely_of_discipline_letters_matches_as_a_subset() {
         let sim = HeuristicMatcher::calculate_similarity("AISLE", "AISLE-WIDTH");
-        assert!(sim >= 0.85, "expected AISLE vs AISLE-WIDTH to score high, got {}", sim);
+        assert!(
+            sim >= 0.85,
+            "expected AISLE vs AISLE-WIDTH to score high, got {}",
+            sim
+        );
     }
 }

@@ -38,9 +38,11 @@ dependencies = [
  "acad_layer_ipc",
  "eframe",
  "egui",
+ "raw-window-handle",
  "serde",
  "serde_json",
  "spatial-ui-kit",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

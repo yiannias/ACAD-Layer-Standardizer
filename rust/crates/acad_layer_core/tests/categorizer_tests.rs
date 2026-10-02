@@ -11,7 +11,11 @@ fn get_shipped_dictionary() -> LayerDictionaryDefinition {
     path.push("assets");
     path.push("layer_dictionary.json");
 
-    assert!(path.exists(), "layer_dictionary.json must exist at {:?}", path);
+    assert!(
+        path.exists(),
+        "layer_dictionary.json must exist at {:?}",
+        path
+    );
     let content = fs::read_to_string(&path).expect("failed to read layer_dictionary.json");
     serde_json::from_str(&content).expect("failed to parse layer_dictionary.json")
 }
@@ -38,11 +42,23 @@ fn test_categorizer_on_real_layers() {
     assert!(res.always_hidden.contains("ADSK_ASSOC_ENTITY_BACKUPS"));
 
     // Annotation should be classified
-    assert!(res.layer_tags.get("A-ANNO-DIM").unwrap().contains("Annotative"));
+    assert!(res
+        .layer_tags
+        .get("A-ANNO-DIM")
+        .unwrap()
+        .contains("Annotative"));
     // Architectural discipline
-    assert!(res.layer_tags.get("A-FL-WALL").unwrap().contains("Architectural"));
+    assert!(res
+        .layer_tags
+        .get("A-FL-WALL")
+        .unwrap()
+        .contains("Architectural"));
     // Structural discipline
-    assert!(res.layer_tags.get("S-FL-BEAM").unwrap().contains("Structural"));
+    assert!(res
+        .layer_tags
+        .get("S-FL-BEAM")
+        .unwrap()
+        .contains("Structural"));
 
     // Visible categories should have items
     assert!(!res.visible_categories.is_empty());

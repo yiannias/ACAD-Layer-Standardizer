@@ -1,7 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -82,11 +82,14 @@ mod tests {
     #[test]
     fn test_merge_preserves_existing() {
         let mut cur = TranslationMemory::default();
-        cur.mappings.insert("A-WALL".to_string(), "ARCH-WALL".to_string());
+        cur.mappings
+            .insert("A-WALL".to_string(), "ARCH-WALL".to_string());
 
         let mut imp = TranslationMemory::default();
-        imp.mappings.insert("A-WALL".to_string(), "NEW-WALL".to_string());
-        imp.mappings.insert("A-DOOR".to_string(), "ARCH-DOOR".to_string());
+        imp.mappings
+            .insert("A-WALL".to_string(), "NEW-WALL".to_string());
+        imp.mappings
+            .insert("A-DOOR".to_string(), "ARCH-DOOR".to_string());
 
         let merged = MemoryStore::merge(cur, imp);
         assert_eq!(merged.mappings.get("A-WALL").unwrap(), "ARCH-WALL");

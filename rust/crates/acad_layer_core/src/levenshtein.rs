@@ -24,7 +24,11 @@ pub fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     for j in 1..=n {
         for i in 1..=m {
-            let cost = if chars_a[i - 1] == chars_b[j - 1] { 0 } else { 1 };
+            let cost = if chars_a[i - 1] == chars_b[j - 1] {
+                0
+            } else {
+                1
+            };
             d[i][j] = (d[i - 1][j] + 1)
                 .min(d[i][j - 1] + 1)
                 .min(d[i - 1][j - 1] + cost);

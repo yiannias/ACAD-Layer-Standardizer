@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,7 +92,10 @@ pub struct LayerCategorizer;
 impl LayerCategorizer {
     pub const MISC_CATEGORY: &'static str = "Misc";
 
-    pub fn classify<I, S>(layer_names: I, dict: &LayerDictionaryDefinition) -> LayerCategorizationResult
+    pub fn classify<I, S>(
+        layer_names: I,
+        dict: &LayerDictionaryDefinition,
+    ) -> LayerCategorizationResult
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -112,9 +115,10 @@ impl LayerCategorizer {
             let upper = name.to_ascii_uppercase();
 
             let is_excluded = excluded_layers.contains(&upper)
-                || dict.excluded_prefixes.iter().any(|prefix| {
-                    upper.starts_with(&prefix.to_ascii_uppercase())
-                });
+                || dict
+                    .excluded_prefixes
+                    .iter()
+                    .any(|prefix| upper.starts_with(&prefix.to_ascii_uppercase()));
 
             if is_excluded {
                 result.always_hidden.insert(name.to_string());
@@ -166,7 +170,11 @@ impl LayerCategorizer {
                 }
                 if let Some(fields) = fields_by_layer.get(name) {
                     if Self::matches_category(fields, cat, dict.fields_scanned) {
-                        result.layer_tags.get_mut(name).unwrap().insert(cat.name.clone());
+                        result
+                            .layer_tags
+                            .get_mut(name)
+                            .unwrap()
+                            .insert(cat.name.clone());
                     }
                 }
             }
@@ -181,7 +189,10 @@ impl LayerCategorizer {
             let members: Vec<String> = remaining
                 .iter()
                 .filter(|n| {
-                    result.layer_tags.get(*n).map_or(false, |tags| tags.contains(&cat.name))
+                    result
+                        .layer_tags
+                        .get(*n)
+                        .map_or(false, |tags| tags.contains(&cat.name))
                 })
                 .cloned()
                 .collect();
@@ -258,9 +269,7 @@ impl LayerCategorizer {
         });
 
         for tag in &sorted_tags {
-            result
-                .sort_group_by_tag
-                .insert(tag.clone(), group_of(tag));
+            result.sort_group_by_tag.insert(tag.clone(), group_of(tag));
         }
 
         result.visible_categories = sorted_tags;

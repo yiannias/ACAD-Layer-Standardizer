@@ -23,6 +23,8 @@ public static class MappingsCommand
     public static void ShowMappingsEditor()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
+        if (doc is null) return;
+
         var ed = doc.Editor;
 
         var config = PluginConfig.Load();
@@ -67,8 +69,22 @@ public static class MappingsCommand
             .ThenBy(n => n, Core.NaturalSortComparer.Instance)
             .ToList();
 
-        // Detect empty source layers
         var emptyLayers = GetEmptyLayers(doc.Database);
+
+        var categorized = LayerCategorizer.Classify(sortedStandard, LayerDictionaryDefinition.Load());
+        var targetFilters = categorized.VisibleCategories.Select(category => (
+            Name: category,
+            SortGroup: categorized.SortGroupByTag.GetValueOrDefault(category, "Specific"),
+            Layers: (IEnumerable<string>)categorized.LayerTags
+                .Where(pair => pair.Value.Contains(category))
+                .Select(pair => pair.Key)
+                .ToArray()));
+
+        // Capture drawing data in this AutoCAD command context. The IPC worker
+        // only serves this snapshot and never accesses the drawing database.
+        if (RustUiLauncher.TryLaunchFromActiveAutoCad(
+                Path.GetFileName(doc.Name), sortedSource, sortedStandard,
+                emptyLayers, memory.Mappings, targetFilters)) return;
 
         // Run heuristic matching for all source layers not already in memory
         var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
