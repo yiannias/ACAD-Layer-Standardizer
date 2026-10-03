@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -27,6 +28,9 @@ public partial class NodeGraphWindow : Window
     private readonly LayerEditorViewModel _viewModel;
     private bool _hasChanges;
     private bool _initializing = true;
+    private Point _columnDragStartPoint;
+    private LayerNodeViewModel? _columnDragSource;
+    private LayerNodeViewModel? _columnDragTarget;
 
     public IReadOnlyDictionary<string, string> ResultMappings => _viewModel.CurrentMappings;
     public IReadOnlyList<string> SourceLayerNames => _viewModel.SourceLayerNames;
@@ -65,9 +69,13 @@ public partial class NodeGraphWindow : Window
         _currentTemplatePath = templatePath;
         _onTemplateChanged = onTemplateChanged;
 
+        var targetFileName = Path.GetFileName(templatePath);
+        if (string.IsNullOrEmpty(targetFileName))
+            targetFileName = "No reference loaded — click Target to choose one";
+
         _viewModel = new LayerEditorViewModel(
             sourceLayers, standardLayers, memoryMappings, heuristicResults, emptyLayers,
-            sourceFileName, Path.GetFileName(templatePath))
+            sourceFileName, targetFileName)
         {
             AreAnimationsEnabled = _preferences.AnimationsEnabled,
         };
@@ -181,18 +189,41 @@ public partial class NodeGraphWindow : Window
         if ((sender as FrameworkElement)?.DataContext is not LayerNodeViewModel { IsHeader: true, Name: "Target" })
             return;
 
+        ChooseStandard();
+    }
+
+    private void OnChooseStandardClick(object sender, RoutedEventArgs e)
+    {
+        ChooseStandard();
+    }
+
+    private void OnColumnTargetHeaderClick(object sender, MouseButtonEventArgs e)
+    {
+        ChooseStandard();
+        e.Handled = true;
+    }
+
+    private void ChooseStandard()
+    {
         var ofd = new Microsoft.Win32.OpenFileDialog
         {
             Title = "Select Standard Template",
-            Filter = "AutoCAD Drawing (*.dwg;*.dxf)|*.dwg;*.dxf|All Files (*.*)|*.*",
+            Filter = "AutoCAD Standards / Drawings (*.dwg;*.dws;*.dxf)|*.dwg;*.dws;*.dxf|All Files (*.*)|*.*",
         };
-        var initialDir = string.IsNullOrEmpty(_currentTemplatePath)
-            ? null
-            : Path.GetDirectoryName(_currentTemplatePath);
-        if (!string.IsNullOrEmpty(initialDir))
+        var initialDir = GetAvailableInitialDirectory(_currentTemplatePath);
+        if (initialDir is not null)
             ofd.InitialDirectory = initialDir;
 
-        if (ofd.ShowDialog(this) != true) return;
+        try
+        {
+            if (ofd.ShowDialog(this) != true) return;
+        }
+        catch (System.Exception ex)
+        {
+            MessageBox.Show(this, $"The standard file picker could not open. Choose a local folder or reconnect the network drive, then try again.\n\n{ex.Message}",
+                "Standard File Unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
 
         bool preserveByName = false;
         if (_viewModel.Connections.Count > 0)
@@ -204,6 +235,40 @@ public partial class NodeGraphWindow : Window
         }
 
         LoadTemplate(ofd.FileName, preserveByName);
+    }
+
+    private static string? GetAvailableInitialDirectory(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            return !string.IsNullOrEmpty(directory) && Directory.Exists(directory)
+                ? directory
+                : null;
+        }
+        catch (System.Exception)
+        {
+            return null;
+        }
+    }
+
+    private void TargetFilterResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        var maxWidth = Math.Max(220, CanvasArea.ActualWidth - 50);
+        var maxHeight = Math.Max(220, CanvasArea.ActualHeight - 160);
+        var currentWidth = double.IsNaN(TargetFilterPanel.Width)
+            ? TargetFilterPanel.ActualWidth
+            : TargetFilterPanel.Width;
+        var currentHeight = double.IsNaN(TargetFilterPanel.Height)
+            ? TargetFilterPanel.ActualHeight
+            : TargetFilterPanel.Height;
+
+        // This panel is pinned to the right edge, so the lower-left grip
+        // grows it when dragged left. Keep room above the bottom action panel.
+        TargetFilterPanel.Width = Math.Min(maxWidth, Math.Max(220, currentWidth - e.HorizontalChange));
+        TargetFilterPanel.Height = Math.Min(maxHeight, Math.Max(220, currentHeight + e.VerticalChange));
     }
 
     private void LoadTemplate(string path, bool preserveByName)
@@ -625,7 +690,7 @@ public partial class NodeGraphWindow : Window
                 n.IsSelected = false;
         }
 
-        if (e.Key == Key.Space && !e.IsRepeat)
+        if (e.Key == Key.Space && !e.IsRepeat && ModeSwitch.IsChecked != true)
             SetPanGestureIncludesLeftClick(true);
 
         // Skipped while a TextBox has focus (the Source/Target live filter
@@ -671,6 +736,126 @@ public partial class NodeGraphWindow : Window
             DialogResult = false;
 
         SavePreferences();
+    }
+
+    private void OnModeSwitchClick(object sender, RoutedEventArgs e)
+    {
+        bool columnMode = ModeSwitch.IsChecked == true;
+        if (columnMode && _leftPanEnabled)
+            SetPanGestureIncludesLeftClick(false);
+        GridBackground.Visibility = columnMode ? Visibility.Collapsed : Visibility.Visible;
+        Editor.Visibility = columnMode ? Visibility.Collapsed : Visibility.Visible;
+        ColumnModePanel.Visibility = columnMode ? Visibility.Visible : Visibility.Collapsed;
+        InstructionText.Text = columnMode
+            ? "Drag a source layer onto a target layer to pair them. Use the side panels to filter the lists."
+            : "Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan.";
+    }
+
+    private void OnColumnSourceMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _columnDragSource = FindLayerNode(e.OriginalSource as DependencyObject);
+        if (_columnDragSource is not { IsSource: true, IsHeader: false })
+        {
+            _columnDragSource = null;
+            return;
+        }
+
+        _columnDragStartPoint = e.GetPosition(ColumnSourceList);
+    }
+
+    private void OnColumnSourceMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || _columnDragSource is null)
+            return;
+
+        var current = e.GetPosition(ColumnSourceList);
+        if (Math.Abs(current.X - _columnDragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - _columnDragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        try
+        {
+            var data = new DataObject(typeof(LayerNodeViewModel), _columnDragSource);
+            DragDrop.DoDragDrop(ColumnSourceList, data, DragDropEffects.Move);
+        }
+        finally
+        {
+            ClearColumnDropTarget();
+            _columnDragSource = null;
+        }
+    }
+
+    private void OnColumnTargetDragOver(object sender, DragEventArgs e)
+    {
+        var source = e.Data.GetDataPresent(typeof(LayerNodeViewModel))
+            ? e.Data.GetData(typeof(LayerNodeViewModel)) as LayerNodeViewModel
+            : null;
+        var target = FindLayerNode(e.OriginalSource as DependencyObject);
+
+        if (source is { IsSource: true, IsHeader: false }
+            && target is { IsSource: false, IsHeader: false, IsVisible: true })
+        {
+            SetColumnDropTarget(target);
+            e.Effects = DragDropEffects.Move;
+        }
+        else
+        {
+            ClearColumnDropTarget();
+            e.Effects = DragDropEffects.None;
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnColumnTargetDragLeave(object sender, DragEventArgs e)
+    {
+        ClearColumnDropTarget();
+    }
+
+    private void OnColumnTargetDrop(object sender, DragEventArgs e)
+    {
+        var source = e.Data.GetDataPresent(typeof(LayerNodeViewModel))
+            ? e.Data.GetData(typeof(LayerNodeViewModel)) as LayerNodeViewModel
+            : null;
+        var target = FindLayerNode(e.OriginalSource as DependencyObject);
+
+        if (source is { IsSource: true, IsHeader: false }
+            && target is { IsSource: false, IsHeader: false, IsVisible: true })
+        {
+            _viewModel.MapSourceToTarget(source, target);
+            e.Effects = DragDropEffects.Move;
+        }
+
+        ClearColumnDropTarget();
+        e.Handled = true;
+    }
+
+    private void SetColumnDropTarget(LayerNodeViewModel? target)
+    {
+        if (_columnDragTarget == target) return;
+        if (_columnDragTarget is not null)
+            _columnDragTarget.IsDropTarget = false;
+        _columnDragTarget = target;
+        if (_columnDragTarget is not null)
+            _columnDragTarget.IsDropTarget = true;
+    }
+
+    private void ClearColumnDropTarget() => SetColumnDropTarget(null);
+
+    private static LayerNodeViewModel? FindLayerNode(DependencyObject? element)
+    {
+        while (element is not null)
+        {
+            if (element is FrameworkElement frameworkElement
+                && frameworkElement.DataContext is LayerNodeViewModel layer)
+                return layer;
+
+            element = element is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                ? VisualTreeHelper.GetParent(element)
+                : LogicalTreeHelper.GetParent(element);
+        }
+
+        return null;
     }
 
     private void SavePreferences()

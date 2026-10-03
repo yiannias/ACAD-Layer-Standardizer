@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <defs>
+    <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0H0V60" fill="none" stroke="#fff" stroke-opacity=".045"/></pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="7" stdDeviation="12" flood-color="#000" flood-opacity=".4"/></filter>
+    <style>text{font-family:'Fira Sans','Segoe UI',sans-serif}.title{fill:#e8e8e8;font-size:21px;font-weight:600}.sub{fill:#999;font-size:12px}.row{fill:#d4d4d4;font-size:13px}.small{fill:#aaa;font-size:11px}</style>
+  </defs>
+  <rect width="1440" height="900" fill="#0e0e0e"/><rect width="1440" height="900" fill="url(#grid)"/>
+  <text x="32" y="35" fill="#777" font-size="11" letter-spacing="2">LAYER STANDARDIZER  /  COLUMN MODE CONCEPT</text>
+  <text x="32" y="68" fill="#eee" font-size="24" font-weight="600">Pair layers in two lists</text>
+  <text x="32" y="91" fill="#999" font-size="13">Drag a source layer onto a target layer to create or change its mapping.</text>
+
+  <!-- Source Drawing panel stays visible at left -->
+  <g filter="url(#shadow)"><rect x="24" y="118" width="202" height="610" rx="9" fill="#242424" fill-opacity=".94" stroke="#666"/></g>
+  <text x="42" y="148" fill="#e6e6e6" font-size="17" font-weight="600">Source Drawing</text>
+  <text x="42" y="173" class="small">Visibility Toggle</text>
+  <g fill="#484848" stroke="#666">
+    <rect x="42" y="186" width="166" height="31" rx="5"/><rect x="42" y="223" width="166" height="31" rx="5"/>
+    <rect x="42" y="260" width="166" height="31" rx="5"/><rect x="42" y="297" width="166" height="31" rx="5"/>
+    <rect x="42" y="334" width="166" height="31" rx="5"/>
+  </g>
+  <g fill="#ddd" font-size="11" font-weight="600" text-anchor="middle">
+    <text x="125" y="206">Exact Match</text><text x="125" y="243">Memory Match</text><text x="125" y="280">Heuristic Match</text><text x="125" y="317">Manual Match</text><text x="125" y="354">Unmatched</text>
+  </g>
+  <rect x="42" y="383" width="166" height="1" fill="#555"/><text x="42" y="406" class="small">Empty Layers</text>
+  <rect x="42" y="418" width="79" height="30" rx="5" fill="#484848"/><rect x="129" y="418" width="79" height="30" rx="5" fill="#812d2d"/>
+  <text x="81" y="438" text-anchor="middle" class="small">Highlight</text><text x="168" y="438" text-anchor="middle" fill="#fff" font-size="11">Purge</text>
+  <rect x="42" y="463" width="166" height="1" fill="#555"/><text x="42" y="487" class="small">Layer Property Matching</text>
+  <text x="42" y="520" class="small">Color</text><rect x="158" y="505" width="50" height="22" rx="11" fill="#4682b4"/>
+  <text x="42" y="556" class="small">Linetype</text><rect x="158" y="541" width="50" height="22" rx="11" fill="#4682b4"/>
+  <text x="42" y="592" class="small">Lineweight</text><rect x="158" y="577" width="50" height="22" rx="11" fill="#4682b4"/>
+  <text x="42" y="628" class="small">Make ByLayer</text><rect x="158" y="613" width="50" height="22" rx="11" fill="#4682b4"/>
+
+  <!-- Scrollable Source list -->
+  <g filter="url(#shadow)"><rect x="248" y="118" width="338" height="610" rx="9" fill="#242424" fill-opacity=".94" stroke="#666"/></g>
+  <text x="266" y="150" class="title">Source</text><text x="266" y="173" class="sub">HA Design Center - OLD.dwg</text>
+  <rect x="266" y="186" width="302" height="32" rx="5" fill="#171717" stroke="#505050"/><text x="278" y="207" class="small">Search source layers</text>
+  <g fill="#353535" stroke="#555">
+    <rect x="266" y="229" width="302" height="34" rx="5" fill="#344b5d" stroke="#83b8e4" stroke-dasharray="5 3"/>
+    <rect x="266" y="270" width="302" height="34" rx="5"/><rect x="266" y="311" width="302" height="34" rx="5"/><rect x="266" y="352" width="302" height="34" rx="5"/><rect x="266" y="393" width="302" height="34" rx="5"/><rect x="266" y="434" width="302" height="34" rx="5"/><rect x="266" y="475" width="302" height="34" rx="5"/><rect x="266" y="516" width="302" height="34" rx="5"/><rect x="266" y="557" width="302" height="34" rx="5"/><rect x="266" y="598" width="302" height="34" rx="5"/><rect x="266" y="639" width="302" height="34" rx="5"/><rect x="266" y="680" width="302" height="34" rx="5"/>
+  </g>
+  <g class="row"><text x="278" y="251" fill="#fff">A-ANNO-DETL</text><text x="278" y="292">A-ANNO-DIMS</text><text x="278" y="333">A-ANNO-LEGN</text><text x="278" y="374">A-ANNO-MATCH-LINE</text><text x="278" y="415">A-ANNO-NOPLOT</text><text x="278" y="456">A-ANNO-REV-01</text><text x="278" y="497">A-ANNO-SYM</text><text x="278" y="538">A-ANNO-TEXT</text><text x="278" y="579">A-AREA-GROSS</text><text x="278" y="620">A-AREA-NET</text><text x="278" y="661">A-DOOR</text><text x="278" y="702">A-FL-DOOR</text></g>
+  <rect x="574" y="229" width="4" height="485" rx="2" fill="#292929"/><rect x="574" y="244" width="4" height="122" rx="2" fill="#777"/>
+
+  <!-- Scrollable Target list -->
+  <g filter="url(#shadow)"><rect x="604" y="118" width="338" height="610" rx="9" fill="#242424" fill-opacity=".94" stroke="#666"/></g>
+  <text x="622" y="150" class="title">Target</text><text x="622" y="173" class="sub">STANDARD TEMPLATE.dws</text>
+  <rect x="622" y="186" width="302" height="32" rx="5" fill="#171717" stroke="#505050"/><text x="634" y="207" class="small">Search target layers</text>
+  <g fill="#353535" stroke="#555">
+    <rect x="622" y="229" width="302" height="34" rx="5"/><rect x="622" y="270" width="302" height="34" rx="5"/><rect x="622" y="311" width="302" height="34" rx="5" fill="#31485a" stroke="#83b8e4" stroke-width="2" stroke-dasharray="5 3"/><rect x="622" y="352" width="302" height="34" rx="5"/><rect x="622" y="393" width="302" height="34" rx="5"/><rect x="622" y="434" width="302" height="34" rx="5"/><rect x="622" y="475" width="302" height="34" rx="5"/><rect x="622" y="516" width="302" height="34" rx="5"/><rect x="622" y="557" width="302" height="34" rx="5"/><rect x="622" y="598" width="302" height="34" rx="5"/><rect x="622" y="639" width="302" height="34" rx="5"/><rect x="622" y="680" width="302" height="34" rx="5"/>
+  </g>
+  <g class="row"><text x="634" y="251">A-DEMO-WALL</text><text x="634" y="292">A-DOOR-SWNG</text><text x="634" y="333" fill="#fff">A-DT-1</text><text x="634" y="374">A-DT-1-HID</text><text x="634" y="415">A-DT-2</text><text x="634" y="456">A-DT-2-HID</text><text x="634" y="497">A-DT-3</text><text x="634" y="538">A-DT-4</text><text x="634" y="579">A-DT-5</text><text x="634" y="620">A-DT-HATCH</text><text x="634" y="661">A-FL-DOOR</text><text x="634" y="702">A-FL-WALL</text></g>
+  <rect x="774" y="317" width="135" height="23" rx="11" fill="#23485d"/><text x="841" y="333" text-anchor="middle" fill="#c9e9ff" font-size="10">DROP TO PAIR</text>
+  <rect x="930" y="229" width="4" height="485" rx="2" fill="#292929"/><rect x="930" y="311" width="4" height="122" rx="2" fill="#777"/>
+
+  <!-- Target Filter panel stays visible at right -->
+  <g filter="url(#shadow)"><rect x="966" y="118" width="262" height="500" rx="9" fill="#242424" fill-opacity=".96" stroke="#666"/></g>
+  <text x="984" y="150" fill="#e6e6e6" font-size="17" font-weight="600">Target Filter</text>
+  <text x="984" y="171" class="small">STANDARD TEMPLATE.dws</text>
+  <rect x="984" y="184" width="226" height="31" rx="5" fill="#4682b4"/><text x="1097" y="204" text-anchor="middle" fill="#fff" font-size="12">Choose Standard</text>
+  <text x="984" y="239" class="small">Visibility Toggle</text>
+  <rect x="984" y="249" width="226" height="31" rx="5" fill="#4682b4"/><text x="1097" y="269" text-anchor="middle" fill="#fff" font-size="12">All On/Off</text>
+  <g fill="#426f62"><rect x="984" y="288" width="226" height="31" rx="5"/><rect x="984" y="326" width="226" height="31" rx="5"/><rect x="984" y="364" width="226" height="31" rx="5"/><rect x="984" y="402" width="226" height="31" rx="5"/><rect x="984" y="440" width="226" height="31" rx="5"/><rect x="984" y="478" width="226" height="31" rx="5"/></g>
+  <g fill="#eee" font-size="12" text-anchor="middle"><text x="1097" y="308">Architectural</text><text x="1097" y="346">Engineering</text><text x="1097" y="384">Structural</text><text x="1097" y="422">Annotative</text><text x="1097" y="460">Area / GFA</text><text x="1097" y="498">Ceiling Plan</text></g>
+  <rect x="1208" y="249" width="4" height="260" rx="2" fill="#292929"/><rect x="1208" y="261" width="4" height="77" rx="2" fill="#777"/>
+
+  <!-- Footer: guidance, mode switch, actions -->
+  <g filter="url(#shadow)"><rect x="24" y="778" width="1204" height="72" rx="9" fill="#242424" fill-opacity=".94" stroke="#666"/></g>
+  <text x="44" y="808" fill="#bbb" font-size="13">Drag a source layer onto a target layer to pair them.</text>
+  <text x="44" y="832" fill="#777" font-size="11">Ready  ·  234 source layers  ·  321 target layers</text>
+  <text x="662" y="804" text-anchor="end" fill="#aaa" font-size="12">Mode</text>
+  <rect x="676" y="791" width="160" height="38" rx="19" fill="#252525" stroke="#666"/><rect x="757" y="794" width="76" height="32" rx="16" fill="#4682b4"/>
+  <text x="715" y="815" text-anchor="middle" fill="#aaa" font-size="12">Node</text><text x="795" y="815" text-anchor="middle" fill="#fff" font-size="12" font-weight="600">Column</text>
+  <rect x="900" y="797" width="82" height="36" rx="7" fill="#444" stroke="#666"/><text x="941" y="820" text-anchor="middle" fill="#eee" font-size="13" font-weight="600">Apply</text>
+  <rect x="992" y="797" width="218" height="36" rx="7" fill="#4682b4" stroke="#5a9ec4"/><text x="1101" y="820" text-anchor="middle" fill="#fff" font-size="13" font-weight="600">Apply &amp; Remember</text>
+  <text x="24" y="880" fill="#888" font-size="12">Both side panels remain available. The lists are inset so rows stay unobstructed.</text>
+</svg>

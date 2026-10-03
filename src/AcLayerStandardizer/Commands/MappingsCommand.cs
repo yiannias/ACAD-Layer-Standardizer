@@ -27,37 +27,46 @@ public static class MappingsCommand
 
         var config = PluginConfig.Load();
 
-        if (string.IsNullOrEmpty(config.TemplateDwgPath))
-        {
-            ed.WriteMessage("\nNo template DWG configured. Run STD_SetTemplate first.");
-            return;
-        }
-
-        if (!File.Exists(config.TemplateDwgPath))
-        {
-            ed.WriteMessage($"\nTemplate DWG not found: {config.TemplateDwgPath}");
-            return;
-        }
+        var templatePath = !string.IsNullOrEmpty(config.TemplateDwgPath) && File.Exists(config.TemplateDwgPath)
+            ? config.TemplateDwgPath
+            : string.Empty;
+        if (templatePath.Length == 0)
+            ed.WriteMessage("\nReference file unavailable. Opening without targets; click the Target header to choose one.");
 
         var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
             ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
             : config.MemoryFilePath;
 
-        IReadOnlyDictionary<string, LayerProperties> standardLayers;
-        try
+        IReadOnlyDictionary<string, LayerProperties> standardLayers = new Dictionary<string, LayerProperties>();
+        if (templatePath.Length > 0)
         {
-            standardLayers = SideDatabase.LoadStandardLayers(config.TemplateDwgPath);
-        }
-        catch (System.Exception ex)
-        {
-            ed.WriteMessage($"\nError reading template DWG: {ex.Message}");
-            return;
+            try
+            {
+                standardLayers = SideDatabase.LoadStandardLayers(templatePath);
+            }
+            catch (System.Exception ex)
+            {
+                ed.WriteMessage($"\nError reading template DWG: {ex.Message}");
+                return;
+            }
         }
 
         var activeLayers = GetActiveLayerNames(doc.Database);
 
         var store = new MemoryStore(memPath);
-        var memory = store.Load();
+        TranslationMemory memory;
+        var memoryLoaded = true;
+        try
+        {
+            memory = store.Load();
+        }
+        catch (System.Exception ex)
+        {
+            memory = new TranslationMemory();
+            memoryLoaded = false;
+            ed.WriteMessage($"\nTranslation memory could not be read and will not be overwritten: {memPath}");
+            ed.WriteMessage($"\n  {ex.GetType().Name}: {ex.Message}");
+        }
 
         var configThreshold = config.HeuristicThreshold;
 
@@ -104,7 +113,7 @@ public static class MappingsCommand
                     purgeTr.Commit();
                 },
                 sourceFileName: Path.GetFileName(doc.Name),
-                templatePath: config.TemplateDwgPath,
+                templatePath: templatePath,
                 standardLayerProperties: standardLayers,
                 onTemplateChanged: newPath =>
                 {
@@ -140,33 +149,40 @@ public static class MappingsCommand
 
         if (action is MappingEditorAction.ApplyAndSave)
         {
-            var beforeCount = memory.Mappings.Count;
+            if (!memoryLoaded)
+            {
+                ed.WriteMessage("\nTranslation memory was not saved because the existing file could not be read. Apply the mappings, then repair or choose another memory file before remembering them.");
+            }
+            else
+            {
+                var beforeCount = memory.Mappings.Count;
 
-            // Only touch the source layers this session actually loaded and
-            // judged -- clearing the whole dictionary here used to wipe out
-            // every mapping remembered from other drawings, since
-            // resultMappings only ever covers layers present in *this*
-            // drawing. A layer the session loaded but left unmatched (e.g.
-            // explicitly un-matched) is forgotten; everything else survives.
-            foreach (var sourceLayer in dialog.SourceLayerNames)
-            {
-                if (resultMappings.TryGetValue(sourceLayer, out var target))
-                    memory.Mappings[sourceLayer] = target;
-                else
-                    memory.Mappings.Remove(sourceLayer);
-            }
-            try
-            {
-                store.Save(memory);
-                var diff = memory.Mappings.Count - beforeCount;
-                if (diff != 0)
-                    ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
-                else
-                    ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
-            }
-            catch (System.Exception ex)
-            {
-                ed.WriteMessage($"\nFailed to save translation memory to {store.FilePath}: {ex.Message}");
+                // Only touch the source layers this session actually loaded and
+                // judged -- clearing the whole dictionary here used to wipe out
+                // every mapping remembered from other drawings, since
+                // resultMappings only ever covers layers present in *this*
+                // drawing. A layer the session loaded but left unmatched (e.g.
+                // explicitly un-matched) is forgotten; everything else survives.
+                foreach (var sourceLayer in dialog.SourceLayerNames)
+                {
+                    if (resultMappings.TryGetValue(sourceLayer, out var target))
+                        memory.Mappings[sourceLayer] = target;
+                    else
+                        memory.Mappings.Remove(sourceLayer);
+                }
+                try
+                {
+                    store.Save(memory);
+                    var diff = memory.Mappings.Count - beforeCount;
+                    if (diff != 0)
+                        ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
+                    else
+                        ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
+                }
+                catch (System.Exception ex)
+                {
+                    ed.WriteMessage($"\nFailed to save translation memory to {store.FilePath}: {ex.Message}");
+                }
             }
         }
 

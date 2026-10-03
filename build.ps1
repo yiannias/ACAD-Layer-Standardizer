@@ -24,7 +24,7 @@ $BundleDir = Join-Path $SolutionRoot $BundleName
 # Single source of truth for the app version -- keep in sync with the
 # installer's #define MyAppVersion (installer/ACADLayerStandardizer.iss),
 # which reads this same string via the MYAPPVERSION env var below.
-$AppVersion = "BETA/1.0"
+$AppVersion = "BETA/1.1"
 $AppVersionSafe = $AppVersion -replace "/", "-"
 
 # One payload per AutoCAD .NET binary-compatibility era. The csproj

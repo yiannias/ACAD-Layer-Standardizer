@@ -6,7 +6,7 @@
         Title="Layer Standardizer: Layer Mapping Editor"
         Width="1200" Height="650"
         WindowStartupLocation="CenterScreen"
-        FontFamily="Segoe UI" FontSize="12"
+        FontFamily="Fira Sans" FontSize="12"
         PreviewKeyDown="Window_PreviewKeyDown"
         PreviewKeyUp="Window_PreviewKeyUp"
         PreviewMouseDown="Window_PreviewMouseDown">
@@ -185,6 +185,102 @@
         </Setter>
       </Style>
 
+      <DataTemplate x:Key="ColumnSourceItemTemplate" DataType="{x:Type local:LayerNodeViewModel}">
+        <Border Background="#353535" BorderBrush="#555" BorderThickness="1"
+                CornerRadius="5" Padding="9,5" Margin="0,0,0,4" MinHeight="34">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Name}" Foreground="#e0e0e0" FontSize="14"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <TextBlock Grid.Column="1" Text="{Binding MappedTargetName, StringFormat='→ {0}'}"
+                       Foreground="#999" FontSize="12" Margin="12,0,0,0"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                       Visibility="{Binding MappedTargetName, Converter={StaticResource StringEmptyToVis}}" />
+          </Grid>
+        </Border>
+      </DataTemplate>
+
+      <DataTemplate x:Key="ColumnTargetItemTemplate" DataType="{x:Type local:LayerNodeViewModel}">
+        <Border x:Name="TargetRow" Background="#353535" BorderBrush="#555"
+                BorderThickness="1" CornerRadius="5" Padding="9,5" Margin="0,0,0,4"
+                MinHeight="34">
+          <TextBlock Text="{Binding Name}" Foreground="#e0e0e0" FontSize="14"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+        </Border>
+        <DataTemplate.Triggers>
+          <DataTrigger Binding="{Binding IsDropTarget}" Value="True">
+            <Setter TargetName="TargetRow" Property="Background" Value="#31485a" />
+            <Setter TargetName="TargetRow" Property="BorderBrush" Value="#83b8e4" />
+          </DataTrigger>
+        </DataTemplate.Triggers>
+      </DataTemplate>
+
+      <Style x:Key="ModeSlideSwitch" TargetType="ToggleButton">
+        <Setter Property="Width" Value="174" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="ToggleButton">
+              <Border x:Name="Track" CornerRadius="18" Background="#252525"
+                      BorderBrush="#666" BorderThickness="1" SnapsToDevicePixels="True">
+                <Grid>
+                  <Border x:Name="Thumb" Width="82" Height="30" CornerRadius="15"
+                          Background="#4682b4" HorizontalAlignment="Left" Margin="2,0,0,0">
+                    <Border.RenderTransform>
+                      <TranslateTransform />
+                    </Border.RenderTransform>
+                  </Border>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="NodeLabel" Grid.Column="0" Text="Node"
+                               Foreground="White" FontSize="13" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <TextBlock x:Name="ColumnLabel" Grid.Column="1" Text="Column"
+                               Foreground="#aaa" FontSize="13" FontWeight="SemiBold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  </Grid>
+                </Grid>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsChecked" Value="True">
+                  <Trigger.EnterActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                         Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.X)"
+                                         To="86" Duration="0:0:0.16" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.EnterActions>
+                  <Trigger.ExitActions>
+                    <BeginStoryboard>
+                      <Storyboard>
+                        <DoubleAnimation Storyboard.TargetName="Thumb"
+                                         Storyboard.TargetProperty="(Border.RenderTransform).(TranslateTransform.X)"
+                                         To="0" Duration="0:0:0.16" />
+                      </Storyboard>
+                    </BeginStoryboard>
+                  </Trigger.ExitActions>
+                  <Setter TargetName="NodeLabel" Property="Foreground" Value="#aaa" />
+                  <Setter TargetName="ColumnLabel" Property="Foreground" Value="White" />
+                </Trigger>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="Track" Property="BorderBrush" Value="#888" />
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <!-- Confidence threshold slider for the Heuristic sub-filter: thin
            amber-accented track + circular thumb, styled to sit visually with
            FilterToggleButton/SlideToggle rather than the WPF default look. -->
@@ -234,7 +330,7 @@
                         Background="{TemplateBinding Background}"
                         BorderBrush="{TemplateBinding BorderBrush}"
                         BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="4">
+                        CornerRadius="7">
                   <ContentPresenter HorizontalAlignment="Center"
                                     VerticalAlignment="Center" />
                 </Border>
@@ -345,11 +441,6 @@
   </Window.Resources>
 
   <Grid>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="*" />
-      <RowDefinition Height="Auto" />
-    </Grid.RowDefinitions>
-
     <!-- Nodify editor area -->
     <Grid x:Name="CanvasArea" Grid.Row="0" Background="#0e0e0e">
       <!-- Pan/zoom-tracking grid. History of failed approaches, so nobody
@@ -397,6 +488,7 @@
       </Rectangle>
 
       <nodify:NodifyEditor x:Name="Editor"
+                            Visibility="Visible"
                             Background="Transparent"
                             ItemsSource="{Binding Nodes}"
                             Connections="{Binding Connections}"
@@ -626,6 +718,135 @@
         </nodify:NodifyEditor.PendingConnectionTemplate>
       </nodify:NodifyEditor>
 
+      <!-- Column view reuses the same source and target layer models and
+           matching state as the graph. Side panels remain visible; these
+           reserved outer columns keep the two long lists out from beneath
+           the Source Drawing and Target Filter panels. -->
+      <Grid x:Name="ColumnModePanel"
+            Margin="0,24,0,130"
+            Visibility="Collapsed"
+            Panel.ZIndex="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="250" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="18" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="310" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="1" Padding="14,12" CornerRadius="8"
+                Background="#882a2a2a" BorderBrush="#666" BorderThickness="1"
+                Effect="{StaticResource PanelShadow}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Source" FontSize="22" FontWeight="SemiBold" Foreground="#e6e6e6" />
+            <TextBlock Grid.Row="1" Text="{Binding SourceFileName}" FontSize="12" Foreground="#999"
+                       TextTrimming="CharacterEllipsis" Margin="0,2,0,7" />
+            <Grid Grid.Row="2" Margin="0,0,0,8">
+              <TextBox Text="{Binding SourceFilterText, UpdateSourceTrigger=PropertyChanged}"
+                       Padding="7,4" Height="30" FontSize="13" Background="#1b1b1b"
+                       Foreground="#eee" CaretBrush="#eee" BorderBrush="#555" BorderThickness="1" />
+              <TextBlock Text="Search source layers" FontSize="12" Foreground="#777"
+                         Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                         Visibility="{Binding SourceFilterText, Converter={StaticResource StringEmptyToVis}}" />
+            </Grid>
+            <ListBox x:Name="ColumnSourceList" Grid.Row="3"
+                     ItemsSource="{Binding SourceLayers}"
+                     PreviewMouseLeftButtonDown="OnColumnSourceMouseDown"
+                     PreviewMouseMove="OnColumnSourceMouseMove"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     Background="Transparent" BorderThickness="0" Padding="0"
+                     Focusable="False" ItemTemplate="{StaticResource ColumnSourceItemTemplate}">
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                  <Setter Property="Padding" Value="0" />
+                  <Setter Property="Margin" Value="0" />
+                  <Setter Property="Focusable" Value="False" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  <Setter Property="Background" Value="Transparent" />
+                  <Setter Property="BorderThickness" Value="0" />
+                  <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+                  <Setter Property="Template">
+                    <Setter.Value>
+                      <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                      </ControlTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </ListBox.ItemContainerStyle>
+            </ListBox>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="3" Padding="14,12" CornerRadius="8"
+                Background="#882a2a2a" BorderBrush="#666" BorderThickness="1"
+                Effect="{StaticResource PanelShadow}">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Target" FontSize="22" FontWeight="SemiBold" Foreground="#e6e6e6"
+                       Cursor="Hand" ToolTip="Click to choose a different standard"
+                       MouseLeftButtonUp="OnColumnTargetHeaderClick" />
+            <TextBlock Grid.Row="1" Text="{Binding TargetFileName}" FontSize="12" Foreground="#999"
+                       TextTrimming="CharacterEllipsis" Margin="0,2,0,7" />
+            <Grid Grid.Row="2" Margin="0,0,0,8">
+              <TextBox Text="{Binding TargetFilterText, UpdateSourceTrigger=PropertyChanged}"
+                       Padding="7,4" Height="30" FontSize="13" Background="#1b1b1b"
+                       Foreground="#eee" CaretBrush="#eee" BorderBrush="#555" BorderThickness="1" />
+              <TextBlock Text="Search target layers" FontSize="12" Foreground="#777"
+                         Margin="9,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False"
+                         Visibility="{Binding TargetFilterText, Converter={StaticResource StringEmptyToVis}}" />
+            </Grid>
+            <ListBox x:Name="ColumnTargetList" Grid.Row="3"
+                     ItemsSource="{Binding TargetLayers}"
+                     AllowDrop="True"
+                     DragOver="OnColumnTargetDragOver"
+                     DragLeave="OnColumnTargetDragLeave"
+                     Drop="OnColumnTargetDrop"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.CanContentScroll="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     Background="Transparent" BorderThickness="0" Padding="0"
+                     Focusable="False" ItemTemplate="{StaticResource ColumnTargetItemTemplate}">
+              <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                  <Setter Property="Padding" Value="0" />
+                  <Setter Property="Margin" Value="0" />
+                  <Setter Property="Focusable" Value="False" />
+                  <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                  <Setter Property="Background" Value="Transparent" />
+                  <Setter Property="BorderThickness" Value="0" />
+                  <Setter Property="Visibility" Value="{Binding IsVisible, Converter={StaticResource BoolToVis}}" />
+                  <Setter Property="Template">
+                    <Setter.Value>
+                      <ControlTemplate TargetType="ListBoxItem">
+                        <ContentPresenter />
+                      </ControlTemplate>
+                    </Setter.Value>
+                  </Setter>
+                </Style>
+              </ListBox.ItemContainerStyle>
+            </ListBox>
+          </Grid>
+        </Border>
+      </Grid>
+
       <!-- Floating filter panel (top-left, legend + toggles) -->
       <Border x:Name="LegendPanel"
               Grid.Row="0"
@@ -808,21 +1029,22 @@
            Core.LayerCategorizer), so an empty panel (no dictionary
            installed, or nothing matched) stays hidden rather than showing
            an empty box. -->
-      <Border Grid.Row="0"
+      <Border x:Name="TargetFilterPanel"
+              Grid.Row="0"
               HorizontalAlignment="Right"
               VerticalAlignment="Top"
               Margin="0,25,25,25"
               Padding="14,12"
+              MinWidth="220"
+              Width="270"
               CornerRadius="8"
               Background="#882a2a2a"
               BorderBrush="#666"
               BorderThickness="1"
               Panel.ZIndex="10"
-              Width="{Binding ActualWidth, ElementName=LegendPanel}"
-              MaxHeight="{Binding ActualHeight, ElementName=CanvasArea, Converter={StaticResource SubtractDouble}, ConverterParameter=50}"
+              MaxWidth="{Binding ActualWidth, ElementName=CanvasArea, Converter={StaticResource SubtractDouble}, ConverterParameter=50}"
+              MaxHeight="{Binding ActualHeight, ElementName=CanvasArea, Converter={StaticResource SubtractDouble}, ConverterParameter=160}"
               Visibility="{Binding HasTargetFilters, Converter={StaticResource BoolToVis}}"
-              IsEnabled="{Binding AreFilterButtonsEnabled}"
-              Opacity="{Binding AreFilterButtonsEnabled, Converter={StaticResource BoolToOpacity}}"
               Effect="{StaticResource PanelShadow}">
         <Grid>
           <Grid.RowDefinitions>
@@ -834,10 +1056,43 @@
             <TextBlock Text="Target Filter"
                        FontSize="18" FontWeight="Bold"
                        Foreground="#e6e6e6" />
+            <TextBlock Text="{Binding TargetFileName}"
+                       FontSize="12"
+                       Foreground="#999"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip="{Binding TargetFileName}"
+                       Margin="0,2,0,7" />
+            <Button Content="Choose Standard"
+                    Style="{StaticResource ModernButton}"
+                    Background="#4682b4"
+                    Foreground="White"
+                    HorizontalAlignment="Stretch"
+                    Height="32"
+                    Margin="0,0,0,8"
+                    Click="OnChooseStandardClick" />
             <TextBlock Text="Visibility Toggle"
                        FontSize="13"
                        Foreground="#777"
-                       Margin="0,0,0,10" />
+                       Margin="0,0,0,7" />
+            <Grid Margin="0,0,0,9">
+              <TextBox x:Name="TargetCategorySearchBox"
+                       Text="{Binding TargetFilterText, UpdateSourceTrigger=PropertyChanged}"
+                       Padding="7,3"
+                       Height="27"
+                       FontSize="12"
+                       Background="#1b1b1b"
+                       Foreground="#eee"
+                       CaretBrush="#eee"
+                       BorderBrush="#555"
+                       BorderThickness="1" />
+              <TextBlock Text="Search layers"
+                         FontSize="12"
+                         Foreground="#777"
+                         Margin="9,0,0,0"
+                         VerticalAlignment="Center"
+                         IsHitTestVisible="False"
+                         Visibility="{Binding Text, ElementName=TargetCategorySearchBox, Converter={StaticResource StringEmptyToVis}}" />
+            </Grid>
           </StackPanel>
 
           <!-- Top-aligned + MaxHeight (bound to the canvas area's actual
@@ -847,6 +1102,9 @@
                ScrollViewer space below a short list. Still caps + scrolls
                once the list genuinely exceeds that height. -->
           <ScrollViewer Grid.Row="1"
+                        Margin="16,0,0,16"
+                        IsEnabled="{Binding AreFilterButtonsEnabled}"
+                        Opacity="{Binding AreFilterButtonsEnabled, Converter={StaticResource BoolToOpacity}}"
                         VerticalScrollBarVisibility="Auto"
                         HorizontalScrollBarVisibility="Disabled">
             <StackPanel>
@@ -887,12 +1145,45 @@
               </ItemsControl>
             </StackPanel>
           </ScrollViewer>
+          <Thumb Grid.Row="1"
+                 Width="16" Height="16"
+                 HorizontalAlignment="Left"
+                 VerticalAlignment="Bottom"
+                 Cursor="SizeNESW"
+                 ToolTip="Drag to resize"
+                 DragDelta="TargetFilterResizeThumb_DragDelta"
+                 Panel.ZIndex="1">
+            <Thumb.Template>
+              <ControlTemplate TargetType="Thumb">
+                <Grid Background="Transparent">
+                  <Path Data="M 13,2 L 2,13 M 14,7 L 7,14 M 14,12 L 12,14"
+                        Stroke="#999"
+                        StrokeThickness="1.5"
+                        StrokeStartLineCap="Round"
+                        StrokeEndLineCap="Round"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Bottom"
+                        Margin="2,0,0,2" />
+                </Grid>
+              </ControlTemplate>
+            </Thumb.Template>
+          </Thumb>
         </Grid>
       </Border>
-    </Grid>
 
-    <!-- Status bar + action buttons -->
-    <Border Grid.Row="1" Background="#2d2d2d" Padding="12,7">
+      <!-- Floating instruction and action panel -->
+      <Border Grid.Row="0"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Bottom"
+              Margin="25,0,25,25"
+              Padding="18,14"
+              MinHeight="90"
+              CornerRadius="8"
+              Background="#882a2a2a"
+              BorderBrush="#666"
+              BorderThickness="1"
+              Panel.ZIndex="10"
+              Effect="{StaticResource PanelShadow}">
       <Grid>
         <Grid.RowDefinitions>
           <RowDefinition Height="Auto" />
@@ -902,10 +1193,11 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
           <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
         <!-- Guidance line -->
-        <TextBlock Grid.Row="0" Grid.ColumnSpan="3"
+        <TextBlock x:Name="InstructionText" Grid.Row="0" Grid.ColumnSpan="4"
                    Foreground="#aaa"
                    FontFamily="Fira Sans"
                    FontSize="15"
@@ -931,12 +1223,20 @@
                      Margin="14,0,0,0" />
         </StackPanel>
 
-        <Button Grid.Row="1" Grid.Column="1" Content="Apply"
+        <ToggleButton x:Name="ModeSwitch" Grid.Row="1" Grid.Column="1"
+                      Style="{StaticResource ModeSlideSwitch}"
+                      IsChecked="False"
+                      ToolTip="Switch between node graph and column lists"
+                      Click="OnModeSwitchClick"
+                      Margin="0,0,16,0"
+                      VerticalAlignment="Center" />
+
+        <Button Grid.Row="1" Grid.Column="2" Content="Apply"
                 Style="{StaticResource ModernButton}"
                 VerticalAlignment="Center"
                 Margin="0,0,8,0"
                 Click="OnApply" />
-        <Button Grid.Row="1" Grid.Column="2" Content="Apply &amp; Remember"
+        <Button Grid.Row="1" Grid.Column="3" Content="Apply &amp; Remember"
                 Style="{StaticResource ModernButton}"
                 Foreground="White"
                 Background="#4682b4"
@@ -949,6 +1249,7 @@
           </Button.Effect>
         </Button>
       </Grid>
-    </Border>
+      </Border>
+    </Grid>
   </Grid>
 </Window>
