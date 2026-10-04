@@ -29,32 +29,19 @@ public static class MappingsCommand
 
         var config = PluginConfig.Load();
 
-        if (string.IsNullOrEmpty(config.TemplateDwgPath))
-        {
-            ed.WriteMessage("\nNo template DWG configured. Run STD_SetTemplate first.");
-            return;
-        }
-
-        if (!File.Exists(config.TemplateDwgPath))
-        {
-            ed.WriteMessage($"\nTemplate DWG not found: {config.TemplateDwgPath}");
-            return;
-        }
-
         var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
             ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
             : config.MemoryFilePath;
 
-        IReadOnlyDictionary<string, LayerProperties> standardLayers;
-        try
+        IReadOnlyDictionary<string, LayerProperties> standardLayers =
+            new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase);
+        if (!string.IsNullOrEmpty(config.TemplateDwgPath) && File.Exists(config.TemplateDwgPath))
         {
-            standardLayers = SideDatabase.LoadStandardLayers(config.TemplateDwgPath);
+            try { standardLayers = SideDatabase.LoadStandardLayers(config.TemplateDwgPath); }
+            catch (System.Exception ex) { ed.WriteMessage($"\nCould not read saved standard: {ex.Message}"); }
         }
-        catch (System.Exception ex)
-        {
-            ed.WriteMessage($"\nError reading template DWG: {ex.Message}");
-            return;
-        }
+        else if (!string.IsNullOrEmpty(config.TemplateDwgPath))
+            ed.WriteMessage("\nSaved standard file was not found. Choose a standard in the editor.");
 
         var activeLayers = GetActiveLayerNames(doc.Database);
 
@@ -83,8 +70,9 @@ public static class MappingsCommand
         // Capture drawing data in this AutoCAD command context. The IPC worker
         // only serves this snapshot and never accesses the drawing database.
         if (RustUiLauncher.TryLaunchFromActiveAutoCad(
-                Path.GetFileName(doc.Name), sortedSource, sortedStandard,
-                emptyLayers, memory.Mappings, targetFilters)) return;
+                doc, Path.GetFileName(doc.Name), configThreshold, sortedSource, sortedStandard,
+                emptyLayers, standardLayers, memory.Mappings, store.FilePath, targetFilters,
+                config.TemplateDwgPath, categorized.AlwaysHidden)) return;
 
         // Run heuristic matching for all source layers not already in memory
         var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
@@ -197,7 +185,7 @@ public static class MappingsCommand
         }
     }
 
-    private static HashSet<string> GetEmptyLayers(Database db)
+    internal static HashSet<string> GetEmptyLayers(Database db)
     {
         var layerCounts = new Dictionary<ObjectId, int>();
 

@@ -1,0 +1,5 @@
+# RustUI panel spacing and footer review
+
+Chris confirms the neutral-with-outline mockup direction and the Apply / Apply & Remember visual treatment. New feedback asks for the Source Drawing and Target Filter panels to use the same neutral fill, status/category outline, and rounded-control conventions as the map rows. Column rows should have shorter node faces but more vertical breathing room between rows. Increase the horizontal separation between the Source and Target containers in Node mode. Center all footer controls vertically and make Apply / Apply & Remember larger and rounder to match the Node / Column switch.
+
+Implemented in RustUI: source match filters and target category buttons now use neutral fills with colored outlines; drawing panels use the same dark frame treatment; Column rows have 30 px faces and 8 px gaps; Node Source/Target containers have an additional 40 px gap; footer buttons use centered, 34 px pill controls matching the mode switch. cargo check, optimized release build, Inno compile, and git diff --check succeeded. AutoCAD visual review remains user-controlled.
