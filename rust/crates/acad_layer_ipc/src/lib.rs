@@ -211,7 +211,10 @@ fn request(request: IpcRequest) -> Result<IpcResponse, String> {
             Err(error) => {
                 last_error = error.to_string();
                 if attempt == 0 || attempt == 49 {
-                    trace(&format!("Pipe open attempt {} failed: {last_error}", attempt + 1));
+                    trace(&format!(
+                        "Pipe open attempt {} failed: {last_error}",
+                        attempt + 1
+                    ));
                 }
                 thread::sleep(Duration::from_millis(100));
             }
