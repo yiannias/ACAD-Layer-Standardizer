@@ -69,6 +69,8 @@ public class LayerEditorViewModel : ObservableObject
     private const double HeaderTopStripHeight = HeaderTitleBarHeight + HeaderFilterBoxHeight;
 
     public ObservableCollection<LayerNodeViewModel> Nodes { get; } = [];
+    public ObservableCollection<LayerNodeViewModel> SourceLayers { get; } = [];
+    public ObservableCollection<LayerNodeViewModel> TargetLayers { get; } = [];
     public ObservableCollection<LayerConnectionViewModel> Connections { get; } = [];
     public ObservableCollection<TargetFilterViewModel> TargetFilters { get; } = [];
 
@@ -453,6 +455,7 @@ public class LayerEditorViewModel : ObservableObject
             var loc = new Point(LeftColX, TopMargin + i * NodeSpacing);
             var vm = new LayerNodeViewModel(sourceLayers[i], true, loc);
             sourceModels.Add(vm);
+            SourceLayers.Add(vm);
             Nodes.Add(vm);
         }
 
@@ -460,6 +463,7 @@ public class LayerEditorViewModel : ObservableObject
         {
             var vm = new LayerNodeViewModel(standardLayers[i], false, new Point(0, 0));
             standardModels.Add(vm);
+            TargetLayers.Add(vm);
             Nodes.Add(vm);
         }
 
@@ -664,6 +668,11 @@ public class LayerEditorViewModel : ObservableObject
             // hidden by the Target Filter stayed drawn to a node that wasn't
             // there anymore.
             conn.IsVisible = conn.Source.IsVisible && conn.Target.IsVisible;
+        }
+
+        foreach (var source in Nodes.Where(n => n.IsSource && !n.IsHeader))
+        {
+            source.MappedTargetName = Connections.FirstOrDefault(c => c.Source == source)?.Target.Name ?? "";
         }
 
         RepositionVisibleNodes();
@@ -962,6 +971,7 @@ public class LayerEditorViewModel : ObservableObject
                 Connections.Remove(c);
             }
             Nodes.Remove(node);
+            SourceLayers.Remove(node);
         }
         ApplyFilters();
     }
@@ -1031,7 +1041,10 @@ public class LayerEditorViewModel : ObservableObject
         ClearHistory();
         var oldTargets = Nodes.Where(n => !n.IsSource && !n.IsHeader).ToList();
         foreach (var n in oldTargets)
+        {
             Nodes.Remove(n);
+            TargetLayers.Remove(n);
+        }
         Connections.Clear();
         TargetFilters.Clear();
 
@@ -1044,6 +1057,7 @@ public class LayerEditorViewModel : ObservableObject
         {
             var vm = new LayerNodeViewModel(newStandardLayers[i], false, new Point(0, 0));
             standardModels.Add(vm);
+            TargetLayers.Add(vm);
             Nodes.Add(vm);
         }
 
@@ -1076,6 +1090,28 @@ public class LayerEditorViewModel : ObservableObject
         }
 
         ApplyFilters();
+    }
+
+    public void MapSourceToTarget(LayerNodeViewModel source, LayerNodeViewModel target)
+    {
+        if (!source.IsSource || source.IsHeader || target.IsSource || target.IsHeader
+            || !Nodes.Contains(source) || !Nodes.Contains(target))
+            return;
+
+        var existing = Connections.FirstOrDefault(c => c.Source == source);
+        if (existing?.Target == target)
+            return;
+
+        PushUndoSnapshot();
+        if (existing is not null)
+        {
+            existing.Source.IsMapped = false;
+            if (!Connections.Any(other => other != existing && other.Target == existing.Target))
+                existing.Target.IsMapped = false;
+            Connections.Remove(existing);
+        }
+
+        Connections.Add(new LayerConnectionViewModel(source, target, ConnectionMatchSource.Manual));
     }
 
 }

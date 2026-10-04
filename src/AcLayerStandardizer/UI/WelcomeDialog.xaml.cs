@@ -23,16 +23,16 @@ public partial class WelcomeDialog : Window
 
     private void RefreshDisplay()
     {
-        SetPathLabel(TemplateLabel, _config.TemplateDwgPath, "No reference file set");
+        SetPathLabel(TemplateLabel, _config.TemplateDwgPath, "No reference file set", markMissing: true);
         SetPathLabel(MemoryLabel, _config.MemoryFilePath, "No memory file set");
 
         var hasTemplate = !string.IsNullOrEmpty(_config.TemplateDwgPath) && File.Exists(_config.TemplateDwgPath);
         StatusLine.Text = hasTemplate
             ? "Ready. Open the mappings editor to connect your layers."
-            : "Tip: set a reference file first, then open the editor.";
+            : "Reference file not set or unavailable. Browse to reconnect it, or open the editor and choose one later.";
     }
 
-    private static void SetPathLabel(System.Windows.Controls.TextBlock label, string? fullPath, string fallback)
+    private static void SetPathLabel(System.Windows.Controls.TextBlock label, string? fullPath, string fallback, bool markMissing = false)
     {
         if (string.IsNullOrEmpty(fullPath))
         {
@@ -43,10 +43,13 @@ public partial class WelcomeDialog : Window
             return;
         }
 
-        label.Text = Path.GetFileName(fullPath);
+        var exists = !markMissing || File.Exists(fullPath);
+        label.Text = exists ? Path.GetFileName(fullPath) : $"Unavailable: {Path.GetFileName(fullPath)}";
         label.FontStyle = FontStyles.Normal;
         // Gainsboro, not Black: this dialog is dark-themed now.
-        label.Foreground = System.Windows.Media.Brushes.Gainsboro;
+        label.Foreground = exists
+            ? System.Windows.Media.Brushes.Gainsboro
+            : System.Windows.Media.Brushes.DarkOrange;
         ToolTipService.SetToolTip(label, fullPath);
     }
 
@@ -59,17 +62,26 @@ public partial class WelcomeDialog : Window
             CheckFileExists = true
         };
 
-        if (!string.IsNullOrEmpty(_config.TemplateDwgPath))
+        var initialDirectory = GetAvailableInitialDirectory(_config.TemplateDwgPath);
+        if (initialDirectory is not null)
         {
-            var dir = Path.GetDirectoryName(_config.TemplateDwgPath);
-            if (dir is not null) dialog.InitialDirectory = dir;
+            dialog.InitialDirectory = initialDirectory;
         }
 
-        if (dialog.ShowDialog() == true)
+        try
         {
-            _config.TemplateDwgPath = dialog.FileName;
-            _config.Save();
-            RefreshDisplay();
+            if (dialog.ShowDialog() == true)
+            {
+                _config.TemplateDwgPath = dialog.FileName;
+                _config.Save();
+                RefreshDisplay();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            MessageBox.Show(this,
+                $"The reference file picker could not open. Choose a local folder or reconnect the network drive, then try again.\n\n{ex.Message}",
+                "Reference File Unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -82,30 +94,50 @@ public partial class WelcomeDialog : Window
             FileName = "standards_memory.json"
         };
 
-        if (!string.IsNullOrEmpty(_config.MemoryFilePath))
+        var initialDirectory = GetAvailableInitialDirectory(_config.MemoryFilePath);
+        if (initialDirectory is not null)
         {
-            var dir = Path.GetDirectoryName(_config.MemoryFilePath);
-            if (dir is not null) dialog.InitialDirectory = dir;
+            dialog.InitialDirectory = initialDirectory;
         }
 
-        if (dialog.ShowDialog() == true)
+        try
         {
-            _config.MemoryFilePath = dialog.FileName;
-            _config.Save();
-            RefreshDisplay();
+            if (dialog.ShowDialog() == true)
+            {
+                _config.MemoryFilePath = dialog.FileName;
+                _config.Save();
+                RefreshDisplay();
+            }
+        }
+        catch (System.Exception ex)
+        {
+            MessageBox.Show(this,
+                $"The memory file picker could not open. Choose a local folder or reconnect the network drive, then try again.\n\n{ex.Message}",
+                "Memory File Location Unavailable", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private static string? GetAvailableInitialDirectory(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            return !string.IsNullOrEmpty(directory) && Directory.Exists(directory)
+                ? directory
+                : null;
+        }
+        catch (System.Exception)
+        {
+            // An old path can contain an unavailable network share or invalid
+            // directory. Let the picker start in its normal location instead.
+            return null;
         }
     }
 
     private void OpenMappingsEditor_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(_config.TemplateDwgPath) || !File.Exists(_config.TemplateDwgPath))
-        {
-            MessageBox.Show(this,
-                "Please set a valid reference file before opening the mappings editor.",
-                "Reference Required", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
-        }
-
         OpenMappings = true;
         DialogResult = true;
         Close();

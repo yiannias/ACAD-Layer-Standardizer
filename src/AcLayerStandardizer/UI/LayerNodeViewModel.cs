@@ -40,6 +40,20 @@ public class LayerNodeViewModel : ObservableObject
         set => SetProperty(ref _isMapped, value);
     }
 
+    private bool _isDropTarget;
+    public bool IsDropTarget
+    {
+        get => _isDropTarget;
+        set => SetProperty(ref _isDropTarget, value);
+    }
+
+    private string _mappedTargetName = "";
+    public string MappedTargetName
+    {
+        get => _mappedTargetName;
+        set => SetProperty(ref _mappedTargetName, value);
+    }
+
     private bool _isEmpty;
     public bool IsEmpty
     {
