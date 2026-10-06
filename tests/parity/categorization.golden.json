@@ -1,0 +1,1475 @@
+{
+  "alwaysHidden": [
+    "0___1",
+    "ADSK_ASSOC_ENTITY_BACKUPS",
+    "ADSK_CONSTRAINTS",
+    "DEFPOINTS"
+  ],
+  "visibleCategories": [
+    "Architectural",
+    "Engineering",
+    "Structural",
+    "Annotative",
+    "Area/GFA",
+    "Ceiling Plan",
+    "Demolition",
+    "Details",
+    "Floor Plan",
+    "Roof",
+    "Site Plan",
+    "Wall",
+    "ADA",
+    "Coordination Notes",
+    "Door",
+    "Equipment",
+    "Exterior",
+    "Floor Plan Misc",
+    "Graphics/Color Fills",
+    "Hatches/Patterns/Fills",
+    "Life Safety",
+    "MEP",
+    "Misc",
+    "Parking",
+    "Reference/Non-Plot",
+    "Title Block",
+    "Unit",
+    "Vertical Transportation",
+    "Window"
+  ],
+  "sortGroupByTag": {
+    "ADA": "Specific",
+    "Annotative": "General",
+    "Architectural": "Discipline",
+    "Area/GFA": "General",
+    "Ceiling Plan": "General",
+    "Coordination Notes": "Specific",
+    "Demolition": "General",
+    "Details": "General",
+    "Door": "Specific",
+    "Engineering": "Discipline",
+    "Equipment": "Specific",
+    "Exterior": "Specific",
+    "Floor Plan": "General",
+    "Floor Plan Misc": "Specific",
+    "Graphics/Color Fills": "Specific",
+    "Hatches/Patterns/Fills": "Specific",
+    "Life Safety": "Specific",
+    "MEP": "Specific",
+    "Misc": "Specific",
+    "Parking": "Specific",
+    "Reference/Non-Plot": "Specific",
+    "Roof": "General",
+    "Site Plan": "General",
+    "Structural": "Discipline",
+    "Title Block": "Specific",
+    "Unit": "Specific",
+    "Vertical Transportation": "Specific",
+    "Wall": "General",
+    "Window": "Specific"
+  },
+  "layerTags": {
+    "0": [
+      "Misc"
+    ],
+    "0-BLOCK": [
+      "Misc"
+    ],
+    "0-COL-AMENITY": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-CORE": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-CXT": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-GRASS": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-OFFICE": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-PARKING": [
+      "Graphics/Color Fills",
+      "Parking"
+    ],
+    "0-COL-RETAIL": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-RETAIL_DD": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-STREET": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-UNIT_A": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-UNIT_B": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-UNIT_C": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-UNIT_CIRC": [
+      "Graphics/Color Fills"
+    ],
+    "0-COL-WATER": [
+      "Graphics/Color Fills"
+    ],
+    "0-IMAGE": [
+      "Misc"
+    ],
+    "0-LOGO": [
+      "Misc"
+    ],
+    "0-SURVEY": [
+      "Misc"
+    ],
+    "A-ANNO-DIM": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-DIM-EXT_WALL": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-DIM-PARKING": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-DIM-SITE": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-DIM-UNIT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-DWG_TTL": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-1HR": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-2HR": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-3HR": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-4HR": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-TRAVEL": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-TRAVEL-D": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-LIFESAFETY-TRAVEL-S": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-NONPLOT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-NOT_IN_CONTRACT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REV-01-CLOUD": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REV-01-NOTE": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REV-TAG": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-01": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-02": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-03": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-04": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-05": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-06": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-07": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-08": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-09": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-10": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-11": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-12": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-13": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-14": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-15": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-16": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-17": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-18": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-19": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-REVISION_CLOUDS-20": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-SYM": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-SYM-CALLOUT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-SYM-MATCHLINE": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-DOOR": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-ELEVATION": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-FINISH": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-ROOM": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-WALL": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TAG-WINDOW": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-DEMO": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-PRESENTATION": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-PRESENTATION-U": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-ROAD": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-UNIT_INFO": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TEXT-UNIT_TYPE": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-TTLB": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-ANNO-VPRT": [
+      "Annotative",
+      "Architectural"
+    ],
+    "A-AREA": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-BOMA": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-COMMERCIAL": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-FAR-ELEV_STAIR": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-FAR-MECH_ACCESSORY": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-FAR-NOT_INCLUDED": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-FAR-PARK_LOADING": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-GREEN_ROOF": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-GROSS": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-LIGHTVENT": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-MEP": [
+      "Architectural",
+      "Area/GFA",
+      "MEP"
+    ],
+    "A-AREA-NET": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-NOTE": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-RETAIL": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-AREA-RETAIL-NET": [
+      "Architectural",
+      "Area/GFA"
+    ],
+    "A-CL-CEILING_TILE": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-ELECTRICAL": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-HEADER": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-LIGHT_FIXTURE": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-LIGHT_FIXTURE-ALT": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-LIGHT_SWITCHING": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-MECH": [
+      "Architectural",
+      "Ceiling Plan",
+      "Engineering"
+    ],
+    "A-CL-OPENING": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-SOFFIT": [
+      "Architectural",
+      "Ceiling Plan"
+    ],
+    "A-CL-SOFFIT-HATCH": [
+      "Architectural",
+      "Ceiling Plan",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DEMO": [
+      "Architectural",
+      "Demolition"
+    ],
+    "A-DEMO-DOOR": [
+      "Architectural",
+      "Demolition",
+      "Door"
+    ],
+    "A-DEMO-ELEC": [
+      "Architectural",
+      "Demolition",
+      "Engineering"
+    ],
+    "A-DEMO-EQUIPMENT": [
+      "Architectural",
+      "Demolition",
+      "Equipment"
+    ],
+    "A-DEMO-GL": [
+      "Architectural",
+      "Demolition",
+      "Window"
+    ],
+    "A-DEMO-HATCH": [
+      "Architectural",
+      "Demolition",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DEMO-ITEM": [
+      "Architectural",
+      "Demolition"
+    ],
+    "A-DEMO-MECH": [
+      "Architectural",
+      "Demolition",
+      "Engineering"
+    ],
+    "A-DEMO-OPENING": [
+      "Architectural",
+      "Demolition"
+    ],
+    "A-DEMO-PLUMB": [
+      "Architectural",
+      "Demolition"
+    ],
+    "A-DEMO-WALL": [
+      "Architectural",
+      "Demolition",
+      "Wall"
+    ],
+    "A-DOOR-SWNG": [
+      "Architectural",
+      "Door"
+    ],
+    "A-DT-1": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-1-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-2": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-2-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-251": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-251-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-252": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-252-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-253": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-253-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-254": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-255": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-3": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-3-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-4": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-4-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-5": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-5-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-6": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-6-HID": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-7": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-BLOCK": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-HATCH": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-HATCH-251": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-HATCH-252": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-HATCH-253": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-HATCH-254": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-HATCH-255": [
+      "Architectural",
+      "Details",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-DT-MAT-AWB": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-MAT-EXIST": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-MAT-MEMBRANE_FLASHING": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-MAT-METAL_FLASHING": [
+      "Architectural",
+      "Details"
+    ],
+    "A-DT-MAT-STRUCT": [
+      "Architectural",
+      "Details"
+    ],
+    "A-FL-ADA": [
+      "ADA",
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-ADA-CLEARANCE": [
+      "ADA",
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-ADA-GRAB_BAR": [
+      "ADA",
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-ADA-GRAB_BAR-FUTURE": [
+      "ADA",
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-ADA-SCRATCH": [
+      "ADA",
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-APPLIANCE": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-APPLIANCE_BELOW": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-BELOW": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-CAS-BELOW": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-CASEWORK": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-CASEWORK-HIDDEN": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-CASEWORK-OVERHEAD": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-DOOR": [
+      "Architectural",
+      "Door",
+      "Floor Plan"
+    ],
+    "A-FL-EDGE": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-ENTOURAGE": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-EQUIPMENT": [
+      "Architectural",
+      "Equipment",
+      "Floor Plan"
+    ],
+    "A-FL-EQUIPMENT-FITNESS": [
+      "Architectural",
+      "Equipment",
+      "Floor Plan"
+    ],
+    "A-FL-EQUIPMENT-MISC": [
+      "Architectural",
+      "Equipment",
+      "Floor Plan"
+    ],
+    "A-FL-EXISTING-EXT": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-EXISTING-EXT-DEMO": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-EXISTING-WALL": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Wall"
+    ],
+    "A-FL-EXISTING-WALL-DEMO": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Wall"
+    ],
+    "A-FL-EXT-ABOVE": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan"
+    ],
+    "A-FL-EXT-BELOW": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan"
+    ],
+    "A-FL-EXT-DOOR": [
+      "Architectural",
+      "Door",
+      "Exterior",
+      "Floor Plan"
+    ],
+    "A-FL-EXT-GL-FRAME": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Window"
+    ],
+    "A-FL-EXT-GL-GLASS": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Window"
+    ],
+    "A-FL-EXT-GL-OPERATION": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Window"
+    ],
+    "A-FL-EXT-GL-SILL": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Window"
+    ],
+    "A-FL-EXT-WALL": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-EXT-WALL-COMPONENT": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-EXT-WALL-COMPONENT-IN": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-EXT-WALL-HATCH": [
+      "Architectural",
+      "Exterior",
+      "Floor Plan",
+      "Hatches/Patterns/Fills",
+      "Wall"
+    ],
+    "A-FL-FINISH": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-FINISH-PATTERN": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-FL-FINISH-PATTERN-FLOOR": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-FL-FINISH-PATTERN-TILE": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Hatches/Patterns/Fills"
+    ],
+    "A-FL-FURNITURE": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-FURNITURE-NIC": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-INT_GL-FRAME": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-INT_GL-GLASS": [
+      "Architectural",
+      "Floor Plan"
+    ],
+    "A-FL-MEP": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-MEP-CLEARANCE": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-MEP-EQUIPMENT": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-MEP-FIXTURE": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-MEP-RISER": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-OVERHEAD": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-OVERHEAD-CEILING_FAN": [
+      "Architectural",
+      "Floor Plan",
+      "Floor Plan Misc"
+    ],
+    "A-FL-PARKING-NUMBERING": [
+      "Architectural",
+      "Floor Plan",
+      "Parking"
+    ],
+    "A-FL-PARKING-SPACE": [
+      "Architectural",
+      "Floor Plan",
+      "Parking"
+    ],
+    "A-FL-PARKING-SPACE-BIKE": [
+      "Architectural",
+      "Floor Plan",
+      "Parking"
+    ],
+    "A-FL-PARKING-STRIPE": [
+      "Architectural",
+      "Floor Plan",
+      "Parking"
+    ],
+    "A-FL-PARKING-STRIPE-BIKE": [
+      "Architectural",
+      "Floor Plan",
+      "Parking"
+    ],
+    "A-FL-PLUMBING_FIXTURE": [
+      "Architectural",
+      "Floor Plan",
+      "MEP"
+    ],
+    "A-FL-ROOF-DRAIN": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-ROOF-EQUIPMENT": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-ROOF-FEATURES-MAJOR": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-ROOF-FEATURES-MINOR": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-ROOF-GEOMETRY": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-ROOF-PAVERS": [
+      "Architectural",
+      "Floor Plan",
+      "Roof"
+    ],
+    "A-FL-UNIT-APPLIANCE": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-APPLIANCE_BELOW": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-CASEWORK": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-CASEWORK-HIDDEN": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-CASEWORK-OVERHEA": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-DOOR": [
+      "Architectural",
+      "Door",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-EQUIPMENT": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-FINISH": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-FURNITURE": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-FURNITURE-NIC": [
+      "Architectural",
+      "Floor Plan",
+      "Unit"
+    ],
+    "A-FL-UNIT-MEP-FIXTURES": [
+      "Architectural",
+      "Floor Plan",
+      "MEP",
+      "Unit"
+    ],
+    "A-FL-UNIT-WALL": [
+      "Architectural",
+      "Floor Plan",
+      "Unit",
+      "Wall"
+    ],
+    "A-FL-VT-CHUTE-LAUNDRY": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-CHUTE-TRASH": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-ELEVATOR": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-ELEVATOR-CLEARANCE": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-ELEVATOR-COMPONENT": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-ESCALATOR": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-ESCALATOR-COMPONEN": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-LOADING_RAMP": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-PARKING_RAMP": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-PARKING_RAMP-BELOW": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-ARA": [
+      "Architectural",
+      "Floor Plan",
+      "Life Safety",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-CLEARANCE": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-HID": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-OVERHEAD": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-RAIL": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-VT-STAIR-SYMBOL": [
+      "Architectural",
+      "Floor Plan",
+      "Vertical Transportation"
+    ],
+    "A-FL-WALL": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-COMPONENT": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-COMPONENT-INSULA": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-COMPONENT-TILE": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-DEMISING": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-FINISH": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-HATCH": [
+      "Architectural",
+      "Floor Plan",
+      "Hatches/Patterns/Fills",
+      "Wall"
+    ],
+    "A-FL-WALL-PARTIAL": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-FL-WALL-RATED": [
+      "Architectural",
+      "Floor Plan",
+      "Wall"
+    ],
+    "A-GRID": [
+      "Architectural"
+    ],
+    "A-GRID-DIMENSION": [
+      "Architectural"
+    ],
+    "A-GRID-INSIDE": [
+      "Architectural"
+    ],
+    "A-GRID-SYMBOL": [
+      "Architectural"
+    ],
+    "A-SECT-C": [
+      "Architectural",
+      "Engineering"
+    ],
+    "A-SP-BUILDING": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-BUILDING-HATCH": [
+      "Architectural",
+      "Hatches/Patterns/Fills",
+      "Site Plan"
+    ],
+    "A-SP-CONTEXT-BUILDINGS": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CONTEXT-CTA": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CONTEXT-HATCH": [
+      "Architectural",
+      "Hatches/Patterns/Fills",
+      "Site Plan"
+    ],
+    "A-SP-CONTEXT-TREES": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CONTEXT-UTILITIES": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CURB": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CURB-BELOW": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-CURB-INTERNAL": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ENTOURAGE": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-EQUIPMENT": [
+      "Architectural",
+      "Equipment",
+      "Site Plan"
+    ],
+    "A-SP-FENCE": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-HATCH": [
+      "Architectural",
+      "Hatches/Patterns/Fills",
+      "Site Plan"
+    ],
+    "A-SP-LS-GROUNDCOVER": [
+      "Architectural",
+      "Engineering",
+      "Site Plan"
+    ],
+    "A-SP-LS-PLANT": [
+      "Architectural",
+      "Engineering",
+      "Site Plan"
+    ],
+    "A-SP-LS-TREES": [
+      "Architectural",
+      "Engineering",
+      "Site Plan"
+    ],
+    "A-SP-PARKING-SPACE": [
+      "Architectural",
+      "Parking",
+      "Site Plan"
+    ],
+    "A-SP-PARKING-SPACE-BIKE": [
+      "Architectural",
+      "Parking",
+      "Site Plan"
+    ],
+    "A-SP-PARKING-STRIPE": [
+      "Architectural",
+      "Parking",
+      "Site Plan"
+    ],
+    "A-SP-PARKING-STRIPE-BIKE": [
+      "Architectural",
+      "Parking",
+      "Site Plan"
+    ],
+    "A-SP-PARKING-VEHICLES": [
+      "Architectural",
+      "Parking",
+      "Site Plan"
+    ],
+    "A-SP-PROP": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-PROP-PARCEL": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-PROP-SETBACKS": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-CENTER": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-CURB": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-CURB-PATT": [
+      "Architectural",
+      "Hatches/Patterns/Fills",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-FEATURES": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-MARKINGS": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-ROAD-SIDEWALK": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-SIGN": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-SITE-CURB-BELOW": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-SITE-CURB-INTERNAL": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-TURNING_RADIUS": [
+      "Architectural",
+      "Site Plan"
+    ],
+    "A-SP-WALL": [
+      "Architectural",
+      "Site Plan",
+      "Wall"
+    ],
+    "A-TLBLK": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-BKGND": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-HA_LOGO": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-PLOTSTAMP": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-SEAL": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-TEXT": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-TEXT-BLK": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-TEXT-ORG": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-TLBLK-TEXT-WHT": [
+      "Architectural",
+      "Title Block"
+    ],
+    "A-WIPEOUT": [
+      "Architectural"
+    ],
+    "C-BLDG-N": [
+      "Engineering"
+    ],
+    "S-FL-BEAM": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-BEAM-CENTER": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-BEAM-FLANGE": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-BELOW": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-COL": [
+      "Floor Plan",
+      "Graphics/Color Fills",
+      "Structural"
+    ],
+    "S-FL-COL-CONC": [
+      "Floor Plan",
+      "Graphics/Color Fills",
+      "Structural"
+    ],
+    "S-FL-COL-CONC-HATCH": [
+      "Floor Plan",
+      "Graphics/Color Fills",
+      "Hatches/Patterns/Fills",
+      "Structural"
+    ],
+    "S-FL-COL-STEEL": [
+      "Floor Plan",
+      "Graphics/Color Fills",
+      "Structural"
+    ],
+    "S-FL-COL-STEEL-HATCH": [
+      "Floor Plan",
+      "Graphics/Color Fills",
+      "Hatches/Patterns/Fills",
+      "Structural"
+    ],
+    "S-FL-FIREPROOFING": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-MISC_METALS": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "S-FL-OVERHEAD": [
+      "Floor Plan",
+      "Floor Plan Misc",
+      "Structural"
+    ],
+    "S-FL-SLAB_EDGE": [
+      "Floor Plan",
+      "Structural"
+    ],
+    "X-BLOCKS": [
+      "Reference/Non-Plot"
+    ],
+    "X-BLOCKS-UNIT": [
+      "Reference/Non-Plot",
+      "Unit"
+    ],
+    "X-GUIDES": [
+      "Reference/Non-Plot"
+    ],
+    "X-REF": [
+      "Reference/Non-Plot"
+    ],
+    "X-REF-GRID": [
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH": [
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH-COORD_NOTES-GENE": [
+      "Coordination Notes",
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH-COORD_NOTES-INTE": [
+      "Coordination Notes",
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH-COORD_NOTES-MECH": [
+      "Coordination Notes",
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH-COORD_NOTES-PLUM": [
+      "Coordination Notes",
+      "Reference/Non-Plot"
+    ],
+    "X-SCRATCH-COORD_NOTES-STRU": [
+      "Coordination Notes",
+      "Reference/Non-Plot"
+    ],
+    "X-VIEWPORT": [
+      "Reference/Non-Plot"
+    ]
+  }
+}

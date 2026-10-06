@@ -1,0 +1,29 @@
+{
+  "count": 4,
+  "lookups": [
+    {
+      "source": "a-wall",
+      "target": "A-WALL"
+    },
+    {
+      "source": "A-WALL",
+      "target": "A-WALL"
+    },
+    {
+      "source": "a-ELEV-medm",
+      "target": "A-DT-3"
+    },
+    {
+      "source": "$0$a-anno-dim",
+      "target": "A-ANNO-DIM"
+    },
+    {
+      "source": "x-scratch",
+      "target": "X-SCRATCH"
+    },
+    {
+      "source": "A-DOOR",
+      "target": null
+    }
+  ]
+}
