@@ -14,8 +14,9 @@ namespace AcLayerStandardizer.Core;
 
 public static class IpcBridgeServer
 {
-    public const string PipeName = "acad_layer_standardizer";
-    private const int ApplyPlanProtocolVersion = 2;
+    // Settable only so test processes (one per target framework, run in parallel)
+    // can use private pipes; production always uses the default.
+    public static string PipeName { get; set; } = "acad_layer_standardizer";
     private static CancellationTokenSource? _cts;
     private static Task? _serverTask;
     private static readonly object SnapshotLock = new();
@@ -25,6 +26,7 @@ public static class IpcBridgeServer
     private sealed record TargetFilterSnapshot(string Name, string SortGroup, string[] Layers);
     private sealed record DrawingSnapshot(
         Document Document,
+        string DrawingId,
         string DrawingName,
         double HeuristicThreshold,
         string TemplateName,
@@ -58,6 +60,7 @@ public static class IpcBridgeServer
     {
         var snapshot = new DrawingSnapshot(
             document,
+            ActiveDrawingTracker.GetDrawingId(document),
             drawingName,
             heuristicThreshold,
             string.IsNullOrEmpty(templatePath) ? "" : Path.GetFileName(templatePath),
@@ -165,6 +168,15 @@ public static class IpcBridgeServer
                     var layers = GetDrawingSnapshot()?.SourceLayers ?? Array.Empty<string>();
                     return JsonSerializer.Serialize(new { type = "Layers", payload = layers });
 
+                case "GetActiveDrawing":
+                    long? knownRevision = null;
+                    if (root.TryGetProperty("payload", out var activePayload)
+                        && activePayload.ValueKind == JsonValueKind.Object
+                        && activePayload.TryGetProperty("known_revision", out var known)
+                        && known.ValueKind == JsonValueKind.Number)
+                        knownRevision = known.GetInt64();
+                    return IpcProtocol.BuildActiveDrawingResponse(ActiveDrawingRegistry.Current, knownRevision);
+
                 case "GetDrawingSnapshot":
                     var snapshot = GetDrawingSnapshot();
                     if (snapshot is null)
@@ -172,12 +184,15 @@ public static class IpcBridgeServer
                     return SerializeSnapshot("DrawingSnapshot", snapshot);
 
                 case "ApplyPlan":
+                    if (CheckProtocolVersion(root) is { } versionErrorApplyPlan) return versionErrorApplyPlan;
                     return await ApplyPlanAsync(root).ConfigureAwait(false);
 
                 case "PurgeEmptyLayers":
+                    if (CheckProtocolVersion(root) is { } versionErrorPurgeEmptyLayers) return versionErrorPurgeEmptyLayers;
                     return await PurgeEmptyLayersAsync(root).ConfigureAwait(false);
 
                 case "LoadStandard":
+                    if (CheckProtocolVersion(root) is { } versionErrorLoadStandard) return versionErrorLoadStandard;
                     return await LoadStandardAsync(root).ConfigureAwait(false);
 
                 default:
@@ -190,11 +205,19 @@ public static class IpcBridgeServer
         }
     }
 
+    // Kept separate from the AutoCAD-touching handlers so an unsupported client
+    // is rejected without running (or even loading) any AutoCAD code.
+    private static string? CheckProtocolVersion(JsonElement root)
+    {
+        var version = root.GetProperty("payload").GetProperty("protocol_version").GetInt32();
+        return IpcProtocol.IsSupportedVersion(version) ? null : Error($"Unsupported protocol version {version}.");
+    }
+
     private static async Task<string> LoadStandardAsync(JsonElement root)
     {
         var payload = root.GetProperty("payload");
         var version = payload.GetProperty("protocol_version").GetInt32();
-        if (version != ApplyPlanProtocolVersion) return Error($"Unsupported standard-load protocol version {version}.");
+        if (!IpcProtocol.IsSupportedVersion(version)) return Error($"Unsupported standard-load protocol version {version}.");
         var path = payload.GetProperty("path").GetString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return Error("The selected standard file could not be found.");
         var current = GetDrawingSnapshot();
@@ -249,6 +272,7 @@ public static class IpcBridgeServer
         type,
         payload = new
         {
+            drawing_id = snapshot.DrawingId,
             drawing_name = snapshot.DrawingName,
             heuristic_threshold = snapshot.HeuristicThreshold,
             template_name = snapshot.TemplateName,
@@ -271,7 +295,7 @@ public static class IpcBridgeServer
     {
         var payload = root.GetProperty("payload");
         var version = payload.GetProperty("protocol_version").GetInt32();
-        if (version != ApplyPlanProtocolVersion)
+        if (!IpcProtocol.IsSupportedVersion(version))
             return Error($"Unsupported apply-plan protocol version {version}.");
 
         var snapshot = GetDrawingSnapshot();
@@ -279,8 +303,9 @@ public static class IpcBridgeServer
             return Error("No drawing snapshot is available. Run LSTDR from an active drawing.");
 
         var drawingName = payload.GetProperty("drawing_name").GetString() ?? string.Empty;
-        if (!string.Equals(drawingName, snapshot.DrawingName, StringComparison.OrdinalIgnoreCase))
-            return Error("The mapping window belongs to a different drawing. Close it and run LSTDR again.");
+        var requestDrawingId = payload.TryGetProperty("drawing_id", out var idElement) ? idElement.GetString() : null;
+        var targetError = IpcProtocol.CheckDrawingTarget(snapshot.DrawingId, snapshot.DrawingName, requestDrawingId, drawingName);
+        if (targetError is not null) return Error(targetError);
 
         var mappings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in payload.GetProperty("mappings").EnumerateArray())
@@ -364,7 +389,7 @@ public static class IpcBridgeServer
                 type = "Applied",
                 payload = new
                 {
-                    protocol_version = ApplyPlanProtocolVersion,
+                    protocol_version = version,
                     count = applied.Renamed,
                     remembered,
                     warning = memoryWarning
@@ -416,7 +441,7 @@ public static class IpcBridgeServer
     {
         var payload = root.GetProperty("payload");
         var version = payload.GetProperty("protocol_version").GetInt32();
-        if (version != ApplyPlanProtocolVersion)
+        if (!IpcProtocol.IsSupportedVersion(version))
             return Error($"Unsupported purge protocol version {version}.");
 
         var snapshot = GetDrawingSnapshot();
@@ -424,8 +449,9 @@ public static class IpcBridgeServer
             return Error("No drawing snapshot is available. Run LSTDR from an active drawing.");
 
         var drawingName = payload.GetProperty("drawing_name").GetString() ?? string.Empty;
-        if (!string.Equals(drawingName, snapshot.DrawingName, StringComparison.OrdinalIgnoreCase))
-            return Error("The mapping window belongs to a different drawing. Close it and run LSTDR again.");
+        var requestDrawingId = payload.TryGetProperty("drawing_id", out var idElement) ? idElement.GetString() : null;
+        var targetError = IpcProtocol.CheckDrawingTarget(snapshot.DrawingId, snapshot.DrawingName, requestDrawingId, drawingName);
+        if (targetError is not null) return Error(targetError);
 
         var requestedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in payload.GetProperty("layers").EnumerateArray())
@@ -494,7 +520,7 @@ public static class IpcBridgeServer
             return JsonSerializer.Serialize(new
             {
                 type = "Purged",
-                payload = new { protocol_version = ApplyPlanProtocolVersion, layers = purged }
+                payload = new { protocol_version = version, layers = purged }
             });
         }
         catch (Exception ex)

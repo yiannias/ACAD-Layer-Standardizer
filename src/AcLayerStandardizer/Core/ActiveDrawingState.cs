@@ -9,6 +9,42 @@ namespace AcLayerStandardizer.Core;
 // ActiveDrawingTracker on the AutoCAD thread and read by the pipe thread.
 public sealed record ActiveDrawingState(string DrawingId, string DisplayName, string LayerFingerprint, long Revision);
 
+// Latest active-drawing state, published by ActiveDrawingTracker on the AutoCAD
+// thread and read by the pipe thread. Deliberately free of AutoCAD types.
+public static class ActiveDrawingRegistry
+{
+    private static readonly object Gate = new();
+    private static ActiveDrawingState? _current;
+    private static long _revision;
+
+    public static ActiveDrawingState? Current
+    {
+        get { lock (Gate) return _current; }
+    }
+
+    // Revision advances only when the drawing id, display name, or layer
+    // fingerprint actually changed (or when nothing was published before).
+    public static ActiveDrawingState Publish(string drawingId, string displayName, string layerFingerprint)
+    {
+        lock (Gate)
+        {
+            if (_current is not null
+                && _current.DrawingId == drawingId
+                && _current.DisplayName == displayName
+                && _current.LayerFingerprint == layerFingerprint)
+                return _current;
+
+            _current = new ActiveDrawingState(drawingId, displayName, layerFingerprint, ++_revision);
+            return _current;
+        }
+    }
+
+    public static void Clear()
+    {
+        lock (Gate) _current = null;
+    }
+}
+
 public static class LayerFingerprint
 {
     // Order- and case-insensitive digest of the layers the tool can edit, so

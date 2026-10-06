@@ -38,6 +38,7 @@ public class EntryPoint : IExtensionApplication
         try
         {
             IpcBridgeServer.Start();
+            ActiveDrawingTracker.Start();
         }
         catch (System.Exception ex)
         {
@@ -67,6 +68,7 @@ public class EntryPoint : IExtensionApplication
     {
         try
         {
+            ActiveDrawingTracker.Stop();
             IpcBridgeServer.Stop();
         }
         catch { }
