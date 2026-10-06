@@ -68,6 +68,7 @@ struct LayerStandardizerApp {
     ipc_sender: Sender<Result<IpcResponse, String>>,
     ipc_results: Receiver<Result<IpcResponse, String>>,
     drawing_name: String,
+    drawing_id: String,
     template_name: String,
     empty_layers: HashSet<String>,
     memory_mappings: HashMap<String, String>,
@@ -109,6 +110,7 @@ impl LayerStandardizerApp {
             ipc_sender,
             ipc_results,
             drawing_name: String::new(),
+            drawing_id: String::new(),
             template_name: String::new(),
             empty_layers: HashSet::new(),
             memory_mappings: HashMap::new(),
@@ -288,6 +290,7 @@ impl eframe::App for LayerStandardizerApp {
         if let Some(remember) = editor_event.remember {
             let request = (
                 self.drawing_name.clone(),
+                self.drawing_id.clone(),
                 self.mapping_editor.current_mappings(&self.matches),
                 remember,
                 self.mapping_editor.property_settings(),
@@ -296,7 +299,7 @@ impl eframe::App for LayerStandardizerApp {
             self.apply_pending = true;
             self.status_message = "Applying mappings in AutoCAD…".to_string();
             std::thread::spawn(move || {
-                let result = acad_layer_ipc::apply_plan(request.0, String::new(), request.1, request.2, request.3);
+                let result = acad_layer_ipc::apply_plan(request.0, request.1, request.2, request.3, request.4);
                 let _ = sender.send(result);
             });
         }
@@ -304,13 +307,14 @@ impl eframe::App for LayerStandardizerApp {
         if editor_event.purge {
             let request = (
                 self.drawing_name.clone(),
+                self.drawing_id.clone(),
                 self.empty_layers.iter().cloned().collect::<Vec<_>>(),
             );
             let sender = self.ipc_sender.clone();
             self.apply_pending = true;
             self.status_message = "Removing empty layers in AutoCAD…".to_string();
             std::thread::spawn(move || {
-                let result = acad_layer_ipc::purge_empty_layers(request.0, String::new(), request.1);
+                let result = acad_layer_ipc::purge_empty_layers(request.0, request.1, request.2);
                 let _ = sender.send(result);
             });
         }
@@ -385,6 +389,7 @@ impl LayerStandardizerApp {
             self.mapping_editor.confidence = self.min_confidence;
         }
         self.drawing_name = snapshot.drawing_name;
+        self.drawing_id = snapshot.drawing_id;
         self.template_name = snapshot.template_name;
         self.empty_layers = snapshot.empty_layers.into_iter().collect();
         self.memory_mappings = snapshot.memory_mappings;

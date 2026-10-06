@@ -168,3 +168,7 @@ The FFI wrapper has no production call sites, and the normal `build.ps1` packagi
 ## Immediate next action after review
 
 First run the owned-window feasibility spike in a specifically approved GUI batch; workspace screen-ownership instructions require asking and waiting before launching AutoCAD or the Rust UI, and approval covers one stated batch only. If it passes, implement the UI's manual override/Apply flow through a versioned IPC request that marshals drawing changes to a valid AutoCAD command context. If it fails, investigate an egui-in-WPF host before a broad UI rewrite. Then lock the existing plugin baseline and port the core with behavior parity.
+
+## IPC protocol note (protocol version 3)
+
+The Rust app and the AutoCAD connector exchange one JSON object per line over the named pipe `acad_layer_standardizer`. Besides the snapshot, apply, purge, and load-standard messages, `GetActiveDrawing { known_revision }` returns the active drawing's session `drawing_id`, display name, and a layer fingerprint with a revision counter (`ActiveDrawing`), `ActiveDrawingUnchanged` when the revision matches, or `NoActiveDrawing`. Apply and Purge may carry `drawing_id`; when present it takes precedence over the drawing name, which remains the fallback for older clients. The connector replies with the protocol version the request used, and accepts versions 2 and 3.

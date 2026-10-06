@@ -28,6 +28,8 @@ Live-sync makes snapshots repeated work. Today each snapshot makes C# categorize
 
 ### Phase 1: Thin connector contract
 
+**Status:** implemented on `main`, pending manual verification in AutoCAD (see `docs/superpowers/plans/2026-10-06-phase1-thin-connector-contract.md`, Task 4 step 4). Protocol version is now 3; versions 2 and 3 are accepted.
+
 Define the slim IPC surface between the Rust app and the AutoCAD connector.
 
 - **Active drawing identity:** document handle plus display name, and a **change token** (drawing identity + layer-table hash) so "has anything changed?" is a cheap call.
