@@ -183,6 +183,13 @@ public static class IpcBridgeServer
                         return JsonSerializer.Serialize(new { type = "Error", payload = "No drawing snapshot is available. Run LSTDR from an active drawing." });
                     return SerializeSnapshot("DrawingSnapshot", snapshot);
 
+                case "GetStandardLayers":
+                    if (CheckProtocolVersion(root) is { } versionErrorGetStandard) return versionErrorGetStandard;
+                    var standardPath = root.GetProperty("payload").GetProperty("path").GetString() ?? string.Empty;
+                    if (string.IsNullOrWhiteSpace(standardPath) || !File.Exists(standardPath))
+                        return Error("The selected standard file could not be found.");
+                    return await GetStandardLayersAsync(standardPath).ConfigureAwait(false);
+
                 case "ApplyPlan":
                     if (CheckProtocolVersion(root) is { } versionErrorApplyPlan) return versionErrorApplyPlan;
                     return await ApplyPlanAsync(root).ConfigureAwait(false);
@@ -211,6 +218,51 @@ public static class IpcBridgeServer
     {
         var version = root.GetProperty("payload").GetProperty("protocol_version").GetInt32();
         return IpcProtocol.IsSupportedVersion(version) ? null : Error($"Unsupported protocol version {version}.");
+    }
+
+    // Reads the standard (template) layer names for the Rust window and caches the
+    // layers' properties in the snapshot for Apply. Unlike LoadStandard it neither
+    // writes config nor touches memory/categories: the Rust app owns those.
+    private static async Task<string> GetStandardLayersAsync(string path)
+    {
+        var current = GetDrawingSnapshot();
+        if (current is null) return Error("No active drawing snapshot is available. Run LSTDR again.");
+
+        var completion = new TaskCompletionSource<DrawingSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            await Application.DocumentManager.ExecuteInCommandContextAsync(_ =>
+            {
+                try
+                {
+                    if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, current.Document))
+                        throw new InvalidOperationException("The source drawing is no longer active. Run LSTDR again in that drawing.");
+
+                    var properties = SideDatabase.LoadStandardLayers(path);
+                    var names = properties.Keys.OrderBy(n => n == "0" ? 0 : 1)
+                        .ThenBy(n => n, NaturalSortComparer.Instance).ToArray();
+                    var updated = current with
+                    {
+                        TemplateName = Path.GetFileName(path),
+                        TemplatePath = path,
+                        StandardLayers = names,
+                        StandardLayerProperties = properties
+                    };
+                    lock (SnapshotLock) _drawingSnapshot = updated;
+                    current.Document.Editor.WriteMessage($"\nStandard loaded: {Path.GetFileName(path)} ({names.Length} layers).");
+                    completion.TrySetResult(updated);
+                }
+                catch (Exception ex) { completion.TrySetException(ex); }
+                return Task.CompletedTask;
+            }, null);
+            var loaded = await completion.Task.ConfigureAwait(false);
+            return JsonSerializer.Serialize(new
+            {
+                type = "StandardLayers",
+                payload = new { template_name = loaded.TemplateName, template_path = loaded.TemplatePath, layers = loaded.StandardLayers }
+            });
+        }
+        catch (Exception ex) { return Error($"Could not load the standard file: {ex.GetBaseException().Message}"); }
     }
 
     private static async Task<string> LoadStandardAsync(JsonElement root)

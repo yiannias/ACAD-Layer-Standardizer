@@ -39,6 +39,22 @@ public static class MappingsCommand
             ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
             : config.MemoryFilePath;
 
+        // Rust window first: it reads the template, categorizes, and loads memory
+        // itself, so only the active drawing's layers are captured here. The full
+        // load below is for the WPF fallback.
+        if (RustUiLauncher.IsAvailable())
+        {
+            var rustSource = GetActiveLayerNames(doc.Database)
+                .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
+            if (RustUiLauncher.TryLaunchFromActiveAutoCad(
+                    doc, Path.GetFileName(doc.Name), config.HeuristicThreshold, rustSource, Array.Empty<string>(),
+                    GetEmptyLayers(doc.Database),
+                    new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase),
+                    new Dictionary<string, string>(), memPath,
+                    Array.Empty<(string Name, string SortGroup, IEnumerable<string> Layers)>(),
+                    templatePath, Array.Empty<string>())) return;
+        }
+
         IReadOnlyDictionary<string, LayerProperties> standardLayers =
             new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase);
         if (templatePath.Length > 0)

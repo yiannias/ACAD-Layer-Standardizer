@@ -8,6 +8,10 @@ namespace AcLayerStandardizer.Core;
 
 internal static class RustUiLauncher
 {
+    // True when the Rust window is installed; callers can then skip work only the
+    // WPF fallback needs (reading the template, categorizing, loading memory).
+    public static bool IsAvailable() => FindUiExecutable() is not null;
+
     public static bool TryLaunchFromActiveAutoCad(
         Document document,
         string drawingName,

@@ -28,6 +28,14 @@ fn default_heuristic_threshold() -> f64 {
     0.6
 }
 
+/// Standard (target) layer names read from a template drawing by the connector.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StandardLayersInfo {
+    pub template_name: String,
+    pub template_path: String,
+    pub layers: Vec<String>,
+}
+
 /// Lightweight identity of the drawing AutoCAD currently has active.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveDrawingInfo {
@@ -50,6 +58,10 @@ pub enum IpcRequest {
     Ping,
     GetDrawingLayers,
     GetDrawingSnapshot,
+    GetStandardLayers {
+        protocol_version: u32,
+        path: String,
+    },
     GetActiveDrawing {
         known_revision: Option<u64>,
     },
@@ -106,6 +118,7 @@ pub enum IpcResponse {
     Layers(Vec<String>),
     DrawingSnapshot(DrawingSnapshot),
     ActiveDrawing(ActiveDrawingInfo),
+    StandardLayers(StandardLayersInfo),
     ActiveDrawingUnchanged,
     NoActiveDrawing,
     Classification(Vec<MatchResult>),
@@ -127,6 +140,14 @@ pub enum IpcResponse {
 #[cfg(windows)]
 pub fn request_drawing_snapshot() -> Result<IpcResponse, String> {
     request(IpcRequest::GetDrawingSnapshot)
+}
+
+#[cfg(windows)]
+pub fn get_standard_layers(path: String) -> Result<IpcResponse, String> {
+    request(IpcRequest::GetStandardLayers {
+        protocol_version: IPC_PROTOCOL_VERSION,
+        path,
+    })
 }
 
 #[cfg(windows)]
@@ -260,6 +281,11 @@ pub fn request_drawing_snapshot() -> Result<IpcResponse, String> {
 }
 
 #[cfg(not(windows))]
+pub fn get_standard_layers(_path: String) -> Result<IpcResponse, String> {
+    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(not(windows))]
 pub fn get_active_drawing(_known_revision: Option<u64>) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
 }
@@ -352,5 +378,29 @@ mod tests {
         };
         assert!(!request("").contains("drawing_id"));
         assert!(request("doc-2").contains(r#""drawing_id":"doc-2""#));
+    }
+
+    #[test]
+    fn get_standard_layers_request_shape() {
+        let json = serde_json::to_string(&IpcRequest::GetStandardLayers {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            path: "X.dwg".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"GetStandardLayers","payload":{"protocol_version":3,"path":"X.dwg"}}"#
+        );
+    }
+
+    #[test]
+    fn standard_layers_response_round_trips() {
+        let json = r#"{"type":"StandardLayers","payload":{"template_name":"T.dws","template_path":"C:/T.dws","layers":["0","A-WALL"]}}"#;
+        let IpcResponse::StandardLayers(info) = serde_json::from_str(json).unwrap() else {
+            panic!("expected StandardLayers");
+        };
+        assert_eq!(info.template_name, "T.dws");
+        assert_eq!(info.template_path, "C:/T.dws");
+        assert_eq!(info.layers, vec!["0", "A-WALL"]);
     }
 }

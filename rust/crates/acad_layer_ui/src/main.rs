@@ -1,6 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-use acad_layer_core::{HeuristicMatcher, MatchResult, MatchSource};
+use acad_layer_core::{
+    HeuristicMatcher, LayerDictionaryDefinition, MatchResult, MatchSource, MemoryStore, PluginConfig,
+};
 use acad_layer_ipc::{DrawingSnapshot, IpcResponse, TargetFilter};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ use std::{
     sync::mpsc::{Receiver, Sender},
 };
 
+mod data;
 mod mapping_editor;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +78,12 @@ struct LayerStandardizerApp {
     memory_mappings: HashMap<String, String>,
     target_filters: Vec<TargetFilter>,
     always_hidden_targets: HashSet<String>,
+    plugin_config: PluginConfig,
+    config_path: Option<PathBuf>,
+    config_writable: bool,
+    dictionary: LayerDictionaryDefinition,
+    memory_store: Option<MemoryStore>,
+    standard_requested: bool,
     mapping_editor: mapping_editor::MappingEditor,
     user_preferences: UserPreferences,
 }
@@ -86,7 +95,10 @@ impl LayerStandardizerApp {
         ipc_results: Receiver<Result<IpcResponse, String>>,
         user_preferences: UserPreferences,
     ) -> Self {
+        let startup = data::load_startup();
+        let min_confidence = startup.config.heuristic_threshold.clamp(0.6, 1.0);
         let mut mapping_editor = mapping_editor::MappingEditor::default();
+        mapping_editor.confidence = min_confidence;
         mapping_editor.restore_view_preferences(
             user_preferences.mapping_editor_zoom,
             user_preferences.mapping_editor_viewport_x,
@@ -96,7 +108,7 @@ impl LayerStandardizerApp {
         Self {
             dark_theme: ThemePalette::dark(),
             search_query: String::new(),
-            min_confidence: 0.6,
+            min_confidence,
             source_layers: Vec::new(),
             standard_layers: Vec::new(),
             matches: Vec::new(),
@@ -108,16 +120,22 @@ impl LayerStandardizerApp {
             owner_hwnd,
             owner_attached: false,
             apply_pending: false,
-            error_message: None,
+            error_message: (!startup.notes.is_empty()).then(|| startup.notes.join("\n\n")),
             ipc_sender,
             ipc_results,
             drawing_name: String::new(),
             drawing_id: String::new(),
             template_name: String::new(),
             empty_layers: HashSet::new(),
-            memory_mappings: HashMap::new(),
+            memory_mappings: startup.memory.mappings,
             target_filters: Vec::new(),
             always_hidden_targets: HashSet::new(),
+            plugin_config: startup.config,
+            config_path: startup.config_path,
+            config_writable: startup.config_writable,
+            dictionary: startup.dictionary,
+            memory_store: startup.memory_store,
+            standard_requested: false,
             mapping_editor,
             user_preferences,
         }
@@ -189,11 +207,33 @@ impl eframe::App for LayerStandardizerApp {
                 Ok(IpcResponse::DrawingSnapshot(snapshot)) => {
                     self.set_snapshot(snapshot);
                     self.status_message = format!(
+                        "Connected to {} • {} drawing layers",
+                        self.drawing_name,
+                        self.source_layers.len()
+                    );
+                    self.request_standard_if_needed(ui.ctx());
+                }
+                Ok(IpcResponse::StandardLayers(info)) => {
+                    self.apply_pending = false;
+                    self.template_name = info.template_name.clone();
+                    let view = data::build_target_view(&info.layers, &self.dictionary);
+                    self.target_filters = view.filters;
+                    self.always_hidden_targets = view.always_hidden.into_iter().collect();
+                    self.mapping_editor.retain_valid_targets(&info.layers);
+                    let source = std::mem::take(&mut self.source_layers);
+                    self.set_layers(source, info.layers);
+                    self.status_message = format!(
                         "Connected to {} • {} drawing layers • {} standard layers",
                         self.drawing_name,
                         self.source_layers.len(),
                         self.standard_layers.len()
                     );
+                    if !info
+                        .template_path
+                        .eq_ignore_ascii_case(&self.plugin_config.template_dwg_path)
+                    {
+                        self.remember_template_path(info.template_path);
+                    }
                 }
                 Ok(IpcResponse::TemplateLoaded(snapshot)) => {
                     self.apply_pending = false;
@@ -335,15 +375,7 @@ impl eframe::App for LayerStandardizerApp {
                     .pick_file()
             });
             if let Some(path) = selected {
-                let sender = self.ipc_sender.clone();
-                let repaint = ui.ctx().clone();
-                self.apply_pending = true;
-                self.status_message = "Loading standard drawing in AutoCAD…".to_string();
-                std::thread::spawn(move || {
-                    let result = acad_layer_ipc::load_standard(path.to_string_lossy().into_owned());
-                    let _ = sender.send(result);
-                    repaint.request_repaint();
-                });
+                self.request_standard(ui.ctx(), path.to_string_lossy().into_owned());
             }
         }
 
@@ -408,21 +440,57 @@ impl LayerStandardizerApp {
         self.user_preferences.animations_enabled = animations;
     }
 
+    /// Takes only what needs AutoCAD (the drawing's layers); standards, categories,
+    /// and memory are loaded by this app itself.
     fn set_snapshot(&mut self, snapshot: DrawingSnapshot) {
-        if self.drawing_name.is_empty() {
-            self.min_confidence = snapshot.heuristic_threshold.clamp(0.6, 1.0);
-            self.mapping_editor.confidence = self.min_confidence;
-        }
         self.drawing_name = snapshot.drawing_name;
         self.drawing_id = snapshot.drawing_id;
-        self.template_name = snapshot.template_name;
         self.empty_layers = snapshot.empty_layers.into_iter().collect();
-        self.memory_mappings = snapshot.memory_mappings;
-        self.target_filters = snapshot.target_filters;
-        self.always_hidden_targets = snapshot.always_hidden_targets.into_iter().collect();
-        self.mapping_editor
-            .retain_valid_targets(&snapshot.standard_layers);
-        self.set_layers(snapshot.source_layers, snapshot.standard_layers);
+        let standard = std::mem::take(&mut self.standard_layers);
+        self.set_layers(snapshot.source_layers, standard);
+    }
+
+    fn request_standard_if_needed(&mut self, ctx: &egui::Context) {
+        if self.standard_requested || !self.standard_layers.is_empty() {
+            return;
+        }
+        self.standard_requested = true;
+        let path = self.plugin_config.template_dwg_path.clone();
+        if path.is_empty() {
+            return;
+        }
+        if std::path::Path::new(&path).exists() {
+            self.request_standard(ctx, path);
+        } else {
+            self.status_message =
+                "Reference file unavailable. Click the Target header to choose one.".to_string();
+        }
+    }
+
+    fn request_standard(&mut self, ctx: &egui::Context, path: String) {
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        self.apply_pending = true;
+        self.status_message = "Loading standard drawing in AutoCAD…".to_string();
+        std::thread::spawn(move || {
+            let result = acad_layer_ipc::get_standard_layers(path);
+            let _ = sender.send(result);
+            repaint.request_repaint();
+        });
+    }
+
+    /// Remembers the chosen standard for next launch, unless the config file was
+    /// unreadable (saving would replace it with defaults).
+    fn remember_template_path(&mut self, path: String) {
+        self.plugin_config.template_dwg_path = path;
+        if !self.config_writable {
+            return;
+        }
+        if let Some(config_path) = &self.config_path {
+            if let Err(error) = self.plugin_config.save_to(config_path) {
+                self.error_message = Some(format!("Could not remember the chosen standard: {error}"));
+            }
+        }
     }
 }
 

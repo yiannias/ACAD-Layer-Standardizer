@@ -131,4 +131,16 @@ public class IpcBridgeServerTests
         Assert.True(state.Revision > 1_000_000, "known_revision from another AutoCAD process must not look current");
         ActiveDrawingRegistry.Clear();
     }
+
+    [Fact]
+    public async Task GetStandardLayers_with_missing_file_returns_Error_without_touching_AutoCAD()
+    {
+        var response = await SendAsync(new
+        {
+            type = "GetStandardLayers",
+            payload = new { protocol_version = 3, path = @"C:\definitely\not\here.dwg" }
+        });
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Contains("could not be found", response.GetProperty("payload").GetString());
+    }
 }
