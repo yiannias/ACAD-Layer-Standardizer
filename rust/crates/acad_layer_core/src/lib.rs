@@ -1,4 +1,5 @@
 pub mod categorization;
+pub mod config;
 pub mod levenshtein;
 pub mod matching;
 pub mod memory;
@@ -8,4 +9,5 @@ pub use categorization::{
 };
 pub use levenshtein::levenshtein_distance;
 pub use matching::{HeuristicMatcher, MatchResult, MatchSource, MatchingEngine, MemoryMatcher};
-pub use memory::{MemoryStore, TranslationMemory};
+pub use config::{config_dir, ConfigError, PluginConfig};
+pub use memory::{MemoryError, MemoryStore, TranslationMemory};
