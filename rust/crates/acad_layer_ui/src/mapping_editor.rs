@@ -25,7 +25,7 @@ const SOURCE_X: f32 = 250.0;
 const TARGET_X: f32 = 620.0;
 const TARGET_STEP: f32 = 320.0;
 const MIN_ZOOM: f32 = 0.03;
-const MIN_LABEL_PX: f32 = 6.0;
+const MIN_LABEL_PX: f32 = 1.0;
 
 #[derive(Debug, Default)]
 pub struct MappingEditorEvent {
@@ -852,7 +852,7 @@ impl MappingEditor {
         painter.rect_filled(area, 0.0, CANVAS);
 
         let side_space = (area.width() * 0.15).clamp(168.0, 220.0);
-        let gap = 18.0;
+        let gap = 96.0;
         let column_width = ((area.width() - side_space * 2.0 - gap) * 0.5).max(120.0);
         let source_rect = Rect::from_min_size(
             Pos2::new(area.left() + side_space, area.top() + 16.0),
@@ -1061,8 +1061,10 @@ impl MappingEditor {
             }
             if self.dragging_source.as_deref() == Some(name.as_str()) {
                 if let Some(pointer) = ctx.input(|input| input.pointer.hover_pos()) {
-                    source_painter.line_segment(
-                        [Pos2::new(row.right(), row.center().y), pointer],
+                    paint_connection_curve(
+                        &source_painter,
+                        Pos2::new(row.right(), row.center().y),
+                        pointer,
                         Stroke::new(2.0, PURPLE),
                     );
                 }
@@ -1100,7 +1102,7 @@ impl MappingEditor {
             };
             let start = Pos2::new(source_row.right(), source_row.center().y);
             let end = Pos2::new(target_row.left(), target_row.center().y);
-            painter.line_segment([start, end], Stroke::new(1.5, color));
+            paint_connection_curve(&painter, start, end, Stroke::new(1.5, color));
             painter.circle_filled(start, 3.0, color);
             painter.circle_filled(end, 3.0, color);
         }
@@ -1450,7 +1452,7 @@ impl MappingEditor {
     }
 
     fn draw_group_headers(
-        &self,
+        &mut self,
         ui: &mut egui::Ui,
         painter: &Painter,
         canvas: Rect,
@@ -1532,6 +1534,22 @@ impl MappingEditor {
                     FontId::proportional(11.0 * self.zoom),
                     subtitle_color,
                 );
+            }
+            if self.zoom >= 0.4 {
+                let top_left = self.world_rect(canvas, x + 18.0, 104.0, 0.0, 0.0).min;
+                let width = ((right - x - 36.0) * self.zoom).min(260.0);
+                let field = Rect::from_min_size(top_left, Vec2::new(width, 24.0));
+                if canvas.contains_rect(field) {
+                    let (query, hint) = if is_target {
+                        (&mut self.target_query, "Search target layers")
+                    } else {
+                        (&mut self.source_query, "Search source layers")
+                    };
+                    ui.put(
+                        field,
+                        egui::TextEdit::singleline(query).hint_text(hint),
+                    );
+                }
             }
         }
         target_name_clicked
@@ -1886,11 +1904,13 @@ impl MappingEditor {
                                 .size(11.0)
                                 .color(Color32::from_rgb(120, 120, 120)),
                         );
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.source_query)
-                                .desired_width(130.0)
-                                .hint_text("Search source layers"),
-                        );
+                        if self.column_mode {
+                            ui.add(
+                                egui::TextEdit::singleline(&mut self.source_query)
+                                    .desired_width(130.0)
+                                    .hint_text("Search source layers"),
+                            );
+                        }
                         ui.add_space(4.0);
                         if ui
                             .add_sized([150.0, 24.0], egui::Button::new("Fit to View (F)"))
@@ -2045,7 +2065,7 @@ impl MappingEditor {
                                         .size(9.0)
                                         .color(Color32::from_gray(130)),
                                 );
-                                if !filters.is_empty() {
+                                if !filters.is_empty() && self.column_mode {
                                     ui.add(
                                         egui::TextEdit::singleline(&mut self.target_query)
                                             .desired_width(control_width)
@@ -2278,6 +2298,17 @@ fn contains_folded(text: &str, query: &str) -> bool {
 
 fn interpolate_rect(from: Rect, to: Rect, amount: f32) -> Rect {
     Rect::from_min_max(from.min.lerp(to.min, amount), from.max.lerp(to.max, amount))
+}
+
+/// Draws the same horizontal-tangent S-curve that node mode uses for connections.
+fn paint_connection_curve(painter: &Painter, start: Pos2, end: Pos2, stroke: Stroke) {
+    let handle = Vec2::new((end.x - start.x) * 0.45, 0.0);
+    painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
+        [start, start + handle, end - handle, end],
+        false,
+        Color32::TRANSPARENT,
+        stroke,
+    ));
 }
 
 fn cubic(a: Pos2, b: Pos2, c: Pos2, d: Pos2, t: f32) -> Pos2 {

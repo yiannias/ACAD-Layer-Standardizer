@@ -6,3 +6,9 @@ members = [
     "crates/acad_layer_ui",
 ]
 resolver = "2"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = true
