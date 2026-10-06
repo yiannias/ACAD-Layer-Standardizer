@@ -62,6 +62,7 @@ struct LayerStandardizerApp {
     standard_layers: Vec<String>,
     matches: Vec<MatchResult>,
     status_message: String,
+    error_message: Option<String>,
     owner_hwnd: Option<isize>,
     owner_attached: bool,
     apply_pending: bool,
@@ -107,6 +108,7 @@ impl LayerStandardizerApp {
             owner_hwnd,
             owner_attached: false,
             apply_pending: false,
+            error_message: None,
             ipc_sender,
             ipc_results,
             drawing_name: String::new(),
@@ -256,7 +258,8 @@ impl eframe::App for LayerStandardizerApp {
                 }
                 Ok(IpcResponse::Error(message)) | Err(message) => {
                     self.apply_pending = false;
-                    self.status_message = message;
+                    self.status_message = message.clone();
+                    self.error_message = Some(message);
                 }
                 Ok(_) => {
                     self.status_message = "AutoCAD returned an unexpected IPC response.".to_string()
@@ -296,11 +299,13 @@ impl eframe::App for LayerStandardizerApp {
                 self.mapping_editor.property_settings(),
             );
             let sender = self.ipc_sender.clone();
+            let repaint = ui.ctx().clone();
             self.apply_pending = true;
             self.status_message = "Applying mappings in AutoCAD…".to_string();
             std::thread::spawn(move || {
                 let result = acad_layer_ipc::apply_plan(request.0, request.1, request.2, request.3, request.4);
                 let _ = sender.send(result);
+                repaint.request_repaint();
             });
         }
 
@@ -311,11 +316,13 @@ impl eframe::App for LayerStandardizerApp {
                 self.empty_layers.iter().cloned().collect::<Vec<_>>(),
             );
             let sender = self.ipc_sender.clone();
+            let repaint = ui.ctx().clone();
             self.apply_pending = true;
             self.status_message = "Removing empty layers in AutoCAD…".to_string();
             std::thread::spawn(move || {
                 let result = acad_layer_ipc::purge_empty_layers(request.0, request.1, request.2);
                 let _ = sender.send(result);
+                repaint.request_repaint();
             });
         }
 
@@ -329,13 +336,31 @@ impl eframe::App for LayerStandardizerApp {
             });
             if let Some(path) = selected {
                 let sender = self.ipc_sender.clone();
+                let repaint = ui.ctx().clone();
                 self.apply_pending = true;
                 self.status_message = "Loading standard drawing in AutoCAD…".to_string();
                 std::thread::spawn(move || {
                     let result = acad_layer_ipc::load_standard(path.to_string_lossy().into_owned());
                     let _ = sender.send(result);
+                    repaint.request_repaint();
                 });
             }
+        }
+
+        if let Some(message) = self.error_message.clone() {
+            egui::Window::new("AutoCAD could not complete that")
+                .collapsible(false)
+                .resizable(false)
+                .order(egui::Order::Tooltip)
+                .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+                .show(ui.ctx(), |ui| {
+                    ui.set_max_width(420.0);
+                    ui.label(message);
+                    ui.add_space(8.0);
+                    if ui.button("OK").clicked() {
+                        self.error_message = None;
+                    }
+                });
         }
 
         self.capture_user_preferences(ui.ctx());
@@ -487,17 +512,19 @@ fn main() -> eframe::Result<()> {
     };
 
     let (ipc_tx, ipc_results) = std::sync::mpsc::channel();
-    if owner_hwnd.is_some() {
-        let snapshot_sender = ipc_tx.clone();
-        std::thread::spawn(move || {
-            let _ = snapshot_sender.send(acad_layer_ipc::request_drawing_snapshot());
-        });
-    }
 
     eframe::run_native(
         "AutoCAD Layer Standardizer",
         options,
-        Box::new(move |_cc| {
+        Box::new(move |cc| {
+            if owner_hwnd.is_some() {
+                let snapshot_sender = ipc_tx.clone();
+                let repaint = cc.egui_ctx.clone();
+                std::thread::spawn(move || {
+                    let _ = snapshot_sender.send(acad_layer_ipc::request_drawing_snapshot());
+                    repaint.request_repaint();
+                });
+            }
             Ok(Box::new(LayerStandardizerApp::new(
                 owner_hwnd,
                 ipc_tx,
