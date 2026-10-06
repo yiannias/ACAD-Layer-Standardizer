@@ -24,6 +24,15 @@ const COLUMN_NODE_HEIGHT: f32 = 30.0;
 const SOURCE_X: f32 = 250.0;
 const TARGET_X: f32 = 620.0;
 const TARGET_STEP: f32 = 320.0;
+const SOURCE_STEP: f32 = 320.0;
+/// Node mode never stacks more than this many nodes in one column, on either side.
+const MAX_NODE_COLUMN_HEIGHT: usize = 25;
+/// Lines that pass under other columns of nodes are drawn this much of their color.
+const PASS_UNDER_DARKEN: f32 = 0.7;
+/// The node-mode filter boxes are a fixed screen size, whatever the zoom.
+const FILTER_FIELD_WIDTH: f32 = 260.0;
+const FILTER_FIELD_HEIGHT: f32 = 28.0;
+const FILTER_FIELD_GAP: f32 = 12.0;
 const MIN_ZOOM: f32 = 0.03;
 const MIN_LABEL_PX: f32 = 1.0;
 
@@ -393,8 +402,7 @@ impl MappingEditor {
         let allow_layout_animation = self.last_view_transform == Some(transform);
         self.last_view_transform = Some(transform);
         let mut source_positions = self.source_positions(&visible_sources, canvas_rect);
-        let mut target_positions =
-            self.target_positions(&visible_targets, visible_sources.len(), canvas_rect);
+        let mut target_positions = self.target_positions(&visible_targets, canvas_rect);
         self.animate_positions(&mut source_positions, true, allow_layout_animation, ctx);
         self.animate_positions(&mut target_positions, false, allow_layout_animation, ctx);
         let target_rects_by_name = target_positions
@@ -633,6 +641,7 @@ impl MappingEditor {
             }
         }
 
+        self.draw_filter_fields(ui, canvas_rect);
         self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
         let choose_standard =
             self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
@@ -761,17 +770,17 @@ impl MappingEditor {
 
     /// World-space bounds of the source and target groups, matching `draw_group_headers`.
     fn content_bounds(sources: usize, targets: usize) -> Rect {
-        let columns = targets.div_ceil(sources.max(20)).clamp(1, 5);
-        let target_rows = targets.div_ceil(columns).max(1);
+        let (source_columns, source_rows) = column_layout(sources);
+        let (target_columns, target_rows) = column_layout(targets);
         let right = if targets > 0 {
-            TARGET_X + (columns - 1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0
+            TARGET_X + (target_columns - 1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0
         } else {
             SOURCE_X + NODE_WIDTH + 24.0
         };
-        let rows = sources.max(target_rows).max(1);
+        let rows = source_rows.max(target_rows);
         let bottom = 150.0 + (rows - 1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
         Rect::from_min_max(
-            Pos2::new(SOURCE_X - 24.0, 40.0),
+            Pos2::new(source_group_left(source_columns), 40.0),
             Pos2::new(right, bottom.max(140.0)),
         )
     }
@@ -823,18 +832,21 @@ impl MappingEditor {
     }
 
     fn source_positions(&self, visible: &[usize], canvas: Rect) -> HashMap<usize, Rect> {
+        let (columns, rows) = column_layout(visible.len());
         visible
             .iter()
             .enumerate()
-            .filter_map(|(row, index)| {
+            .map(|(position, index)| {
+                let (column, row) = (position / rows, position % rows);
+                let x = SOURCE_X - (columns - 1 - column) as f32 * SOURCE_STEP;
                 let rect = self.world_rect(
                     canvas,
-                    SOURCE_X,
+                    x,
                     150.0 + row as f32 * ROW_STEP,
                     NODE_WIDTH,
                     NODE_HEIGHT,
                 );
-                Some((*index, rect))
+                (*index, rect)
             })
             .collect()
     }
@@ -945,7 +957,7 @@ impl MappingEditor {
                     if drop_highlight {
                         Color32::from_rgb(131, 184, 228)
                     } else if selected {
-                        PAIR_HIGHLIGHT
+                        highlight_color(color)
                     } else if paired_count > 0 {
                         color
                     } else {
@@ -1032,7 +1044,7 @@ impl MappingEditor {
                     if self.selected_sources.contains(name) {
                         Color32::from_rgb(190, 170, 255)
                     } else if paired_to_selected {
-                        PAIR_HIGHLIGHT
+                        highlight_color(color)
                     } else if empty {
                         Color32::from_rgb(255, 80, 80)
                     } else if target.is_some() {
@@ -1378,21 +1390,13 @@ impl MappingEditor {
         }
     }
 
-    fn target_positions(
-        &self,
-        visible: &[usize],
-        visible_source_count: usize,
-        canvas: Rect,
-    ) -> HashMap<usize, Rect> {
-        let column_height = visible_source_count.max(20);
-        let columns = visible.len().div_ceil(column_height).clamp(1, 5);
-        let rows = visible.len().div_ceil(columns).max(1);
+    fn target_positions(&self, visible: &[usize], canvas: Rect) -> HashMap<usize, Rect> {
+        let (_, rows) = column_layout(visible.len());
         visible
             .iter()
             .enumerate()
-            .filter_map(|(position, index)| {
-                let column = position / rows;
-                let row = position % rows;
+            .map(|(position, index)| {
+                let (column, row) = (position / rows, position % rows);
                 let rect = self.world_rect(
                     canvas,
                     TARGET_X + column as f32 * TARGET_STEP,
@@ -1400,7 +1404,7 @@ impl MappingEditor {
                     NODE_WIDTH,
                     NODE_HEIGHT,
                 );
-                Some((*index, rect))
+                (*index, rect)
             })
             .collect()
     }
@@ -1478,20 +1482,20 @@ impl MappingEditor {
         sources: &[usize],
         targets: &[usize],
     ) -> bool {
+        let (source_columns, source_rows) = column_layout(sources.len());
+        let (target_columns, target_rows) = column_layout(targets.len());
+        let source_left = source_group_left(source_columns);
         let source_right = SOURCE_X + NODE_WIDTH + 24.0;
         let source_bottom =
-            150.0 + sources.len().saturating_sub(1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
-        let column_height = sources.len().max(20);
-        let target_columns = targets.len().div_ceil(column_height).clamp(1, 5);
+            150.0 + source_rows.saturating_sub(1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
         let target_right =
             TARGET_X + target_columns.saturating_sub(1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0;
-        let target_rows = targets.len().div_ceil(target_columns.max(1));
         let target_bottom =
             150.0 + target_rows.saturating_sub(1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
         let mut target_name_clicked = false;
         for (x, right, bottom, title, subtitle, is_target) in [
             (
-                SOURCE_X - 24.0,
+                source_left,
                 source_right,
                 source_bottom,
                 "Source",
@@ -1552,21 +1556,16 @@ impl MappingEditor {
                     subtitle_color,
                 );
             }
-            if self.zoom >= 0.4 {
-                let top_left = self.world_rect(canvas, x + 18.0, 104.0, 0.0, 0.0).min;
-                let width = ((right - x - 36.0) * self.zoom).min(260.0);
-                let field = Rect::from_min_size(top_left, Vec2::new(width, 24.0));
-                if canvas.contains_rect(field) {
-                    let (query, hint) = if is_target {
-                        (&mut self.target_query, "Filter target layers")
-                    } else {
-                        (&mut self.source_query, "Filter source layers")
-                    };
-                    filter_field(ui, field, query, hint);
-                }
-            }
         }
         target_name_clicked
+    }
+
+    /// Source/Target filter boxes: fixed size and screen position (see
+    /// `filter_field_rects`), drawn after the nodes so they stay on top.
+    fn draw_filter_fields(&mut self, ui: &mut egui::Ui, canvas: Rect) {
+        let [source, target] = filter_field_rects(canvas);
+        filter_field(ui, source, &mut self.source_query, "Filter source layers");
+        filter_field(ui, target, &mut self.target_query, "Filter target layers");
     }
 
     fn draw_connections(
@@ -1577,6 +1576,11 @@ impl MappingEditor {
         sources: &HashMap<usize, Rect>,
         target_rects_by_name: &HashMap<String, Rect>,
     ) {
+        let max_source_right = sources.values().map(|r| r.right()).fold(f32::MIN, f32::max);
+        let min_target_left = target_rects_by_name
+            .values()
+            .map(|r| r.left())
+            .fold(f32::MAX, f32::min);
         for (source_index, source_rect) in sources {
             let Some(source_name) = source_names.get(*source_index).map(String::as_str) else {
                 continue;
@@ -1608,11 +1612,23 @@ impl MappingEditor {
                 let c1 = start + Vec2::new((end.x - start.x) * 0.45, 0.0);
                 let c2 = end - Vec2::new((end.x - start.x) * 0.45, 0.0);
                 let points = [start, c1, c2, end];
+                // Lines between the adjacent columns keep the node outline color; lines
+                // that run under other nodes are darker so they do not blend into them.
+                let line_color = if line_passes_under(
+                    source_rect.right(),
+                    max_source_right,
+                    target_rect.left(),
+                    min_target_left,
+                ) {
+                    darken(color, PASS_UNDER_DARKEN)
+                } else {
+                    color
+                };
                 painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
                     points,
                     false,
                     Color32::TRANSPARENT,
-                    Stroke::new(1.5, color),
+                    Stroke::new(1.5, line_color),
                 ));
             }
         }
@@ -1751,7 +1767,7 @@ impl MappingEditor {
                 if selected {
                     Color32::from_rgb(190, 170, 255)
                 } else if pair_highlighted {
-                    PAIR_HIGHLIGHT
+                    highlight_color(color)
                 } else if empty {
                     Color32::from_rgb(255, 80, 80)
                 } else if connected {
@@ -2189,6 +2205,63 @@ impl MappingEditor {
     fn draw_canvas_help(&self, _ctx: &egui::Context, _rect: Rect) {}
 }
 
+/// Outline color for a node whose pair is highlighted (selected target, or the
+/// sources paired to it). Manual matches keep their purple; everything else uses
+/// the orange pair highlight.
+fn highlight_color(match_color: Color32) -> Color32 {
+    if match_color == PURPLE {
+        PURPLE
+    } else {
+        PAIR_HIGHLIGHT
+    }
+}
+
+/// Splits `count` nodes into the fewest columns of at most
+/// `MAX_NODE_COLUMN_HEIGHT`, balanced so no column is much shorter than the rest.
+/// Returns `(columns, rows_per_column)`.
+fn column_layout(count: usize) -> (usize, usize) {
+    let columns = count.div_ceil(MAX_NODE_COLUMN_HEIGHT).max(1);
+    (columns, count.div_ceil(columns).max(1))
+}
+
+/// World x of the left edge of the Source group: its last column sits beside the
+/// Target group, so extra columns grow to the left.
+fn source_group_left(columns: usize) -> f32 {
+    SOURCE_X - 24.0 - columns.saturating_sub(1) as f32 * SOURCE_STEP
+}
+
+fn darken(color: Color32, factor: f32) -> Color32 {
+    let scale = |channel: u8| (channel as f32 * factor).round() as u8;
+    Color32::from_rgb(scale(color.r()), scale(color.g()), scale(color.b()))
+}
+
+/// A line has to pass under other nodes when its source is not in the column beside
+/// the targets or its target is not in the column beside the sources.
+fn line_passes_under(
+    source_right: f32,
+    max_source_right: f32,
+    target_left: f32,
+    min_target_left: f32,
+) -> bool {
+    source_right < max_source_right - 1.0 || target_left > min_target_left + 1.0
+}
+
+/// Screen rectangles of the Source and Target filter boxes: fixed size, centred at the
+/// top of the canvas, so zooming never resizes them or makes them collide.
+fn filter_field_rects(canvas: Rect) -> [Rect; 2] {
+    let total = FILTER_FIELD_WIDTH * 2.0 + FILTER_FIELD_GAP;
+    let left = canvas.center().x - total / 2.0;
+    let top = canvas.top() + 14.0;
+    let size = Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT);
+    [
+        Rect::from_min_size(Pos2::new(left, top), size),
+        Rect::from_min_size(
+            Pos2::new(left + FILTER_FIELD_WIDTH + FILTER_FIELD_GAP, top),
+            size,
+        ),
+    ]
+}
+
 /// A text filter box with a clearly visible light-grey frame.
 fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
@@ -2198,7 +2271,9 @@ fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str) {
     visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_gray(190));
     child.add_sized(
         rect.size(),
-        egui::TextEdit::singleline(query).hint_text(hint),
+        egui::TextEdit::singleline(query)
+            .hint_text(hint)
+            .font(FontId::proportional(13.0)),
     );
 }
 
@@ -2340,4 +2415,117 @@ fn distance_to_segment(point: Pos2, start: Pos2, end: Pos2) -> f32 {
     }
     let t = ((point - start).dot(delta) / length_squared).clamp(0.0, 1.0);
     point.distance(start + delta * t)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn unit_editor() -> MappingEditor {
+        let mut editor = MappingEditor::default();
+        editor.zoom = 1.0;
+        editor.pan = Vec2::ZERO;
+        editor
+    }
+
+    fn canvas() -> Rect {
+        Rect::from_min_size(Pos2::ZERO, Vec2::new(10_000.0, 10_000.0))
+    }
+
+    fn indices(count: usize) -> Vec<usize> {
+        (0..count).collect()
+    }
+
+    fn tallest_column(rects: &HashMap<usize, Rect>) -> usize {
+        let mut per_column: HashMap<i32, usize> = HashMap::new();
+        for rect in rects.values() {
+            *per_column.entry(rect.left().round() as i32).or_default() += 1;
+        }
+        per_column.values().copied().max().unwrap_or(0)
+    }
+
+    fn column_count(rects: &HashMap<usize, Rect>) -> usize {
+        rects
+            .values()
+            .map(|r| r.left().round() as i32)
+            .collect::<HashSet<_>>()
+            .len()
+    }
+
+    #[test]
+    fn column_layout_never_exceeds_the_maximum_height_and_stays_balanced() {
+        assert_eq!(column_layout(0), (1, 1));
+        assert_eq!(column_layout(25), (1, 25));
+        assert_eq!(column_layout(26), (2, 13));
+        assert_eq!(column_layout(129), (6, 22));
+        assert_eq!(column_layout(321), (13, 25));
+        for count in 1..=2000 {
+            let (columns, rows) = column_layout(count);
+            assert!(rows <= MAX_NODE_COLUMN_HEIGHT, "{count}: {rows} rows");
+            assert!(columns * rows >= count, "{count}: layout cannot hold every node");
+        }
+    }
+
+    #[test]
+    fn source_nodes_wrap_into_short_columns_with_the_last_column_next_to_the_target() {
+        let editor = unit_editor();
+        let rects = editor.source_positions(&indices(129), canvas());
+        assert_eq!(rects.len(), 129);
+        assert_eq!(column_count(&rects), 6);
+        assert!(tallest_column(&rects) <= MAX_NODE_COLUMN_HEIGHT);
+        let rightmost = rects.values().map(|r| r.right()).fold(f32::MIN, f32::max);
+        assert_eq!(rightmost, SOURCE_X + NODE_WIDTH, "the column beside the target does not move");
+    }
+
+    #[test]
+    fn target_nodes_wrap_into_short_columns() {
+        let editor = unit_editor();
+        let rects = editor.target_positions(&indices(321), canvas());
+        assert_eq!(rects.len(), 321);
+        assert_eq!(column_count(&rects), 13);
+        assert!(tallest_column(&rects) <= MAX_NODE_COLUMN_HEIGHT);
+        let leftmost = rects.values().map(|r| r.left()).fold(f32::MAX, f32::min);
+        assert_eq!(leftmost, TARGET_X);
+    }
+
+    #[test]
+    fn content_bounds_cover_every_node_in_both_groups() {
+        let editor = unit_editor();
+        let sources = editor.source_positions(&indices(129), canvas());
+        let targets = editor.target_positions(&indices(321), canvas());
+        let bounds = MappingEditor::content_bounds(129, 321);
+        for rect in sources.values().chain(targets.values()) {
+            assert!(bounds.contains_rect(*rect), "{rect:?} outside {bounds:?}");
+        }
+    }
+
+    #[test]
+    fn a_line_between_the_adjacent_columns_keeps_its_color_and_others_are_darker() {
+        assert!(!line_passes_under(530.0, 530.0, 620.0, 620.0));
+        assert!(line_passes_under(210.0, 530.0, 620.0, 620.0), "source behind another column");
+        assert!(line_passes_under(530.0, 530.0, 940.0, 620.0), "target behind another column");
+        let darker = darken(Color32::from_rgb(100, 200, 50), 0.7);
+        assert_eq!((darker.r(), darker.g(), darker.b()), (70, 140, 35));
+    }
+
+    #[test]
+    fn filter_boxes_have_a_fixed_size_and_never_overlap() {
+        for width in [700.0, 1200.0, 2400.0] {
+            let canvas = Rect::from_min_size(Pos2::new(0.0, 0.0), Vec2::new(width, 800.0));
+            let [source, target] = filter_field_rects(canvas);
+            assert_eq!(source.size(), target.size());
+            assert_eq!(source.size(), Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT));
+            assert!(source.right() < target.left(), "boxes must not overlap");
+            assert!((canvas.center().x - (source.left() + target.right()) / 2.0).abs() < 0.5);
+            assert!(canvas.contains_rect(source) && canvas.contains_rect(target));
+        }
+    }
+
+    #[test]
+    fn a_highlighted_manual_match_stays_purple_and_other_matches_use_the_pair_highlight() {
+        assert_eq!(highlight_color(PURPLE), PURPLE);
+        for color in [GREEN, MEMORY_BLUE, YELLOW, GREY] {
+            assert_eq!(highlight_color(color), PAIR_HIGHLIGHT);
+        }
+    }
 }
