@@ -42,6 +42,8 @@ Define the slim IPC surface between the Rust app and the AutoCAD connector.
 
 ### Phase 2: Move categorization, memory, and config to Rust
 
+**Status:** implemented on `main`, pending manual verification in AutoCAD (see `docs/superpowers/plans/2026-10-06-phase2-rust-owns-data.md`, Task 5 step 2). The C# categorizer, memory store, config, and WPF editor are intentionally still present for the WPF fallback, `LSR`, and `SettingsCommand`; they are removed in Phase 4. Cross-language parity is pinned by goldens in `tests/parity/`.
+
 - Rust loads the layer dictionary, categorizes the standard's layers, and owns the translation-memory file (read/write, import/export used by the Settings command).
 - Rust reads and writes plugin config and user preferences.
 - The connector stops sending categories, memory mappings, and hidden-target lists.

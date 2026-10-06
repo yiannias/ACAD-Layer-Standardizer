@@ -172,3 +172,8 @@ First run the owned-window feasibility spike in a specifically approved GUI batc
 ## IPC protocol note (protocol version 3)
 
 The Rust app and the AutoCAD connector exchange one JSON object per line over the named pipe `acad_layer_standardizer`. Besides the snapshot, apply, purge, and load-standard messages, `GetActiveDrawing { known_revision }` returns the active drawing's session `drawing_id`, display name, and a layer fingerprint with a revision counter (`ActiveDrawing`), `ActiveDrawingUnchanged` when the revision matches, or `NoActiveDrawing`. Apply and Purge may carry `drawing_id`; when present it takes precedence over the drawing name, which remains the fallback for older clients. The connector replies with the protocol version the request used, and accepts versions 2 and 3.
+
+## Data ownership (Phase 2)
+
+The Rust window reads `%APPDATA%\AcLayerStandardizer\config.json`, `layer_dictionary.json`, and the translation memory itself, builds the target filters from the dictionary, and persists the chosen standard and "Apply & Remember" mappings. The connector only supplies the active drawing's layers (`GetDrawingSnapshot`, now without standards, categories, or memory) and the standard-layer names read from a template DWG (`GetStandardLayers`, which also caches the layers' properties for Apply). Behaviour parity with the C# implementations is pinned by shared golden files in `tests/parity/`, asserted by both test suites.
+
