@@ -56,6 +56,20 @@ fn load_preferences() -> UserPreferences {
         .unwrap_or_default()
 }
 
+/// Template drawings the user can choose as the standard.
+const STANDARD_FILE_EXTENSIONS: [&str; 3] = ["dwg", "dxf", "dws"];
+
+/// Checks the file exists (off the UI thread: the template is often on a network
+/// drive that may be slow or unreachable) before asking AutoCAD to read it.
+fn fetch_standard(path: String) -> Result<IpcResponse, String> {
+    if !std::path::Path::new(&path).exists() {
+        return Err(format!(
+            "Reference file unavailable: {path}. Click the Target header to choose one."
+        ));
+    }
+    acad_layer_ipc::get_standard_layers(path)
+}
+
 #[allow(dead_code)]
 struct LayerStandardizerApp {
     dark_theme: ThemePalette,
@@ -66,6 +80,8 @@ struct LayerStandardizerApp {
     matches: Vec<MatchResult>,
     status_message: String,
     error_message: Option<String>,
+    /// When set, dismissing the error dialog also closes the window.
+    close_after_error: bool,
     owner_hwnd: Option<isize>,
     owner_attached: bool,
     apply_pending: bool,
@@ -122,6 +138,7 @@ impl LayerStandardizerApp {
             owner_hwnd,
             owner_attached: false,
             apply_pending: false,
+            close_after_error: false,
             error_message: (!startup.notes.is_empty()).then(|| startup.notes.join("\n\n")),
             ipc_sender,
             ipc_results,
@@ -276,14 +293,15 @@ impl eframe::App for LayerStandardizerApp {
                             (Some(warning), _) => data::MemoryOutcome::Failed(warning),
                             (None, outcome) => outcome,
                         };
-                        if let data::MemoryOutcome::Failed(_) = outcome {
-                            keep_open = true;
-                        }
+                        keep_open = !data::close_after_apply(&outcome);
                         self.status_message = data::applied_status_message(count, outcome);
                         if keep_open {
-                            // The Apply itself succeeded; keep the window up so the
-                            // user sees that the memory was not saved.
+                            // The Apply itself succeeded, so the window is stale: keep it
+                            // up only so the user sees the warning, with Apply and Purge
+                            // disabled, then close it when they press OK.
                             self.error_message = Some(self.status_message.clone());
+                            self.close_after_error = true;
+                            self.apply_pending = true;
                         }
                     }
                     if !keep_open {
@@ -405,7 +423,7 @@ impl eframe::App for LayerStandardizerApp {
             let selected = frame.winit_window().and_then(|window| {
                 rfd::FileDialog::new()
                     .set_title("Choose Standard Drawing")
-                    .add_filter("AutoCAD drawings", &["dwg", "dxf"])
+                    .add_filter("AutoCAD drawings", &STANDARD_FILE_EXTENSIONS)
                     .set_parent(window)
                     .pick_file()
             });
@@ -423,9 +441,15 @@ impl eframe::App for LayerStandardizerApp {
                 .show(ui.ctx(), |ui| {
                     ui.set_max_width(420.0);
                     ui.label(message);
+                    if self.close_after_error {
+                        ui.label("This window will close when you press OK.");
+                    }
                     ui.add_space(8.0);
                     if ui.button("OK").clicked() {
                         self.error_message = None;
+                        if self.close_after_error {
+                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        }
                     }
                 });
         }
@@ -494,12 +518,7 @@ impl LayerStandardizerApp {
         if path.is_empty() {
             return;
         }
-        if std::path::Path::new(&path).exists() {
-            self.request_standard(ctx, path);
-        } else {
-            self.status_message =
-                "Reference file unavailable. Click the Target header to choose one.".to_string();
-        }
+        self.request_standard(ctx, path);
     }
 
     fn request_standard(&mut self, ctx: &egui::Context, path: String) {
@@ -508,7 +527,7 @@ impl LayerStandardizerApp {
         self.apply_pending = true;
         self.status_message = "Loading standard drawing in AutoCAD…".to_string();
         std::thread::spawn(move || {
-            let result = acad_layer_ipc::get_standard_layers(path);
+            let result = fetch_standard(path);
             let _ = sender.send(result);
             repaint.request_repaint();
         });
@@ -636,4 +655,22 @@ fn main() -> eframe::Result<()> {
             )))
         }),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn standard_picker_accepts_dws_templates() {
+        assert!(STANDARD_FILE_EXTENSIONS.contains(&"dws"));
+        assert!(STANDARD_FILE_EXTENSIONS.contains(&"dwg"));
+    }
+
+    #[test]
+    fn fetch_standard_reports_a_missing_file_without_asking_autocad() {
+        let error = fetch_standard("Z:/definitely/not/here.dws".to_string()).unwrap_err();
+        assert!(error.contains("unavailable"), "{error}");
+        assert!(error.contains("here.dws"), "{error}");
+    }
 }

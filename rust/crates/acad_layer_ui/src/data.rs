@@ -51,6 +51,13 @@ pub enum MemoryOutcome {
     Failed(String),
 }
 
+/// After a confirmed Apply the window normally closes. When the memory save failed it
+/// stays up until the user has seen the warning (the drawing is already changed, so
+/// the window must not be used for another Apply).
+pub fn close_after_apply(memory: &MemoryOutcome) -> bool {
+    !matches!(memory, MemoryOutcome::Failed(_))
+}
+
 pub fn applied_status_message(count: usize, memory: MemoryOutcome) -> String {
     match memory {
         MemoryOutcome::NotRequested => format!("Applied {count} mappings."),
@@ -337,5 +344,12 @@ mod tests {
         assert!(text.contains("disk full"), "{text}");
         assert_eq!(applied_status_message(3, MemoryOutcome::Saved), "Applied 3 mappings and saved them to memory.");
         assert_eq!(applied_status_message(1, MemoryOutcome::NotRequested), "Applied 1 mappings.");
+    }
+
+    #[test]
+    fn a_failed_memory_save_does_not_close_the_window_before_the_user_sees_it() {
+        assert!(!close_after_apply(&MemoryOutcome::Failed("disk full".into())));
+        assert!(close_after_apply(&MemoryOutcome::Saved));
+        assert!(close_after_apply(&MemoryOutcome::NotRequested));
     }
 }
