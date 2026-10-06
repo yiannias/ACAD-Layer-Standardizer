@@ -17,6 +17,8 @@ const NODE_HEIGHT: f32 = 30.0;
 const SOURCE_X: f32 = 250.0;
 const TARGET_X: f32 = 580.0;
 const TARGET_STEP: f32 = 320.0;
+const MIN_ZOOM: f32 = 0.03;
+const MIN_LABEL_PX: f32 = 6.0;
 
 pub struct MappingEditor {
     pub confidence: f64,
@@ -39,6 +41,7 @@ pub struct MappingEditor {
     pan: Vec2,
     dragging_source: Option<String>,
     pointer_is_panning: bool,
+    fit_requested: bool,
 }
 
 impl Default for MappingEditor {
@@ -64,6 +67,7 @@ impl Default for MappingEditor {
             pan: Vec2::new(180.0, 40.0),
             dragging_source: None,
             pointer_is_panning: false,
+            fit_requested: true,
         }
     }
 }
@@ -111,6 +115,20 @@ impl MappingEditor {
 
         let visible_sources = self.visible_sources(source_layers, matches);
         let visible_targets = self.visible_targets(standard_layers, target_filters);
+        let wants_fit_key = ctx.input(|i| i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::Home))
+            && !ctx.egui_wants_keyboard_input();
+        if wants_fit_key {
+            self.fit_requested = true;
+        }
+        if self.fit_requested && (!visible_sources.is_empty() || !visible_targets.is_empty()) {
+            self.fit_to_content(
+                canvas_rect,
+                visible_sources.len(),
+                visible_targets.len(),
+                !target_filters.is_empty(),
+            );
+            self.fit_requested = false;
+        }
         let source_positions = self.source_positions(&visible_sources, canvas_rect);
         let target_positions = self.target_positions(&visible_targets, canvas_rect);
 
@@ -238,9 +256,46 @@ impl MappingEditor {
                 .input(|input| input.pointer.hover_pos())
                 .unwrap_or(rect.center());
             let before = (pointer - rect.min - self.pan) / self.zoom;
-            self.zoom = (self.zoom * (scroll * 0.001).exp()).clamp(0.08, 1.6);
+            self.zoom = (self.zoom * (scroll * 0.001).exp()).clamp(MIN_ZOOM, 1.6);
             self.pan = pointer - rect.min - before * self.zoom;
         }
+    }
+
+    /// World-space bounds of the source and target groups, matching `draw_group_headers`.
+    fn content_bounds(sources: usize, targets: usize) -> Rect {
+        let columns = 5usize.min(targets.max(1));
+        let target_rows = targets.div_ceil(columns).max(1);
+        let right = if targets > 0 {
+            TARGET_X + (columns - 1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0
+        } else {
+            SOURCE_X + NODE_WIDTH + 24.0
+        };
+        let rows = sources.max(target_rows).max(1);
+        let bottom = 150.0 + (rows - 1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
+        Rect::from_min_max(
+            Pos2::new(SOURCE_X - 24.0, 40.0),
+            Pos2::new(right, bottom.max(140.0)),
+        )
+    }
+
+    /// Centers and scales the view so all content is visible, clear of the floating panels.
+    fn fit_to_content(&mut self, canvas: Rect, sources: usize, targets: usize, has_filters: bool) {
+        let bounds = Self::content_bounds(sources, targets);
+        let mut usable = canvas.shrink(16.0);
+        usable.min.x += 190.0;
+        if has_filters {
+            usable.max.x -= 210.0;
+        }
+        if usable.width() < 100.0 || usable.height() < 100.0 {
+            usable = canvas;
+        }
+        let zoom = (usable.width() / bounds.width())
+            .min(usable.height() / bounds.height())
+            .clamp(MIN_ZOOM, 1.0);
+        self.zoom = zoom;
+        self.pan = usable.min - canvas.min
+            + (usable.size() - bounds.size() * zoom) / 2.0
+            - bounds.min.to_vec2() * zoom;
     }
 
     fn draw_grid(&self, painter: &Painter, rect: Rect) {
@@ -362,17 +417,19 @@ impl MappingEditor {
                 title_pos,
                 Align2::LEFT_TOP,
                 title,
-                FontId::proportional(18.0 * self.zoom),
+                FontId::proportional((18.0 * self.zoom).max(12.0)),
                 Color32::from_rgb(225, 225, 225),
             );
             let sub_pos = self.world_rect(canvas, x + 18.0, 77.0, 220.0, 20.0).min;
-            painter.text(
-                sub_pos,
-                Align2::LEFT_TOP,
-                subtitle,
-                FontId::proportional(11.0 * self.zoom),
-                Color32::from_rgb(145, 145, 145),
-            );
+            if 11.0 * self.zoom >= MIN_LABEL_PX {
+                painter.text(
+                    sub_pos,
+                    Align2::LEFT_TOP,
+                    subtitle,
+                    FontId::proportional(11.0 * self.zoom),
+                    Color32::from_rgb(145, 145, 145),
+                );
+            }
         }
     }
 
@@ -533,13 +590,16 @@ impl MappingEditor {
             (5.0 * self.zoom).max(2.0),
             color,
         );
-        painter.text(
-            rect.center(),
-            Align2::CENTER_CENTER,
-            name,
-            FontId::proportional((12.0 * self.zoom).max(7.0)),
-            Color32::from_rgb(220, 220, 220),
-        );
+        let font_size = 12.0 * self.zoom;
+        if font_size >= MIN_LABEL_PX {
+            painter.with_clip_rect(rect.shrink(2.0)).text(
+                rect.center(),
+                Align2::CENTER_CENTER,
+                name,
+                FontId::proportional(font_size),
+                Color32::from_rgb(220, 220, 220),
+            );
+        }
         let _ = ui;
     }
 
@@ -650,6 +710,12 @@ impl MappingEditor {
                                 .color(Color32::from_rgb(120, 120, 120)),
                         );
                         ui.add_space(4.0);
+                        if ui
+                            .add_sized([150.0, 24.0], egui::Button::new("Fit to View (F)"))
+                            .clicked()
+                        {
+                            self.fit_requested = true;
+                        }
                         ui.add_space(8.0);
                         filter_button(ui, "Exact Match", GREEN, &mut self.show_exact);
                         filter_button(ui, "Memory Match", BLUE, &mut self.show_memory);
