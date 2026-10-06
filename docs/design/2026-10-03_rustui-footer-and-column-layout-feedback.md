@@ -1,0 +1,5 @@
+# RustUI footer and Column layout feedback
+
+Chris reports the Apply buttons look better but are too rounded; keep the Node/Column switch pill-shaped and make action buttons rounded rectangles. Refine footer vertical centering so the help/status text block and mode/action controls sit centered together within the floating footer panel. Column mode vertical layout remains wrong per the second annotated capture; inspect the list and Target Filter geometry and correct the actual alignment/spacing issue shown. The red markup is feedback, not a specification for exact dimensions.
+
+Implemented: footer help/status and controls now share one horizontally centered row group; action buttons use rounded-rectangle corners while the mode switch remains pill-shaped. Column rows render only above the floating footer, preventing the last visible rows from being covered. cargo check, optimized release build, installer compilation, and git diff --check succeeded. Visual review remains for Chris in AutoCAD.

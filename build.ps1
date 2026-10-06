@@ -24,7 +24,7 @@ $BundleDir = Join-Path $SolutionRoot $BundleName
 # Single source of truth for the app version -- keep in sync with the
 # installer's #define MyAppVersion (installer/ACADLayerStandardizer.iss),
 # which reads this same string via the MYAPPVERSION env var below.
-$AppVersion = "BETA/1.0"
+$AppVersion = "BETA/1.2"
 $AppVersionSafe = $AppVersion -replace "/", "-"
 
 # One payload per AutoCAD .NET binary-compatibility era. The csproj
@@ -59,6 +59,13 @@ if (-not $PackageOnly)
         -p:Configuration=$Configuration `
         -p:InformationalVersion=$AppVersion `
         --no-restore
+    if ($LASTEXITCODE -ne 0) { exit 1 }
+
+    # The native mapping editor is the shipped replacement window in every
+    # configuration. Package one GUI-subsystem release executable beside
+    # each AutoCAD-era plugin DLL.
+    Write-Host ">> Building Rust mapping editor..." -ForegroundColor Yellow
+    cargo build --manifest-path (Join-Path $SolutionRoot "rust\Cargo.toml") --package acad_layer_ui --release
     if ($LASTEXITCODE -ne 0) { exit 1 }
 
     # Run tests (all target frameworks)
@@ -141,6 +148,13 @@ foreach ($Era in $Eras)
     # are ExcludeAssets=runtime in the csproj so they never land here, and
     # the net48 payload legitimately needs its System.Text.Json dep closure.
     Copy-Item -Path (Join-Path $OutputDir "*.dll") -Destination $TargetDir
+
+    $RustUi = Join-Path $SolutionRoot "rust\target\release\acad_layer_ui.exe"
+    if (-not (Test-Path $RustUi))
+    {
+        throw "Rust mapping editor was not built: $RustUi"
+    }
+    Copy-Item -LiteralPath $RustUi -Destination (Join-Path $TargetDir "acad_layer_ui.exe")
 }
 
 # Copy manifest

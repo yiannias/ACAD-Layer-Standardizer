@@ -1,28 +1,58 @@
 use acad_layer_core::{MatchResult, MatchSource};
-use acad_layer_ipc::TargetFilter;
-use egui::{Align2, Color32, FontId, Id, Painter, Pos2, Rect, RichText, Sense, Stroke, Vec2};
+use acad_layer_ipc::{LayerMapping, PropertyMatchSettings, TargetFilter};
+use egui::{
+    Align2, Color32, CursorIcon, FontId, Id, Painter, Pos2, Rect, RichText, Sense, Stroke, Vec2,
+};
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 const CANVAS: Color32 = Color32::from_rgb(14, 14, 14);
-const NODE: Color32 = Color32::from_rgb(66, 66, 66);
+const NODE: Color32 = Color32::from_rgb(38, 40, 44);
 const BLUE: Color32 = Color32::from_rgb(70, 130, 180);
-const GREEN: Color32 = Color32::from_rgb(139, 195, 74);
-const YELLOW: Color32 = Color32::from_rgb(255, 215, 64);
-const PURPLE: Color32 = Color32::from_rgb(144, 133, 233);
+const GREEN: Color32 = Color32::from_rgb(56, 184, 79);
+const MEMORY_BLUE: Color32 = Color32::from_rgb(28, 164, 229);
+const YELLOW: Color32 = Color32::from_rgb(235, 176, 20);
+const PURPLE: Color32 = Color32::from_rgb(164, 78, 232);
 const RED: Color32 = Color32::from_rgb(198, 40, 40);
 const GREY: Color32 = Color32::from_rgb(136, 136, 136);
+const PAIR_HIGHLIGHT: Color32 = Color32::from_rgb(217, 89, 38);
 const ROW_STEP: f32 = 44.0;
 const NODE_WIDTH: f32 = 280.0;
 const NODE_HEIGHT: f32 = 30.0;
+const COLUMN_ROW_STEP: f32 = 38.0;
+const COLUMN_NODE_HEIGHT: f32 = 30.0;
 const SOURCE_X: f32 = 250.0;
-const TARGET_X: f32 = 580.0;
+const TARGET_X: f32 = 620.0;
 const TARGET_STEP: f32 = 320.0;
 const MIN_ZOOM: f32 = 0.03;
 const MIN_LABEL_PX: f32 = 6.0;
 
+#[derive(Debug, Default)]
+pub struct MappingEditorEvent {
+    pub confidence: Option<f64>,
+    pub remember: Option<bool>,
+    pub purge: bool,
+    pub choose_standard: bool,
+}
+
+#[derive(Clone, Copy)]
+struct PositionTween {
+    from: Rect,
+    to: Rect,
+    started: Instant,
+}
+
+#[derive(Default)]
+struct TargetPairSummary {
+    source_names: Vec<String>,
+    match_counts: [usize; 4],
+}
+
 pub struct MappingEditor {
     pub confidence: f64,
     pub overrides: HashMap<String, Option<String>>,
+    undo_stack: Vec<HashMap<String, Option<String>>>,
+    redo_stack: Vec<HashMap<String, Option<String>>>,
     source_query: String,
     target_query: String,
     show_exact: bool,
@@ -30,6 +60,7 @@ pub struct MappingEditor {
     show_heuristic: bool,
     show_manual: bool,
     show_unmatched: bool,
+    column_mode: bool,
     highlight_empty: bool,
     match_color: bool,
     match_linetype: bool,
@@ -40,8 +71,17 @@ pub struct MappingEditor {
     zoom: f32,
     pan: Vec2,
     dragging_source: Option<String>,
+    selected_sources: HashSet<String>,
+    selected_target: Option<String>,
+    source_scroll: f32,
+    target_scroll: f32,
+    target_filter_width: f32,
+    drawn_rects: HashMap<(bool, usize), Rect>,
+    position_tweens: HashMap<(bool, usize), PositionTween>,
+    last_view_transform: Option<(f32, Vec2)>,
     pointer_is_panning: bool,
     fit_requested: bool,
+    purge_confirmation_open: bool,
 }
 
 impl Default for MappingEditor {
@@ -49,6 +89,8 @@ impl Default for MappingEditor {
         Self {
             confidence: 0.6,
             overrides: HashMap::new(),
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
             source_query: String::new(),
             target_query: String::new(),
             show_exact: true,
@@ -56,65 +98,281 @@ impl Default for MappingEditor {
             show_heuristic: true,
             show_manual: true,
             show_unmatched: true,
+            column_mode: false,
             highlight_empty: false,
             match_color: true,
             match_linetype: true,
             match_lineweight: true,
             make_by_layer: false,
-            animations: false,
+            animations: true,
             category_visibility: HashMap::new(),
             zoom: 0.68,
             pan: Vec2::new(180.0, 40.0),
             dragging_source: None,
+            selected_sources: HashSet::new(),
+            selected_target: None,
+            source_scroll: 0.0,
+            target_scroll: 0.0,
+            target_filter_width: 260.0,
+            drawn_rects: HashMap::new(),
+            position_tweens: HashMap::new(),
+            last_view_transform: None,
             pointer_is_panning: false,
             fit_requested: true,
+            purge_confirmation_open: false,
         }
     }
 }
 
 impl MappingEditor {
+    pub fn restore_view_preferences(
+        &mut self,
+        zoom: f32,
+        pan_x: f32,
+        pan_y: f32,
+        animations: bool,
+    ) {
+        self.zoom = zoom.clamp(0.08, 1.6);
+        self.pan = Vec2::new(pan_x, pan_y);
+        self.animations = animations;
+        self.last_view_transform = None;
+        self.drawn_rects.clear();
+        self.position_tweens.clear();
+    }
+
+    pub fn view_preferences(&self) -> (f32, Vec2, bool) {
+        (self.zoom, self.pan, self.animations)
+    }
+
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         ctx: &egui::Context,
         drawing_name: &str,
+        template_name: &str,
         source_layers: &[String],
         standard_layers: &[String],
         matches: &[MatchResult],
         empty_layers: &HashSet<String>,
         target_filters: &[TargetFilter],
+        always_hidden_targets: &HashSet<String>,
         status: &str,
-    ) -> Option<f64> {
+        apply_pending: bool,
+    ) -> MappingEditorEvent {
         let previous_confidence = self.confidence;
-        egui::Area::new(Id::new("mapping_status_bar"))
-            .anchor(Align2::CENTER_BOTTOM, egui::vec2(0.0, -4.0))
+        let mappings = self.current_mappings(matches);
+        let can_apply = !apply_pending && !mappings.is_empty();
+        let mut remember = None;
+        let mut purge = false;
+        let footer_width = (ctx.content_rect().width() - 48.0).max(320.0);
+        let footer_area = egui::Area::new(Id::new("mapping_status_bar"))
+            .anchor(Align2::CENTER_BOTTOM, egui::vec2(0.0, -18.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::new().fill(Color32::from_rgb(45, 45, 45)).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
-                ui.vertical(|ui| {
-                    ui.label(RichText::new("Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan.").size(12.0).color(Color32::from_rgb(170, 170, 170)));
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(status).size(12.0).color(Color32::from_rgb(170, 170, 170)));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.add_enabled(false, egui::Button::new("Apply & Remember").fill(BLUE));
-                            ui.add_space(6.0);
-                            ui.add_enabled(false, egui::Button::new("Apply"));
+                ui.set_width(footer_width);
+                egui::Frame::new()
+                    .fill(Color32::from_rgba_unmultiplied(31, 33, 37, 236))
+                    .stroke(Stroke::new(1.0, Color32::from_rgb(95, 95, 95)))
+                    .corner_radius(8)
+                    .inner_margin(egui::Margin::symmetric(16, 9))
+                    .show(ui, |ui| {
+                        ui.set_width(footer_width - 32.0);
+                        ui.horizontal_centered(|ui| {
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(if self.column_mode {
+                                        "Drag a source layer onto a target layer to pair them. Click a target to highlight its source layers."
+                                    } else {
+                                        "Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan."
+                                    })
+                                    .size(12.0)
+                                    .color(Color32::from_rgb(170, 170, 170)),
+                                );
+                                ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new(status)
+                                        .size(12.0)
+                                        .color(Color32::from_rgb(170, 170, 170)),
+                                );
+                                ui.label(
+                                    RichText::new(format!(
+                                        "v{} · Build {}",
+                                        env!("CARGO_PKG_VERSION"),
+                                        env!("ACAD_LAYER_UI_BUILD_ID")
+                                    ))
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(135, 135, 135)),
+                                );
+                                });
+                            });
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                        if ui
+                                            .add_enabled(
+                                                can_apply,
+                                                egui::Button::new("Apply & Remember")
+                                                    .min_size(Vec2::new(132.0, 34.0))
+                                                    .fill(BLUE)
+                                                    .corner_radius(8)
+                                                    .stroke(Stroke::new(1.0, Color32::from_rgb(104, 166, 218))),
+                                            )
+                                            .clicked()
+                                        {
+                                            remember = Some(true);
+                                        }
+                                        ui.add_space(6.0);
+                                        if ui
+                                            .add_enabled(
+                                                can_apply,
+                                                egui::Button::new("Apply")
+                                                    .min_size(Vec2::new(76.0, 34.0))
+                                                    .fill(Color32::from_rgb(48, 50, 54))
+                                                    .corner_radius(8)
+                                                    .stroke(Stroke::new(1.0, Color32::from_rgb(112, 112, 112))),
+                                            )
+                                            .clicked()
+                                        {
+                                            remember = Some(false);
+                                        }
+                                        ui.separator();
+                                        self.column_mode = draw_mode_switch(ui, self.column_mode);
+                                    });
                         });
                     });
-                });
-                });
             });
+        let footer_rect = footer_area.response.rect;
 
-        let mut canvas_rect = ui.available_rect_before_wrap();
-        canvas_rect.max.y -= 48.0;
+        let canvas_rect = ui.available_rect_before_wrap();
+        self.handle_mapping_history(ctx);
+
+        let visible_sources = self.visible_sources(source_layers, matches);
+        let mut visible_targets =
+            self.visible_targets(standard_layers, target_filters, always_hidden_targets);
+        let visible_target_names = visible_targets
+            .iter()
+            .filter_map(|index| standard_layers.get(*index))
+            .map(|name| name.to_ascii_lowercase())
+            .collect::<HashSet<_>>();
+        if self
+            .selected_target
+            .as_ref()
+            .is_some_and(|target| !visible_target_names.contains(&target.to_ascii_lowercase()))
+        {
+            self.selected_target = None;
+        }
+        let mut connected_targets = HashSet::new();
+        for index in &visible_sources {
+            let Some(source) = source_layers.get(*index) else {
+                continue;
+            };
+            let target = match self.overrides.get(source) {
+                Some(Some(target)) => Some(target.as_str()),
+                Some(None) => None,
+                None => matches
+                    .get(*index)
+                    .and_then(|matched| matched.target_layer.as_deref()),
+            };
+            if let Some(target) = target {
+                let target = target.to_ascii_lowercase();
+                if visible_target_names.contains(&target) {
+                    connected_targets.insert(target);
+                }
+            }
+        }
+        visible_targets.sort_by_key(|index| {
+            standard_layers
+                .get(*index)
+                .map(|name| {
+                    let lower = name.to_ascii_lowercase();
+                    (!connected_targets.contains(&lower), *index)
+                })
+                .unwrap_or((true, usize::MAX))
+        });
+
+        let target_pairs = self.target_pair_summaries(source_layers, matches);
+        if self.column_mode {
+            let _canvas_response = ui.allocate_rect(canvas_rect, Sense::hover());
+            let max_list_bottom = (footer_rect.top() - 12.0).min(canvas_rect.bottom());
+            let visible_row_slots = ((max_list_bottom - canvas_rect.top() - 97.0)
+                / COLUMN_ROW_STEP)
+                .floor()
+                .max(1.0);
+            let list_bottom = (canvas_rect.top() + 97.0 + visible_row_slots * COLUMN_ROW_STEP)
+                .min(canvas_rect.bottom());
+            let filter_left =
+                ctx.content_rect().right() - 20.0 - self.target_filter_width.max(210.0);
+            let filter_clear_right = (filter_left - 18.0).min(canvas_rect.right());
+            let initial_side_space = (canvas_rect.width() * 0.15).clamp(168.0, 220.0);
+            let natural_target_right = canvas_rect.right() - initial_side_space;
+            let mut list_right = canvas_rect.right();
+            if natural_target_right > filter_clear_right {
+                list_right = (filter_clear_right + initial_side_space).min(canvas_rect.right());
+                for _ in 0..4 {
+                    let side_space = ((list_right - canvas_rect.left()) * 0.15).clamp(168.0, 220.0);
+                    list_right = (filter_clear_right + side_space).min(canvas_rect.right());
+                }
+            }
+            let list_area = Rect::from_min_max(canvas_rect.min, Pos2::new(list_right, list_bottom));
+            ui.painter_at(canvas_rect)
+                .rect_filled(canvas_rect, 0.0, CANVAS);
+            let target_name_clicked = self.draw_column_lists(
+                ui,
+                ctx,
+                list_area,
+                drawing_name,
+                template_name,
+                source_layers,
+                standard_layers,
+                matches,
+                empty_layers,
+                &visible_sources,
+                &visible_targets,
+                &target_pairs,
+            );
+            self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
+            let choose_standard =
+                self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
+            if self.purge_confirmation_open {
+                egui::Window::new("Purge Empty Layers")
+                    .collapsible(false)
+                    .resizable(false)
+                    .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+                    .show(ctx, |ui| {
+                        ui.label(format!(
+                            "Remove the {} empty layer(s) from this drawing?",
+                            empty_layers.len()
+                        ));
+                        ui.horizontal(|ui| {
+                            if ui.button("Cancel").clicked() {
+                                self.purge_confirmation_open = false;
+                            }
+                            if ui
+                                .add_enabled(
+                                    !apply_pending && !empty_layers.is_empty(),
+                                    egui::Button::new("Purge").fill(RED),
+                                )
+                                .clicked()
+                            {
+                                self.purge_confirmation_open = false;
+                                purge = true;
+                            }
+                        });
+                    });
+            }
+            return MappingEditorEvent {
+                confidence: ((self.confidence - previous_confidence).abs() > f64::EPSILON)
+                    .then_some(self.confidence),
+                remember,
+                purge,
+                choose_standard,
+            };
+        }
+
         let canvas_response = ui.allocate_rect(canvas_rect, Sense::click_and_drag());
         let painter = ui.painter_at(canvas_rect);
         painter.rect_filled(canvas_rect, 0.0, CANVAS);
         self.handle_canvas_navigation(ctx, &canvas_response, canvas_rect);
         self.draw_grid(&painter, canvas_rect);
 
-        let visible_sources = self.visible_sources(source_layers, matches);
-        let visible_targets = self.visible_targets(standard_layers, target_filters);
         let wants_fit_key = ctx.input(|i| i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::Home))
             && !ctx.egui_wants_keyboard_input();
         if wants_fit_key {
@@ -129,13 +387,33 @@ impl MappingEditor {
             );
             self.fit_requested = false;
         }
-        let source_positions = self.source_positions(&visible_sources, canvas_rect);
-        let target_positions = self.target_positions(&visible_targets, canvas_rect);
+        let transform = (self.zoom, self.pan);
+        let allow_layout_animation = self.last_view_transform == Some(transform);
+        self.last_view_transform = Some(transform);
+        let mut source_positions = self.source_positions(&visible_sources, canvas_rect);
+        let mut target_positions =
+            self.target_positions(&visible_targets, visible_sources.len(), canvas_rect);
+        self.animate_positions(&mut source_positions, true, allow_layout_animation, ctx);
+        self.animate_positions(&mut target_positions, false, allow_layout_animation, ctx);
+        let target_rects_by_name = target_positions
+            .iter()
+            .filter_map(|(index, rect)| {
+                standard_layers
+                    .get(*index)
+                    .map(|name| (name.to_ascii_lowercase(), *rect))
+            })
+            .collect::<HashMap<_, _>>();
 
-        self.draw_group_headers(
+        let target_name_clicked = self.draw_group_headers(
+            ui,
             &painter,
             canvas_rect,
             drawing_name,
+            if template_name.is_empty() {
+                "No standard selected"
+            } else {
+                template_name
+            },
             &visible_sources,
             &visible_targets,
         );
@@ -144,22 +422,22 @@ impl MappingEditor {
             matches,
             source_layers,
             &source_positions,
-            &target_positions,
-            standard_layers,
+            &target_rects_by_name,
         );
         self.handle_connection_click(
             &canvas_response,
             matches,
             source_layers,
-            standard_layers,
             &source_positions,
             &target_positions,
+            &target_rects_by_name,
         );
 
         let mut drop_target_rects = Vec::with_capacity(target_positions.len());
         for (index, rect) in &target_positions {
             let name = &standard_layers[*index];
             drop_target_rects.push((name.as_str(), *rect));
+            let target_selected = self.selected_target.as_deref() == Some(name.as_str());
             self.draw_layer_node(
                 ui,
                 &painter,
@@ -167,17 +445,72 @@ impl MappingEditor {
                 name,
                 false,
                 None,
-                self.target_color(name, matches, source_layers),
+                target_pairs
+                    .get(&name.to_ascii_lowercase())
+                    .map(|summary| Self::summary_color(summary))
+                    .unwrap_or(GREY),
+                target_pairs
+                    .get(&name.to_ascii_lowercase())
+                    .is_some_and(|summary| !summary.source_names.is_empty()),
                 false,
+                false,
+                target_selected,
             );
+            let response = ui.interact(*rect, Id::new(("target-layer", name)), Sense::click());
+            if response.clicked() {
+                self.selected_target = if target_selected {
+                    None
+                } else {
+                    Some(name.clone())
+                };
+                self.selected_sources.clear();
+            }
+            if let Some(summary) = target_pairs.get(&name.to_ascii_lowercase()) {
+                if !summary.source_names.is_empty() {
+                    response
+                        .clone()
+                        .on_hover_text(summary.source_names.join("\n"));
+                }
+            }
+            response.context_menu(|menu| {
+                if !target_filters.is_empty() && menu.button("All On/Off").clicked() {
+                    let all_on = target_filters.iter().all(|filter| {
+                        *self
+                            .category_visibility
+                            .entry(filter.name.clone())
+                            .or_insert(true)
+                    });
+                    for filter in target_filters {
+                        self.category_visibility
+                            .insert(filter.name.clone(), !all_on);
+                    }
+                    menu.close();
+                }
+                if !target_filters.is_empty() {
+                    menu.separator();
+                }
+                for filter in target_filters {
+                    let checked = self
+                        .category_visibility
+                        .entry(filter.name.clone())
+                        .or_insert(true);
+                    menu.checkbox(checked, &filter.name);
+                }
+            });
         }
 
         for (index, rect) in &source_positions {
             let name = &source_layers[*index];
             let result = matches.get(*index);
-            let empty = empty_layers
-                .iter()
-                .any(|layer| layer.eq_ignore_ascii_case(name));
+            let empty = empty_layers.contains(name);
+            let paired_to_selected_target = self
+                .selected_target
+                .as_ref()
+                .and_then(|selected| {
+                    self.effective_target(name, *index, matches)
+                        .map(|target| target.eq_ignore_ascii_case(selected))
+                })
+                .unwrap_or(false);
             let color = if self.overrides.get(name).is_some_and(Option::is_some) {
                 PURPLE
             } else {
@@ -191,7 +524,10 @@ impl MappingEditor {
                 true,
                 result,
                 color,
+                self.effective_target(name, *index, matches).is_some(),
                 empty && self.highlight_empty,
+                self.selected_sources.contains(name),
+                paired_to_selected_target,
             );
 
             let response = ui.interact(
@@ -199,7 +535,65 @@ impl MappingEditor {
                 Id::new(("source-layer", name)),
                 Sense::click_and_drag(),
             );
+            let context_sources =
+                if self.selected_sources.contains(name) && self.selected_sources.len() > 1 {
+                    self.selected_sources.iter().cloned().collect::<Vec<_>>()
+                } else {
+                    vec![name.clone()]
+                };
+            let can_unmatch = context_sources.iter().any(|source| {
+                self.overrides
+                    .get(source)
+                    .map(Option::is_some)
+                    .unwrap_or_else(|| {
+                        source_layers
+                            .iter()
+                            .position(|candidate| candidate == source)
+                            .and_then(|index| matches.get(index))
+                            .is_some_and(|result| result.target_layer.is_some())
+                    })
+            });
+            response.context_menu(|menu| {
+                if menu
+                    .add_enabled(
+                        can_unmatch,
+                        egui::Button::new(if context_sources.len() > 1 {
+                            format!("Un-match ({})", context_sources.len())
+                        } else {
+                            "Un-match".to_string()
+                        }),
+                    )
+                    .clicked()
+                {
+                    self.push_undo_snapshot();
+                    for source in &context_sources {
+                        self.overrides.insert(source.clone(), None);
+                    }
+                    menu.close();
+                }
+                menu.separator();
+                menu.checkbox(&mut self.show_exact, "Exact Match");
+                menu.checkbox(&mut self.show_memory, "Memory Match");
+                menu.checkbox(&mut self.show_heuristic, "Heuristic Match");
+                menu.checkbox(&mut self.show_manual, "Manual Match");
+                menu.checkbox(&mut self.show_unmatched, "Unmatched");
+            });
+            if response.clicked() {
+                let extend = ctx.input(|input| input.modifiers.ctrl || input.modifiers.shift);
+                if extend {
+                    if !self.selected_sources.remove(name) {
+                        self.selected_sources.insert(name.clone());
+                    }
+                } else if !self.selected_sources.contains(name) {
+                    self.selected_sources.clear();
+                    self.selected_sources.insert(name.clone());
+                }
+            }
             if response.drag_started() {
+                if !self.selected_sources.contains(name) {
+                    self.selected_sources.clear();
+                    self.selected_sources.insert(name.clone());
+                }
                 self.dragging_source = Some(name.clone());
             }
             if self.dragging_source.as_deref() == Some(name.as_str()) {
@@ -213,8 +607,17 @@ impl MappingEditor {
                             .iter()
                             .find(|(_, target_rect)| target_rect.contains(pointer))
                         {
-                            self.overrides
-                                .insert(name.clone(), Some((*target).to_string()));
+                            let mapped_sources = visible_sources
+                                .iter()
+                                .filter_map(|index| source_layers.get(*index))
+                                .filter(|source| self.selected_sources.contains(*source))
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            self.push_undo_snapshot();
+                            for source in mapped_sources {
+                                self.overrides.insert(source, Some((*target).to_string()));
+                            }
+                            self.selected_sources.clear();
                         }
                     }
                     self.dragging_source = None;
@@ -223,9 +626,96 @@ impl MappingEditor {
         }
 
         self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
-        self.draw_right_panel(ctx, target_filters);
+        let choose_standard =
+            self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
+        if self.purge_confirmation_open {
+            egui::Window::new("Purge Empty Layers")
+                .collapsible(false)
+                .resizable(false)
+                .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+                .show(ctx, |ui| {
+                    ui.label(format!(
+                        "Remove the {} empty layer(s) from this drawing?",
+                        empty_layers.len()
+                    ));
+                    ui.horizontal(|ui| {
+                        if ui.button("Cancel").clicked() {
+                            self.purge_confirmation_open = false;
+                        }
+                        if ui
+                            .add_enabled(
+                                !apply_pending && !empty_layers.is_empty(),
+                                egui::Button::new("Purge").fill(RED),
+                            )
+                            .clicked()
+                        {
+                            self.purge_confirmation_open = false;
+                            purge = true;
+                        }
+                    });
+                });
+        }
         self.draw_canvas_help(ctx, canvas_rect);
-        ((self.confidence - previous_confidence).abs() > f64::EPSILON).then_some(self.confidence)
+        MappingEditorEvent {
+            confidence: ((self.confidence - previous_confidence).abs() > f64::EPSILON)
+                .then_some(self.confidence),
+            remember,
+            purge,
+            choose_standard,
+        }
+    }
+
+    pub fn current_mappings(&self, matches: &[MatchResult]) -> Vec<LayerMapping> {
+        matches
+            .iter()
+            .filter_map(|result| {
+                let target = match self.overrides.get(&result.source_layer) {
+                    Some(target) => target.as_ref(),
+                    None => result.target_layer.as_ref(),
+                }?;
+                Some(LayerMapping {
+                    source_layer: result.source_layer.clone(),
+                    target_layer: target.clone(),
+                })
+            })
+            .collect()
+    }
+
+    pub fn property_settings(&self) -> PropertyMatchSettings {
+        PropertyMatchSettings {
+            match_color: self.match_color,
+            match_linetype: self.match_linetype,
+            match_lineweight: self.match_lineweight,
+            make_by_layer: self.make_by_layer,
+        }
+    }
+
+    fn push_undo_snapshot(&mut self) {
+        self.undo_stack.push(self.overrides.clone());
+        if self.undo_stack.len() > 100 {
+            self.undo_stack.remove(0);
+        }
+        self.redo_stack.clear();
+    }
+
+    fn handle_mapping_history(&mut self, ctx: &egui::Context) {
+        if ctx.egui_wants_keyboard_input() {
+            return;
+        }
+
+        let undo = ctx.input(|input| input.modifiers.ctrl && input.key_pressed(egui::Key::Z));
+        let redo = ctx.input(|input| input.modifiers.ctrl && input.key_pressed(egui::Key::Y));
+        if undo {
+            if let Some(previous) = self.undo_stack.pop() {
+                self.redo_stack
+                    .push(std::mem::replace(&mut self.overrides, previous));
+            }
+        } else if redo {
+            if let Some(next) = self.redo_stack.pop() {
+                self.undo_stack
+                    .push(std::mem::replace(&mut self.overrides, next));
+            }
+        }
     }
 
     fn handle_canvas_navigation(
@@ -263,7 +753,7 @@ impl MappingEditor {
 
     /// World-space bounds of the source and target groups, matching `draw_group_headers`.
     fn content_bounds(sources: usize, targets: usize) -> Rect {
-        let columns = 5usize.min(targets.max(1));
+        let columns = targets.div_ceil(sources.max(20)).clamp(1, 5);
         let target_rows = targets.div_ceil(columns).max(1);
         let right = if targets > 0 {
             TARGET_X + (columns - 1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0
@@ -341,8 +831,540 @@ impl MappingEditor {
             .collect()
     }
 
-    fn target_positions(&self, visible: &[usize], canvas: Rect) -> HashMap<usize, Rect> {
-        let columns = 5usize.min(visible.len().max(1));
+    fn draw_column_lists(
+        &mut self,
+        ui: &mut egui::Ui,
+        ctx: &egui::Context,
+        area: Rect,
+        drawing_name: &str,
+        template_name: &str,
+        source_layers: &[String],
+        standard_layers: &[String],
+        matches: &[MatchResult],
+        empty_layers: &HashSet<String>,
+        visible_sources: &[usize],
+        visible_targets: &[usize],
+        target_pairs: &HashMap<String, TargetPairSummary>,
+    ) -> bool {
+        let painter = ui.painter_at(area);
+        painter.rect_filled(area, 0.0, CANVAS);
+
+        let side_space = (area.width() * 0.15).clamp(168.0, 220.0);
+        let gap = 18.0;
+        let column_width = ((area.width() - side_space * 2.0 - gap) * 0.5).max(120.0);
+        let source_rect = Rect::from_min_size(
+            Pos2::new(area.left() + side_space, area.top() + 16.0),
+            Vec2::new(column_width, area.height() - 32.0),
+        );
+        let target_rect = source_rect.translate(Vec2::new(column_width + gap, 0.0));
+        let (source_rows_rect, _) = Self::draw_column_panel_header(
+            ui,
+            &painter,
+            source_rect,
+            "Source",
+            drawing_name,
+            false,
+        );
+        let (target_rows_rect, target_name_clicked) = Self::draw_column_panel_header(
+            ui,
+            &painter,
+            target_rect,
+            "Target",
+            if template_name.is_empty() {
+                "No standard selected"
+            } else {
+                template_name
+            },
+            true,
+        );
+
+        self.update_column_scroll(ctx, source_rows_rect, visible_sources.len(), true);
+        self.update_column_scroll(ctx, target_rows_rect, visible_targets.len(), false);
+
+        let first_target = (self.target_scroll / COLUMN_ROW_STEP).floor() as usize;
+        let last_target =
+            ((self.target_scroll + target_rows_rect.height()) / COLUMN_ROW_STEP).ceil() as usize;
+        let target_painter = painter.with_clip_rect(target_rows_rect);
+        let mut drop_target_rects = Vec::new();
+        let mut target_row_rects = HashMap::new();
+        for position in first_target..last_target.min(visible_targets.len()) {
+            let index = visible_targets[position];
+            let Some(name) = standard_layers.get(index) else {
+                continue;
+            };
+            let row = Rect::from_min_size(
+                Pos2::new(
+                    target_rows_rect.left() + 6.0,
+                    target_rows_rect.top() + position as f32 * COLUMN_ROW_STEP - self.target_scroll,
+                ),
+                Vec2::new(target_rows_rect.width() - 12.0, COLUMN_NODE_HEIGHT),
+            );
+            if !row.intersects(target_rows_rect) {
+                continue;
+            }
+            drop_target_rects.push((name.as_str(), row));
+            let key = name.to_ascii_lowercase();
+            target_row_rects.insert(key.clone(), row);
+            let summary = target_pairs.get(&key);
+            let paired_count = summary.map_or(0, |summary| summary.source_names.len());
+            let selected = self
+                .selected_target
+                .as_deref()
+                .is_some_and(|selected| selected.eq_ignore_ascii_case(name));
+            let pointer_over = ctx
+                .input(|input| input.pointer.hover_pos())
+                .is_some_and(|pointer| row.contains(pointer));
+            let drop_highlight = self.dragging_source.is_some() && pointer_over;
+            let color = summary.map_or(GREY, Self::summary_color);
+            let fill = NODE;
+            target_painter.rect_filled(row, 5.0, fill);
+            target_painter.rect_stroke(
+                row,
+                5.0,
+                Stroke::new(
+                    if selected || drop_highlight { 2.0 } else { 1.5 },
+                    if drop_highlight {
+                        Color32::from_rgb(131, 184, 228)
+                    } else if selected {
+                        PAIR_HIGHLIGHT
+                    } else if paired_count > 0 {
+                        color
+                    } else {
+                        GREY
+                    },
+                ),
+                egui::StrokeKind::Inside,
+            );
+            let annotation = summary.and_then(|summary| {
+                (!summary.source_names.is_empty()).then(|| {
+                    if summary.source_names.len() == 1 {
+                        summary.source_names[0].clone()
+                    } else {
+                        format!("{} layers", summary.source_names.len())
+                    }
+                })
+            });
+            Self::draw_column_row_text(&target_painter, row, name, annotation.as_deref());
+
+            let response = ui.interact(
+                row.intersect(target_rows_rect),
+                Id::new(("column-target", name)),
+                Sense::click(),
+            );
+            if response.clicked() {
+                self.selected_target = if selected { None } else { Some(name.clone()) };
+                self.selected_sources.clear();
+            }
+            if let Some(summary) = summary {
+                if !summary.source_names.is_empty() {
+                    response.on_hover_text(summary.source_names.join("\n"));
+                }
+            }
+        }
+
+        let first_source = (self.source_scroll / COLUMN_ROW_STEP).floor() as usize;
+        let last_source =
+            ((self.source_scroll + source_rows_rect.height()) / COLUMN_ROW_STEP).ceil() as usize;
+        let source_painter = painter.with_clip_rect(source_rows_rect);
+        let mut dropped_on = None;
+        let mut visible_source_rows = HashMap::new();
+        let mut column_connections = Vec::new();
+        for position in first_source..last_source.min(visible_sources.len()) {
+            let index = visible_sources[position];
+            let Some(name) = source_layers.get(index) else {
+                continue;
+            };
+            let row = Rect::from_min_size(
+                Pos2::new(
+                    source_rows_rect.left() + 6.0,
+                    source_rows_rect.top() + position as f32 * COLUMN_ROW_STEP - self.source_scroll,
+                ),
+                Vec2::new(source_rows_rect.width() - 12.0, COLUMN_NODE_HEIGHT),
+            );
+            if !row.intersects(source_rows_rect) {
+                continue;
+            }
+            visible_source_rows.insert(name.to_ascii_lowercase(), row);
+            let target = self
+                .effective_target(name, index, matches)
+                .map(str::to_owned);
+            let color = if self.overrides.get(name).is_some_and(Option::is_some) {
+                PURPLE
+            } else {
+                self.source_color(name, matches.get(index))
+            };
+            let empty = empty_layers.contains(name) && self.highlight_empty;
+            let paired_to_selected = target.as_ref().is_some_and(|target| {
+                self.selected_target
+                    .as_deref()
+                    .is_some_and(|selected| selected.eq_ignore_ascii_case(target))
+            });
+            let fill = if empty { RED } else { NODE };
+            source_painter.rect_filled(row, 5.0, fill);
+            source_painter.rect_stroke(
+                row,
+                5.0,
+                Stroke::new(
+                    if paired_to_selected || self.selected_sources.contains(name) {
+                        2.0
+                    } else {
+                        1.5
+                    },
+                    if self.selected_sources.contains(name) {
+                        Color32::from_rgb(190, 170, 255)
+                    } else if paired_to_selected {
+                        PAIR_HIGHLIGHT
+                    } else if empty {
+                        Color32::from_rgb(255, 80, 80)
+                    } else if target.is_some() {
+                        color
+                    } else {
+                        GREY
+                    },
+                ),
+                egui::StrokeKind::Inside,
+            );
+            Self::draw_column_row_text(
+                &source_painter,
+                row,
+                name,
+                target
+                    .as_deref()
+                    .map(|target| format!("to {target}"))
+                    .as_deref(),
+            );
+
+            let response = ui.interact(
+                row.intersect(source_rows_rect),
+                Id::new(("column-source", name)),
+                Sense::click_and_drag(),
+            );
+            if response.clicked() {
+                let extend = ctx.input(|input| input.modifiers.ctrl || input.modifiers.shift);
+                if extend {
+                    if !self.selected_sources.remove(name) {
+                        self.selected_sources.insert(name.clone());
+                    }
+                } else if !self.selected_sources.contains(name) {
+                    self.selected_sources.clear();
+                    self.selected_sources.insert(name.clone());
+                }
+            }
+            if response.drag_started() {
+                if !self.selected_sources.contains(name) {
+                    self.selected_sources.clear();
+                    self.selected_sources.insert(name.clone());
+                }
+                self.dragging_source = Some(name.clone());
+            }
+            if self.dragging_source.as_deref() == Some(name.as_str()) {
+                if let Some(pointer) = ctx.input(|input| input.pointer.hover_pos()) {
+                    source_painter.line_segment(
+                        [Pos2::new(row.right(), row.center().y), pointer],
+                        Stroke::new(2.0, PURPLE),
+                    );
+                }
+                if response.drag_stopped() {
+                    if let Some(pointer) = ctx.input(|input| input.pointer.interact_pos()) {
+                        dropped_on = drop_target_rects
+                            .iter()
+                            .find(|(_, target_row)| target_row.contains(pointer))
+                            .map(|(target, _)| (*target).to_string());
+                    }
+                }
+            }
+            if let Some(target) = target {
+                column_connections.push((
+                    name.to_ascii_lowercase(),
+                    target.to_ascii_lowercase(),
+                    color,
+                ));
+            }
+        }
+
+        for (source, target, color) in column_connections {
+            if self
+                .dragging_source
+                .as_deref()
+                .is_some_and(|dragging| dragging.eq_ignore_ascii_case(&source))
+            {
+                continue;
+            }
+            let (Some(source_row), Some(target_row)) = (
+                visible_source_rows.get(&source),
+                target_row_rects.get(&target),
+            ) else {
+                continue;
+            };
+            let start = Pos2::new(source_row.right(), source_row.center().y);
+            let end = Pos2::new(target_row.left(), target_row.center().y);
+            painter.line_segment([start, end], Stroke::new(1.5, color));
+            painter.circle_filled(start, 3.0, color);
+            painter.circle_filled(end, 3.0, color);
+        }
+
+        if let Some(target) = dropped_on {
+            let mapped_sources = visible_sources
+                .iter()
+                .filter_map(|index| source_layers.get(*index))
+                .filter(|source| self.selected_sources.contains(*source))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !mapped_sources.is_empty() {
+                self.push_undo_snapshot();
+                for source in mapped_sources {
+                    self.overrides.insert(source, Some(target.clone()));
+                }
+                self.selected_sources.clear();
+                self.selected_target = Some(target);
+                self.dragging_source = None;
+                ctx.request_repaint();
+            }
+        }
+
+        Self::draw_column_scrollbar(
+            &painter,
+            source_rows_rect,
+            visible_sources.len(),
+            self.source_scroll,
+        );
+        Self::draw_column_scrollbar(
+            &painter,
+            target_rows_rect,
+            visible_targets.len(),
+            self.target_scroll,
+        );
+        target_name_clicked
+    }
+
+    fn draw_column_panel_header(
+        ui: &mut egui::Ui,
+        painter: &Painter,
+        rect: Rect,
+        title: &str,
+        subtitle: &str,
+        clickable_subtitle: bool,
+    ) -> (Rect, bool) {
+        painter.rect_filled(rect, 8.0, Color32::from_rgba_unmultiplied(31, 33, 37, 236));
+        painter.rect_stroke(
+            rect,
+            8.0,
+            Stroke::new(1.0, Color32::from_rgb(95, 95, 95)),
+            egui::StrokeKind::Inside,
+        );
+        painter.text(
+            Pos2::new(rect.left() + 14.0, rect.top() + 9.0),
+            Align2::LEFT_TOP,
+            title,
+            FontId::proportional(21.0),
+            Color32::from_rgb(230, 230, 230),
+        );
+        let subtitle_rect = Rect::from_min_size(
+            Pos2::new(rect.left() + 14.0, rect.top() + 34.0),
+            Vec2::new((rect.width() - 28.0).max(80.0), 18.0),
+        );
+        let mut choose_standard = false;
+        let mut subtitle_color = Color32::from_rgb(150, 150, 150);
+        if clickable_subtitle {
+            let response = ui.interact(
+                subtitle_rect,
+                Id::new("column_target_standard_name"),
+                Sense::click(),
+            );
+            if response.hovered() {
+                subtitle_color = Color32::from_rgb(205, 205, 205);
+                ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+            }
+            choose_standard = response.clicked();
+        }
+        painter.text(
+            subtitle_rect.min,
+            Align2::LEFT_TOP,
+            subtitle,
+            FontId::proportional(11.0),
+            subtitle_color,
+        );
+        let rows_rect = Rect::from_min_max(
+            Pos2::new(rect.left() + 10.0, rect.top() + 57.0),
+            Pos2::new(rect.right() - 10.0, rect.bottom() - 8.0),
+        );
+        (rows_rect, choose_standard)
+    }
+
+    fn draw_column_row_text(painter: &Painter, row: Rect, name: &str, annotation: Option<&str>) {
+        let font = FontId::proportional(14.0);
+        let annotation_font = FontId::proportional(12.0);
+        let annotation = annotation.map(|text| {
+            let maximum = row.width() * 0.42;
+            Self::truncate_to_width(painter, text, annotation_font.clone(), maximum)
+        });
+        let annotation_width = annotation.as_ref().map_or(0.0, |text| {
+            painter
+                .layout_no_wrap(text.clone(), annotation_font.clone(), GREY)
+                .size()
+                .x
+        });
+        let name_width = (row.width() - annotation_width - 38.0).max(30.0);
+        let name = Self::truncate_to_width(painter, name, font.clone(), name_width);
+        painter.text(
+            Pos2::new(row.left() + 10.0, row.center().y),
+            Align2::LEFT_CENTER,
+            name,
+            font,
+            Color32::from_rgb(224, 224, 224),
+        );
+        if let Some(annotation) = annotation {
+            painter.text(
+                Pos2::new(row.right() - 10.0, row.center().y),
+                Align2::RIGHT_CENTER,
+                annotation,
+                annotation_font,
+                Color32::from_rgb(184, 184, 184),
+            );
+        }
+    }
+
+    fn truncate_to_width(painter: &Painter, text: &str, font: FontId, max_width: f32) -> String {
+        if painter
+            .layout_no_wrap(text.to_string(), font.clone(), Color32::WHITE)
+            .size()
+            .x
+            <= max_width
+        {
+            return text.to_string();
+        }
+        let mut chars = text.chars().collect::<Vec<_>>();
+        while !chars.is_empty() {
+            chars.pop();
+            let candidate = format!("{}…", chars.iter().collect::<String>());
+            if painter
+                .layout_no_wrap(candidate.clone(), font.clone(), Color32::WHITE)
+                .size()
+                .x
+                <= max_width
+            {
+                return candidate;
+            }
+        }
+        String::new()
+    }
+
+    fn update_column_scroll(
+        &mut self,
+        ctx: &egui::Context,
+        viewport: Rect,
+        item_count: usize,
+        source: bool,
+    ) {
+        let max_scroll = (item_count as f32 * COLUMN_ROW_STEP - viewport.height()).max(0.0);
+        let scroll = if source {
+            &mut self.source_scroll
+        } else {
+            &mut self.target_scroll
+        };
+        if ctx
+            .input(|input| input.pointer.hover_pos())
+            .is_some_and(|pointer| viewport.contains(pointer))
+        {
+            *scroll =
+                (*scroll - ctx.input(|input| input.smooth_scroll_delta.y)).clamp(0.0, max_scroll);
+        } else {
+            *scroll = (*scroll).clamp(0.0, max_scroll);
+        }
+    }
+
+    fn draw_column_scrollbar(painter: &Painter, viewport: Rect, item_count: usize, scroll: f32) {
+        let content_height = item_count as f32 * COLUMN_ROW_STEP;
+        if content_height <= viewport.height() {
+            return;
+        }
+        let track = Rect::from_min_max(
+            Pos2::new(viewport.right() - 3.0, viewport.top()),
+            Pos2::new(viewport.right(), viewport.bottom()),
+        );
+        let thumb_height = (viewport.height() * viewport.height() / content_height).max(22.0);
+        let max_scroll = content_height - viewport.height();
+        let thumb_top = track.top() + (track.height() - thumb_height) * (scroll / max_scroll);
+        painter.rect_filled(track, 2.0, Color32::from_rgb(48, 48, 48));
+        painter.rect_filled(
+            Rect::from_min_size(
+                Pos2::new(track.left(), thumb_top),
+                Vec2::new(3.0, thumb_height),
+            ),
+            2.0,
+            Color32::from_rgb(112, 112, 112),
+        );
+    }
+
+    fn target_pair_summaries(
+        &self,
+        source_layers: &[String],
+        matches: &[MatchResult],
+    ) -> HashMap<String, TargetPairSummary> {
+        let mut summaries = HashMap::<String, TargetPairSummary>::new();
+        for (index, source) in source_layers.iter().enumerate() {
+            let Some(target) = self.effective_target(source, index, matches) else {
+                continue;
+            };
+            let source_kind = if self.overrides.get(source).is_some_and(Option::is_some) {
+                MatchSource::Manual
+            } else if let Some(result) = matches.get(index) {
+                result.source
+            } else {
+                continue;
+            };
+            let kind_index = match source_kind {
+                MatchSource::Exact => 0,
+                MatchSource::Memory => 1,
+                MatchSource::Heuristic => 2,
+                MatchSource::Manual => 3,
+                MatchSource::Unmatched => continue,
+            };
+            let summary = summaries.entry(target.to_ascii_lowercase()).or_default();
+            summary.source_names.push(source.clone());
+            summary.match_counts[kind_index] += 1;
+        }
+        summaries
+    }
+
+    fn summary_color(summary: &TargetPairSummary) -> Color32 {
+        let mut best_index = None;
+        let mut best_count = 0;
+        for (index, count) in summary.match_counts.iter().copied().enumerate() {
+            if count > best_count {
+                best_index = Some(index);
+                best_count = count;
+            }
+        }
+        match best_index {
+            Some(0) => GREEN,
+            Some(1) => MEMORY_BLUE,
+            Some(2) => YELLOW,
+            Some(3) => PURPLE,
+            _ => GREY,
+        }
+    }
+
+    fn effective_target<'a>(
+        &'a self,
+        source: &str,
+        index: usize,
+        matches: &'a [MatchResult],
+    ) -> Option<&'a str> {
+        match self.overrides.get(source) {
+            Some(target) => target.as_deref(),
+            None => matches.get(index)?.target_layer.as_deref(),
+        }
+    }
+
+    fn target_positions(
+        &self,
+        visible: &[usize],
+        visible_source_count: usize,
+        canvas: Rect,
+    ) -> HashMap<usize, Rect> {
+        let column_height = visible_source_count.max(20);
+        let columns = visible.len().div_ceil(column_height).clamp(1, 5);
         let rows = visible.len().div_ceil(columns).max(1);
         visible
             .iter()
@@ -362,6 +1384,64 @@ impl MappingEditor {
             .collect()
     }
 
+    fn animate_positions(
+        &mut self,
+        positions: &mut HashMap<usize, Rect>,
+        is_source: bool,
+        allow_animation: bool,
+        ctx: &egui::Context,
+    ) {
+        const DURATION: Duration = Duration::from_millis(180);
+        let now = Instant::now();
+        let mut repaint = false;
+
+        for (index, target) in positions.iter_mut() {
+            let key = (is_source, *index);
+            if !self.animations || !allow_animation {
+                self.position_tweens.remove(&key);
+                self.drawn_rects.insert(key, *target);
+                continue;
+            }
+
+            let previous = self.drawn_rects.get(&key).copied();
+            let tween = self.position_tweens.get(&key).copied();
+            if tween.is_some_and(|active| active.to != *target) {
+                self.position_tweens.remove(&key);
+            }
+            if !self.position_tweens.contains_key(&key) {
+                if let Some(from) = previous.filter(|from| *from != *target) {
+                    self.position_tweens.insert(
+                        key,
+                        PositionTween {
+                            from,
+                            to: *target,
+                            started: now,
+                        },
+                    );
+                }
+            }
+
+            if let Some(tween) = self.position_tweens.get(&key).copied() {
+                let progress = (now - tween.started).as_secs_f32() / DURATION.as_secs_f32();
+                if progress >= 1.0 {
+                    self.position_tweens.remove(&key);
+                    self.drawn_rects.insert(key, *target);
+                } else {
+                    let eased = progress * progress * (3.0 - 2.0 * progress);
+                    *target = interpolate_rect(tween.from, tween.to, eased);
+                    self.drawn_rects.insert(key, *target);
+                    repaint = true;
+                }
+            } else {
+                self.drawn_rects.insert(key, *target);
+            }
+        }
+
+        if repaint {
+            ctx.request_repaint_after(Duration::from_millis(16));
+        }
+    }
+
     fn world_rect(&self, canvas: Rect, x: f32, y: f32, width: f32, height: f32) -> Rect {
         let min = canvas.min + self.pan + Vec2::new(x, y) * self.zoom;
         Rect::from_min_size(min, Vec2::new(width, height) * self.zoom)
@@ -369,39 +1449,41 @@ impl MappingEditor {
 
     fn draw_group_headers(
         &self,
+        ui: &mut egui::Ui,
         painter: &Painter,
         canvas: Rect,
         drawing: &str,
+        template_name: &str,
         sources: &[usize],
         targets: &[usize],
-    ) {
+    ) -> bool {
         let source_right = SOURCE_X + NODE_WIDTH + 24.0;
         let source_bottom =
             150.0 + sources.len().saturating_sub(1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
-        let target_columns = targets
-            .len()
-            .div_ceil(targets.len().div_ceil(5).max(1))
-            .max(1)
-            .min(5);
+        let column_height = sources.len().max(20);
+        let target_columns = targets.len().div_ceil(column_height).clamp(1, 5);
         let target_right =
             TARGET_X + target_columns.saturating_sub(1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0;
         let target_rows = targets.len().div_ceil(target_columns.max(1));
         let target_bottom =
             150.0 + target_rows.saturating_sub(1) as f32 * ROW_STEP + NODE_HEIGHT + 24.0;
-        for (x, right, bottom, title, subtitle) in [
+        let mut target_name_clicked = false;
+        for (x, right, bottom, title, subtitle, is_target) in [
             (
                 SOURCE_X - 24.0,
                 source_right,
                 source_bottom,
                 "Source",
                 drawing,
+                false,
             ),
             (
                 TARGET_X - 24.0,
                 target_right,
                 target_bottom,
                 "Target",
-                "Standard template",
+                template_name,
+                true,
             ),
         ] {
             let rect = self.world_rect(canvas, x, 40.0, right - x, (bottom - 40.0).max(100.0));
@@ -420,17 +1502,37 @@ impl MappingEditor {
                 FontId::proportional((18.0 * self.zoom).max(12.0)),
                 Color32::from_rgb(225, 225, 225),
             );
-            let sub_pos = self.world_rect(canvas, x + 18.0, 77.0, 220.0, 20.0).min;
+            let subtitle_rect = self.world_rect(
+                canvas,
+                x + 18.0,
+                77.0,
+                (right - x - 36.0).clamp(80.0, 420.0),
+                20.0,
+            );
+            let mut subtitle_color = Color32::from_rgb(145, 145, 145);
+            if is_target {
+                let response = ui.interact(
+                    subtitle_rect,
+                    Id::new("node_target_standard_name"),
+                    Sense::click(),
+                );
+                if response.hovered() {
+                    subtitle_color = Color32::from_rgb(205, 205, 205);
+                    ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+                }
+                target_name_clicked = response.clicked();
+            }
             if 11.0 * self.zoom >= MIN_LABEL_PX {
                 painter.text(
-                    sub_pos,
+                    subtitle_rect.min,
                     Align2::LEFT_TOP,
                     subtitle,
                     FontId::proportional(11.0 * self.zoom),
-                    Color32::from_rgb(145, 145, 145),
+                    subtitle_color,
                 );
             }
         }
+        target_name_clicked
     }
 
     fn draw_connections(
@@ -439,8 +1541,7 @@ impl MappingEditor {
         matches: &[MatchResult],
         source_names: &[String],
         sources: &HashMap<usize, Rect>,
-        targets: &HashMap<usize, Rect>,
-        target_names: &[String],
+        target_rects_by_name: &HashMap<String, Rect>,
     ) {
         for (source_index, source_rect) in sources {
             let Some(source_name) = source_names.get(*source_index).map(String::as_str) else {
@@ -461,19 +1562,14 @@ impl MappingEditor {
             } else {
                 match matches.get(*source_index).map(|m| m.source) {
                     Some(MatchSource::Exact) => GREEN,
-                    Some(MatchSource::Memory) => BLUE,
+                    Some(MatchSource::Memory) => MEMORY_BLUE,
                     Some(MatchSource::Heuristic) => YELLOW,
                     Some(MatchSource::Manual) => PURPLE,
                     _ => GREY,
                 }
             };
             let start = Pos2::new(source_rect.right(), source_rect.center().y);
-            if let Some(target_rect) = targets.iter().find_map(|(index, rect)| {
-                target_names
-                    .get(*index)
-                    .filter(|name| name.eq_ignore_ascii_case(target_name))
-                    .map(|_| rect)
-            }) {
+            if let Some(target_rect) = target_rects_by_name.get(&target_name.to_ascii_lowercase()) {
                 let end = Pos2::new(target_rect.left(), target_rect.center().y);
                 let c1 = start + Vec2::new((end.x - start.x) * 0.45, 0.0);
                 let c2 = end - Vec2::new((end.x - start.x) * 0.45, 0.0);
@@ -493,16 +1589,63 @@ impl MappingEditor {
         canvas: &egui::Response,
         matches: &[MatchResult],
         source_names: &[String],
-        target_names: &[String],
         sources: &HashMap<usize, Rect>,
         targets: &HashMap<usize, Rect>,
+        target_rects_by_name: &HashMap<String, Rect>,
     ) {
-        if !canvas.clicked() {
-            return;
-        }
         let Some(pointer) = canvas.interact_pointer_pos() else {
             return;
         };
+        if sources
+            .values()
+            .chain(targets.values())
+            .any(|rect| rect.contains(pointer))
+        {
+            return;
+        }
+        let nearest = self.nearest_connection_at(
+            pointer,
+            matches,
+            source_names,
+            sources,
+            target_rects_by_name,
+        );
+
+        let mut delete_connection = None;
+        canvas.context_menu(|menu| {
+            if let Some((distance, source)) = &nearest {
+                if *distance <= 7.0 && menu.button("Delete Connection").clicked() {
+                    delete_connection = Some(source.clone());
+                    menu.close();
+                } else if *distance > 7.0 {
+                    menu.close();
+                }
+            } else {
+                menu.close();
+            }
+        });
+        if let Some(source) = delete_connection {
+            self.push_undo_snapshot();
+            self.overrides.insert(source, None);
+            return;
+        }
+        if !canvas.clicked() {
+            return;
+        }
+        if let Some((_, source)) = nearest.filter(|(distance, _)| *distance <= 7.0) {
+            self.push_undo_snapshot();
+            self.overrides.insert(source, None);
+        }
+    }
+
+    fn nearest_connection_at(
+        &self,
+        pointer: Pos2,
+        matches: &[MatchResult],
+        source_names: &[String],
+        sources: &HashMap<usize, Rect>,
+        target_rects_by_name: &HashMap<String, Rect>,
+    ) -> Option<(f32, String)> {
         let mut nearest: Option<(f32, String)> = None;
         for (source_index, source_rect) in sources {
             let Some(source_name) = source_names.get(*source_index) else {
@@ -518,11 +1661,8 @@ impl MappingEditor {
             let Some(target_name) = target_name else {
                 continue;
             };
-            let Some((_, target_rect)) = targets.iter().find(|(index, _)| {
-                target_names
-                    .get(**index)
-                    .is_some_and(|name| name.eq_ignore_ascii_case(target_name))
-            }) else {
+            let Some(target_rect) = target_rects_by_name.get(&target_name.to_ascii_lowercase())
+            else {
                 continue;
             };
             let start = Pos2::new(source_rect.right(), source_rect.center().y);
@@ -541,9 +1681,7 @@ impl MappingEditor {
                 nearest = Some((distance, source_name.clone()));
             }
         }
-        if let Some((_, source)) = nearest.filter(|(distance, _)| *distance <= 7.0) {
-            self.overrides.insert(source, None);
-        }
+        nearest
     }
 
     fn draw_layer_node(
@@ -553,18 +1691,14 @@ impl MappingEditor {
         rect: &Rect,
         name: &str,
         source: bool,
-        result: Option<&MatchResult>,
+        _result: Option<&MatchResult>,
         color: Color32,
+        connected: bool,
         empty: bool,
+        selected: bool,
+        pair_highlighted: bool,
     ) {
-        let mut fill = if source && result.is_some_and(|m| m.target_layer.is_some()) {
-            blend(NODE, color, 0.27)
-        } else {
-            NODE
-        };
-        if !source {
-            fill = NODE;
-        }
+        let mut fill = NODE;
         if empty {
             fill = RED;
         }
@@ -573,11 +1707,23 @@ impl MappingEditor {
             *rect,
             3.0,
             Stroke::new(
-                1.0,
-                if empty {
-                    Color32::from_rgb(255, 80, 80)
+                if selected || pair_highlighted {
+                    2.0
+                } else if connected {
+                    1.5
                 } else {
-                    Color32::from_rgb(55, 55, 55)
+                    1.0
+                },
+                if selected {
+                    Color32::from_rgb(190, 170, 255)
+                } else if pair_highlighted {
+                    PAIR_HIGHLIGHT
+                } else if empty {
+                    Color32::from_rgb(255, 80, 80)
+                } else if connected {
+                    color
+                } else {
+                    GREY
                 },
             ),
             egui::StrokeKind::Inside,
@@ -606,7 +1752,7 @@ impl MappingEditor {
     fn source_color(&self, _name: &str, result: Option<&MatchResult>) -> Color32 {
         match result.map(|m| m.source) {
             Some(MatchSource::Exact) => GREEN,
-            Some(MatchSource::Memory) => BLUE,
+            Some(MatchSource::Memory) => MEMORY_BLUE,
             Some(MatchSource::Heuristic) => YELLOW,
             Some(MatchSource::Manual) => PURPLE,
             _ => {
@@ -617,10 +1763,6 @@ impl MappingEditor {
                 }
             }
         }
-    }
-
-    fn target_color(&self, _name: &str, _matches: &[MatchResult], _sources: &[String]) -> Color32 {
-        Color32::from_rgb(140, 140, 140)
     }
 
     fn visible_sources(&self, sources: &[String], matches: &[MatchResult]) -> Vec<usize> {
@@ -652,34 +1794,67 @@ impl MappingEditor {
             .collect()
     }
 
-    fn visible_targets(&mut self, targets: &[String], filters: &[TargetFilter]) -> Vec<usize> {
+    fn visible_targets(
+        &mut self,
+        targets: &[String],
+        filters: &[TargetFilter],
+        always_hidden: &HashSet<String>,
+    ) -> Vec<usize> {
+        let mut filters_by_layer = HashMap::<String, Vec<(&str, &str)>>::new();
+        let mut specific_counts = HashMap::<String, usize>::new();
+        let hidden_names = always_hidden
+            .iter()
+            .map(|name| name.to_ascii_lowercase())
+            .collect::<HashSet<_>>();
+        for filter in filters {
+            for layer in &filter.layers {
+                filters_by_layer
+                    .entry(layer.to_ascii_lowercase())
+                    .or_default()
+                    .push((filter.name.as_str(), filter.sort_group.as_str()));
+                if filter.sort_group == "Specific" {
+                    *specific_counts
+                        .entry(filter.name.to_ascii_lowercase())
+                        .or_default() += 1;
+                }
+            }
+        }
+
         targets
             .iter()
             .enumerate()
             .filter_map(|(index, name)| {
+                if hidden_names.contains(&name.to_ascii_lowercase()) {
+                    return None;
+                }
                 if !contains_folded(name, &self.target_query) {
                     return None;
                 }
                 if filters.is_empty() {
                     return Some(index);
                 }
-                let matched: Vec<&TargetFilter> = filters
-                    .iter()
-                    .filter(|filter| {
-                        filter
-                            .layers
-                            .iter()
-                            .any(|layer| layer.eq_ignore_ascii_case(name))
-                    })
-                    .collect();
-                if matched.is_empty() {
+                let Some(matched) = filters_by_layer.get(&name.to_ascii_lowercase()) else {
                     return Some(index);
-                }
-                let checked = matched.iter().any(|filter| {
-                    *self
-                        .category_visibility
-                        .entry(filter.name.clone())
-                        .or_insert(true)
+                };
+                let primary_specific = matched
+                    .iter()
+                    .filter(|(_, group)| *group == "Specific")
+                    .min_by_key(|(filter_name, _)| {
+                        (
+                            specific_counts
+                                .get(&filter_name.to_ascii_lowercase())
+                                .copied()
+                                .unwrap_or(usize::MAX),
+                            filter_name.to_ascii_lowercase(),
+                        )
+                    })
+                    .map(|(name, _)| *name);
+                let checked = matched.iter().any(|(filter_name, group)| {
+                    (*group != "Specific" || Some(*filter_name) == primary_specific)
+                        && *self
+                            .category_visibility
+                            .entry((*filter_name).to_string())
+                            .or_insert(true)
                 });
                 checked.then_some(index)
             })
@@ -692,7 +1867,7 @@ impl MappingEditor {
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 egui::Frame::new()
-                    .fill(Color32::from_rgba_unmultiplied(42, 42, 42, 226))
+                    .fill(Color32::from_rgba_unmultiplied(31, 33, 37, 236))
                     .stroke(Stroke::new(1.0, Color32::from_rgb(95, 95, 95)))
                     .corner_radius(8)
                     .inner_margin(egui::Margin::symmetric(14, 12))
@@ -709,6 +1884,11 @@ impl MappingEditor {
                                 .size(11.0)
                                 .color(Color32::from_rgb(120, 120, 120)),
                         );
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.source_query)
+                                .desired_width(130.0)
+                                .hint_text("Search source layers"),
+                        );
                         ui.add_space(4.0);
                         if ui
                             .add_sized([150.0, 24.0], egui::Button::new("Fit to View (F)"))
@@ -718,7 +1898,7 @@ impl MappingEditor {
                         }
                         ui.add_space(8.0);
                         filter_button(ui, "Exact Match", GREEN, &mut self.show_exact);
-                        filter_button(ui, "Memory Match", BLUE, &mut self.show_memory);
+                        filter_button(ui, "Memory Match", MEMORY_BLUE, &mut self.show_memory);
                         filter_button(ui, "Heuristic Match", YELLOW, &mut self.show_heuristic);
                         ui.horizontal(|ui| {
                             ui.add(
@@ -746,19 +1926,26 @@ impl MappingEditor {
                                     [74.0, 28.0],
                                     egui::Button::new("Highlight")
                                         .fill(RED)
+                                        .corner_radius(7)
                                         .selected(self.highlight_empty),
                                 )
                                 .clicked()
                                 .then(|| self.highlight_empty = !self.highlight_empty);
-                            ui.add_enabled(
-                                false,
-                                egui::Button::new("Purge")
-                                    .fill(RED)
-                                    .min_size(Vec2::new(74.0, 28.0)),
-                            )
-                            .on_hover_text(
-                                "Purge becomes available after the apply bridge is implemented.",
-                            );
+                            if ui
+                                .add_enabled(
+                                    empty_count > 0,
+                                    egui::Button::new("Purge")
+                                        .fill(RED)
+                                        .corner_radius(7)
+                                        .min_size(Vec2::new(74.0, 28.0)),
+                                )
+                                .on_hover_text(
+                                    "Remove unused empty layers from the active drawing.",
+                                )
+                                .clicked()
+                            {
+                                self.purge_confirmation_open = true;
+                            }
                         });
                         ui.add_space(6.0);
                         separator(ui);
@@ -788,109 +1975,251 @@ impl MappingEditor {
             });
     }
 
-    fn draw_right_panel(&mut self, ctx: &egui::Context, filters: &[TargetFilter]) {
-        if filters.is_empty() {
-            return;
-        }
+    fn draw_right_panel(
+        &mut self,
+        ctx: &egui::Context,
+        filters: &[TargetFilter],
+        template_name: &str,
+    ) -> bool {
+        let mut choose_standard = false;
         egui::Area::new(Id::new("mapping_target_filters"))
             .anchor(Align2::RIGHT_TOP, egui::vec2(-20.0, 20.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                egui::Frame::new()
-                    .fill(Color32::from_rgba_unmultiplied(42, 42, 42, 226))
-                    .stroke(Stroke::new(1.0, Color32::from_rgb(95, 95, 95)))
-                    .corner_radius(8)
-                    .inner_margin(egui::Margin::symmetric(14, 12))
+                let panel_height = (ctx.content_rect().height() - 180.0).max(280.0);
+                egui::Resize::default()
+                    .id_salt("target_filter_panel_resize")
+                    .default_size(Vec2::new(260.0, panel_height))
+                    .min_size(Vec2::new(210.0, 260.0))
+                    .max_size(Vec2::new(
+                        (ctx.content_rect().width() * 0.45).max(260.0),
+                        (ctx.content_rect().height() - 40.0).max(300.0),
+                    ))
+                    .with_stroke(false)
                     .show(ui, |ui| {
-                        ui.set_width(172.0);
-                        ui.label(
-                            RichText::new("Target Filter")
-                                .size(16.0)
-                                .strong()
-                                .color(Color32::from_rgb(230, 230, 230)),
-                        );
-                        ui.label(
-                            RichText::new("Visibility Toggle")
-                                .size(11.0)
-                                .color(Color32::from_rgb(120, 120, 120)),
-                        );
-                        ui.add_space(4.0);
-                        ui.label(
-                            RichText::new("Target filter")
-                                .size(9.0)
-                                .color(Color32::from_gray(130)),
-                        );
-                        ui.add(
-                            egui::TextEdit::singleline(&mut self.target_query)
-                                .desired_width(150.0)
-                                .hint_text("Search layers"),
-                        );
-                        ui.add_space(7.0);
-                        if ui
-                            .add_sized([150.0, 28.0], egui::Button::new("All On/Off").fill(BLUE))
-                            .clicked()
-                        {
-                            let all_on = filters.iter().all(|f| {
-                                *self
-                                    .category_visibility
-                                    .entry(f.name.clone())
-                                    .or_insert(true)
-                            });
-                            for filter in filters {
-                                self.category_visibility
-                                    .insert(filter.name.clone(), !all_on);
-                            }
-                        }
-                        egui::ScrollArea::vertical()
-                            .max_height(ctx.content_rect().height() - 110.0)
+                        let panel_width = ui.available_width();
+                        self.target_filter_width = panel_width;
+                        ui.set_width(panel_width);
+                        egui::Frame::new()
+                            .fill(Color32::from_rgba_unmultiplied(31, 33, 37, 236))
+                            .stroke(Stroke::new(1.0, Color32::from_rgb(95, 95, 95)))
+                            .corner_radius(8)
+                            .inner_margin(egui::Margin::symmetric(14, 12))
                             .show(ui, |ui| {
-                                for filter in filters {
-                                    let checked = self
-                                        .category_visibility
-                                        .entry(filter.name.clone())
-                                        .or_insert(true);
-                                    let color = match filter.sort_group.as_str() {
-                                        "Discipline" => Color32::from_rgb(74, 125, 196),
-                                        "General" => Color32::from_rgb(74, 133, 119),
-                                        _ => Color32::from_rgb(102, 102, 102),
-                                    };
-                                    if ui
+                                let control_width = ui.available_width();
+                                ui.label(
+                                    RichText::new("Target Filter")
+                                        .size(16.0)
+                                        .strong()
+                                        .color(Color32::from_rgb(230, 230, 230)),
+                                );
+                                ui.label(
+                                    RichText::new(if template_name.is_empty() {
+                                        "No standard selected"
+                                    } else {
+                                        template_name
+                                    })
+                                    .size(10.0)
+                                    .color(Color32::from_rgb(160, 160, 160)),
+                                );
+                                if ui
+                                    .add_sized(
+                                        [control_width, 28.0],
+                                        egui::Button::new("Choose Standard")
+                                            .fill(BLUE)
+                                            .corner_radius(7),
+                                    )
+                                    .clicked()
+                                {
+                                    choose_standard = true;
+                                }
+                                ui.label(
+                                    RichText::new("Visibility Toggle")
+                                        .size(11.0)
+                                        .color(Color32::from_rgb(120, 120, 120)),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new("Target filter")
+                                        .size(9.0)
+                                        .color(Color32::from_gray(130)),
+                                );
+                                if !filters.is_empty() {
+                                    ui.add(
+                                        egui::TextEdit::singleline(&mut self.target_query)
+                                            .desired_width(control_width)
+                                            .hint_text("Search layers"),
+                                    );
+                                }
+                                ui.add_space(7.0);
+                                if !filters.is_empty()
+                                    && ui
                                         .add_sized(
-                                            [150.0, 28.0],
-                                            egui::Button::new(&filter.name).fill(if *checked {
-                                                color
-                                            } else {
-                                                GREY
-                                            }),
+                                            [control_width, 28.0],
+                                            egui::Button::new("All On/Off")
+                                                .fill(BLUE)
+                                                .corner_radius(7),
                                         )
                                         .clicked()
-                                    {
-                                        *checked = !*checked;
+                                {
+                                    let all_on = filters.iter().all(|f| {
+                                        *self
+                                            .category_visibility
+                                            .entry(f.name.clone())
+                                            .or_insert(true)
+                                    });
+                                    for filter in filters {
+                                        self.category_visibility
+                                            .insert(filter.name.clone(), !all_on);
                                     }
-                                    ui.add_space(4.0);
                                 }
+                                if !filters.is_empty() {
+                                    egui::ScrollArea::vertical()
+                                        .max_height((ui.available_height() - 4.0).max(80.0))
+                                        .show(ui, |ui| {
+                                            for filter in filters {
+                                                let checked = self
+                                                    .category_visibility
+                                                    .entry(filter.name.clone())
+                                                    .or_insert(true);
+                                                let color = match filter.sort_group.as_str() {
+                                                    "Discipline" => Color32::from_rgb(74, 125, 196),
+                                                    "General" => Color32::from_rgb(74, 133, 119),
+                                                    _ => Color32::from_rgb(102, 102, 102),
+                                                };
+                                                let label = RichText::new(&filter.name).color(
+                                                    if *checked {
+                                                        Color32::from_rgb(232, 232, 232)
+                                                    } else {
+                                                        Color32::from_rgb(158, 158, 158)
+                                                    },
+                                                );
+                                                if ui
+                                                    .add_sized(
+                                                        [ui.available_width(), 28.0],
+                                                        egui::Button::new(label)
+                                                            .fill(Color32::from_rgb(38, 40, 44))
+                                                            .stroke(Stroke::new(
+                                                                if *checked { 1.5 } else { 1.0 },
+                                                                if *checked { color } else { GREY },
+                                                            ))
+                                                            .corner_radius(7),
+                                                    )
+                                                    .clicked()
+                                                {
+                                                    *checked = !*checked;
+                                                }
+                                                ui.add_space(4.0);
+                                            }
+                                        });
+                                }
+                                // Make the painted panel fill the resize allocation so its
+                                // resize grip stays attached to the visible lower-right corner.
+                                ui.set_min_height(ui.available_height());
                             });
                     });
             });
+        choose_standard
+    }
+
+    pub fn retain_valid_targets(&mut self, targets: &[String]) {
+        let names = targets
+            .iter()
+            .map(|name| name.to_ascii_lowercase())
+            .collect::<HashSet<_>>();
+        self.overrides.retain(|_, target| {
+            target
+                .as_ref()
+                .is_none_or(|name| names.contains(&name.to_ascii_lowercase()))
+        });
+        self.undo_stack.clear();
+        self.redo_stack.clear();
     }
 
     fn draw_canvas_help(&self, _ctx: &egui::Context, _rect: Rect) {}
 }
 
 fn filter_button(ui: &mut egui::Ui, label: &str, color: Color32, enabled: &mut bool) {
-    let fill = if *enabled {
-        color
+    let text_color = if *enabled {
+        Color32::from_rgb(232, 232, 232)
     } else {
-        Color32::from_rgb(78, 78, 78)
+        Color32::from_rgb(158, 158, 158)
     };
     if ui
         .add_sized(
             [150.0, 28.0],
-            egui::Button::new(RichText::new(label).strong()).fill(fill),
+            egui::Button::new(RichText::new(label).strong().color(text_color))
+                .fill(Color32::from_rgb(38, 40, 44))
+                .stroke(Stroke::new(
+                    if *enabled { 1.5 } else { 1.0 },
+                    if *enabled { color } else { GREY },
+                ))
+                .corner_radius(7),
         )
         .clicked()
     {
         *enabled = !*enabled;
+    }
+}
+
+fn draw_mode_switch(ui: &mut egui::Ui, column_mode: bool) -> bool {
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(136.0, 34.0), Sense::hover());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 17.0, Color32::from_rgb(37, 37, 37));
+    painter.rect_stroke(
+        rect,
+        17.0,
+        Stroke::new(1.0, Color32::from_rgb(102, 102, 102)),
+        egui::StrokeKind::Inside,
+    );
+
+    let half = rect.width() * 0.5;
+    let node_rect = Rect::from_min_max(rect.min, Pos2::new(rect.left() + half, rect.bottom()));
+    let column_rect = Rect::from_min_max(Pos2::new(rect.left() + half, rect.top()), rect.max);
+    let node_response = ui.interact(node_rect, Id::new("mapping-mode-node"), Sense::click());
+    let column_response = ui.interact(column_rect, Id::new("mapping-mode-column"), Sense::click());
+
+    let thumb_rect = if column_mode {
+        Rect::from_min_max(
+            Pos2::new(rect.left() + half + 3.0, rect.top() + 3.0),
+            Pos2::new(rect.right() - 3.0, rect.bottom() - 3.0),
+        )
+    } else {
+        Rect::from_min_max(
+            Pos2::new(rect.left() + 3.0, rect.top() + 3.0),
+            Pos2::new(rect.left() + half - 3.0, rect.bottom() - 3.0),
+        )
+    };
+    painter.rect_filled(thumb_rect, 14.0, BLUE);
+    painter.text(
+        Pos2::new(node_rect.center().x, rect.center().y),
+        Align2::CENTER_CENTER,
+        "Node",
+        FontId::proportional(13.0),
+        if column_mode {
+            Color32::from_rgb(175, 175, 175)
+        } else {
+            Color32::WHITE
+        },
+    );
+    painter.text(
+        Pos2::new(column_rect.center().x, rect.center().y),
+        Align2::CENTER_CENTER,
+        "Column",
+        FontId::proportional(13.0),
+        if column_mode {
+            Color32::WHITE
+        } else {
+            Color32::from_rgb(175, 175, 175)
+        },
+    );
+
+    if node_response.clicked() {
+        false
+    } else if column_response.clicked() {
+        true
+    } else {
+        column_mode
     }
 }
 
@@ -917,13 +2246,8 @@ fn contains_folded(text: &str, query: &str) -> bool {
     query.is_empty() || text.to_lowercase().contains(&query.to_lowercase())
 }
 
-fn blend(base: Color32, tint: Color32, amount: f32) -> Color32 {
-    let lerp = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * amount).round() as u8;
-    Color32::from_rgb(
-        lerp(base.r(), tint.r()),
-        lerp(base.g(), tint.g()),
-        lerp(base.b(), tint.b()),
-    )
+fn interpolate_rect(from: Rect, to: Rect, amount: f32) -> Rect {
+    Rect::from_min_max(from.min.lerp(to.min, amount), from.max.lerp(to.max, amount))
 }
 
 fn cubic(a: Pos2, b: Pos2, c: Pos2, d: Pos2, t: f32) -> Pos2 {

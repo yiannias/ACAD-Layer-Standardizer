@@ -50,6 +50,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Source: "..\src\AcLayerStandardizer\bin\Release\net48\*.dll"; DestDir: "{app}\Contents\R24"; Flags: ignoreversion
 Source: "..\src\AcLayerStandardizer\bin\Release\net8.0-windows\*.dll"; DestDir: "{app}\Contents\R25"; Flags: ignoreversion
 Source: "..\src\AcLayerStandardizer\bin\Release\net10.0-windows\*.dll"; DestDir: "{app}\Contents\R26"; Flags: ignoreversion
+Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R24"; Flags: ignoreversion
+Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R25"; Flags: ignoreversion
+Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R26"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
 ; config.json: plain app settings (paths, thresholds, checkbox state), not a
 ; versioned content schema -- PluginConfig.Load() already tolerates missing
