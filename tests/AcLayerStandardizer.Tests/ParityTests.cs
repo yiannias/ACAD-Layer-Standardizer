@@ -33,7 +33,45 @@ public class ParityTests
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
     }
 
-    private static string Normalize(string text) => text.Replace("\r\n", "\n").Trim();
+
+    // Compares parsed JSON, treating numbers within 1e-9 as equal: .NET Framework
+    // prints 0.6 as 0.59999999999999998, so a textual comparison would fail there
+    // even though the value is identical.
+    private static void AssertJsonEqual(string expected, string actual)
+    {
+        using var e = JsonDocument.Parse(expected);
+        using var a = JsonDocument.Parse(actual);
+        AssertElementsEqual(e.RootElement, a.RootElement, "$");
+    }
+
+    private static void AssertElementsEqual(JsonElement expected, JsonElement actual, string path)
+    {
+        Assert.True(expected.ValueKind == actual.ValueKind, $"{path}: {expected.ValueKind} vs {actual.ValueKind}");
+        switch (expected.ValueKind)
+        {
+            case JsonValueKind.Object:
+                var expectedProps = expected.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+                var actualProps = actual.EnumerateObject().ToDictionary(p => p.Name, p => p.Value);
+                Assert.Equal(expectedProps.Keys.OrderBy(k => k, StringComparer.Ordinal), actualProps.Keys.OrderBy(k => k, StringComparer.Ordinal));
+                foreach (var pair in expectedProps)
+                    AssertElementsEqual(pair.Value, actualProps[pair.Key], $"{path}.{pair.Key}");
+                break;
+            case JsonValueKind.Array:
+                var expectedItems = expected.EnumerateArray().ToArray();
+                var actualItems = actual.EnumerateArray().ToArray();
+                Assert.True(expectedItems.Length == actualItems.Length, $"{path}: length {expectedItems.Length} vs {actualItems.Length}");
+                for (var i = 0; i < expectedItems.Length; i++)
+                    AssertElementsEqual(expectedItems[i], actualItems[i], $"{path}[{i}]");
+                break;
+            case JsonValueKind.Number:
+                Assert.True(Math.Abs(expected.GetDouble() - actual.GetDouble()) < 1e-9,
+                    $"{path}: {expected.GetDouble()} vs {actual.GetDouble()}");
+                break;
+            case JsonValueKind.String:
+                Assert.Equal(expected.GetString(), actual.GetString());
+                break;
+        }
+    }
 
     // ---- builders: deterministic, sorted JSON ---------------------------------
 
@@ -111,15 +149,15 @@ public class ParityTests
 
     [Fact]
     public void Categorization_matches_golden() =>
-        Assert.Equal(Normalize(File.ReadAllText(Path.Combine(ParityDir(), "categorization.golden.json"))), Normalize(BuildCategorization()));
+        AssertJsonEqual(File.ReadAllText(Path.Combine(ParityDir(), "categorization.golden.json")), BuildCategorization());
 
     [Fact]
     public void Heuristic_scores_match_golden() =>
-        Assert.Equal(Normalize(File.ReadAllText(Path.Combine(ParityDir(), "heuristic.golden.json"))), Normalize(BuildHeuristic()));
+        AssertJsonEqual(File.ReadAllText(Path.Combine(ParityDir(), "heuristic.golden.json")), BuildHeuristic());
 
     [Fact]
     public void Memory_lookup_matches_golden() =>
-        Assert.Equal(Normalize(File.ReadAllText(Path.Combine(ParityDir(), "memory_lookup.golden.json"))), Normalize(BuildMemory()));
+        AssertJsonEqual(File.ReadAllText(Path.Combine(ParityDir(), "memory_lookup.golden.json")), BuildMemory());
 
     [Fact]
     public void Memory_file_saved_by_rust_loads_in_csharp()
