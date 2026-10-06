@@ -2,6 +2,7 @@ use acad_layer_core::{
     LayerCategorizer, LayerDictionaryDefinition, MemoryStore, PluginConfig, TranslationMemory,
 };
 use acad_layer_ipc::TargetFilter;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Target-side filter buttons derived from the layer dictionary, plus layers that
@@ -41,6 +42,46 @@ pub fn build_target_view(standard: &[String], dictionary: &LayerDictionaryDefini
         filters,
         always_hidden,
     }
+}
+
+/// What happened to the translation memory after a confirmed Apply.
+pub enum MemoryOutcome {
+    NotRequested,
+    Saved,
+    Failed(String),
+}
+
+pub fn applied_status_message(count: usize, memory: MemoryOutcome) -> String {
+    match memory {
+        MemoryOutcome::NotRequested => format!("Applied {count} mappings."),
+        MemoryOutcome::Saved => format!("Applied {count} mappings and saved them to memory."),
+        MemoryOutcome::Failed(error) => {
+            format!("Applied {count} mappings, but could not save translation memory: {error}")
+        }
+    }
+}
+
+/// Same semantics as the C# `SaveRememberedMappings`: every drawing source layer that
+/// is mapped gets its mapping stored, every one that is not is forgotten, and other
+/// remembered sources are untouched. A corrupt memory file is an error, never
+/// replaced by a fresh one.
+pub fn remember_mappings(
+    store: &MemoryStore,
+    source_layers: &[String],
+    mappings: &HashMap<String, String>,
+) -> Result<(), String> {
+    let mut memory = store.load_checked().map_err(|e| e.to_string())?;
+    let by_lowercase: HashMap<String, &String> = mappings
+        .iter()
+        .map(|(source, target)| (source.to_lowercase(), target))
+        .collect();
+    for source in source_layers {
+        match by_lowercase.get(&source.to_lowercase()) {
+            Some(target) => memory.set_mapping(source, target),
+            None => memory.remove_mapping(source),
+        }
+    }
+    store.save(&memory).map_err(|e| e.to_string())
 }
 
 /// The user's dictionary (`layer_dictionary.json` in the config dir). Missing or
@@ -237,5 +278,64 @@ mod tests {
         fs::copy(repo_root().join("tests/parity/memory_1_2_x.json"), dir.join("standards_memory.json")).unwrap();
         let startup = load_startup_from(Some(&dir));
         assert_eq!(startup.memory.lookup("a-ELEV-medm"), Some("A-DT-3"));
+    }
+
+    fn temp_store(name: &str) -> (std::path::PathBuf, MemoryStore) {
+        let dir = std::env::temp_dir().join(format!("acad_ui_{name}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("standards_memory.json");
+        (path.clone(), MemoryStore::new(path))
+    }
+
+    #[test]
+    fn remember_mappings_sets_mapped_and_removes_unmapped_sources() {
+        let (_, store) = temp_store("remember_sets");
+        let mut seed = TranslationMemory::default();
+        seed.mappings.insert("A-OLD".into(), "A-WALL".into());
+        seed.mappings.insert("UNRELATED".into(), "KEEP".into());
+        store.save(&seed).unwrap();
+
+        let sources = vec!["A-NEW".to_string(), "A-OLD".to_string()];
+        let mapped: std::collections::HashMap<String, String> =
+            [("A-NEW".to_string(), "A-DOOR".to_string())].into_iter().collect();
+        remember_mappings(&store, &sources, &mapped).unwrap();
+
+        let memory = store.load_checked().unwrap();
+        assert_eq!(memory.lookup("A-NEW"), Some("A-DOOR"));
+        assert_eq!(memory.lookup("A-OLD"), None, "a source that is no longer mapped is forgotten");
+        assert_eq!(memory.lookup("UNRELATED"), Some("KEEP"), "other sources are untouched");
+    }
+
+    #[test]
+    fn remember_mappings_refuses_to_overwrite_a_corrupt_file() {
+        let (path, store) = temp_store("remember_corrupt");
+        fs::write(&path, "{ nope").unwrap();
+        let mapped = [("A".to_string(), "B".to_string())].into_iter().collect();
+        assert!(remember_mappings(&store, &["A".to_string()], &mapped).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ nope");
+    }
+
+    #[test]
+    fn remember_mappings_matches_sources_case_insensitively() {
+        let (_, store) = temp_store("remember_case");
+        let mut seed = TranslationMemory::default();
+        seed.mappings.insert("A-Wall".into(), "OLD".into());
+        store.save(&seed).unwrap();
+        let mapped = [("a-wall".to_string(), "NEW".to_string())].into_iter().collect();
+        remember_mappings(&store, &["a-wall".to_string()], &mapped).unwrap();
+        let memory = store.load_checked().unwrap();
+        assert_eq!(memory.mappings.len(), 1);
+        assert_eq!(memory.lookup("A-WALL"), Some("NEW"));
+    }
+
+    #[test]
+    fn a_memory_failure_after_a_successful_apply_is_a_warning_not_a_failure() {
+        let text = applied_status_message(3, MemoryOutcome::Failed("disk full".into()));
+        assert!(text.starts_with("Applied 3 mappings"), "{text}");
+        assert!(text.contains("could not save translation memory"), "{text}");
+        assert!(text.contains("disk full"), "{text}");
+        assert_eq!(applied_status_message(3, MemoryOutcome::Saved), "Applied 3 mappings and saved them to memory.");
+        assert_eq!(applied_status_message(1, MemoryOutcome::NotRequested), "Applied 1 mappings.");
     }
 }

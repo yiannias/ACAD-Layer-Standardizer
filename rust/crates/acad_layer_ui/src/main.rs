@@ -84,6 +84,8 @@ struct LayerStandardizerApp {
     dictionary: LayerDictionaryDefinition,
     memory_store: Option<MemoryStore>,
     standard_requested: bool,
+    /// Source layers and mapped targets to remember once AutoCAD confirms the Apply.
+    pending_remember: Option<(Vec<String>, HashMap<String, String>)>,
     mapping_editor: mapping_editor::MappingEditor,
     user_preferences: UserPreferences,
 }
@@ -136,6 +138,7 @@ impl LayerStandardizerApp {
             dictionary: startup.dictionary,
             memory_store: startup.memory_store,
             standard_requested: false,
+            pending_remember: None,
             mapping_editor,
             user_preferences,
         }
@@ -250,22 +253,42 @@ impl eframe::App for LayerStandardizerApp {
                     warning,
                 }) => {
                     self.apply_pending = false;
+                    let mut keep_open = false;
                     if protocol_version != acad_layer_ipc::IPC_PROTOCOL_VERSION {
                         self.status_message = format!(
                             "AutoCAD returned unsupported apply response version {protocol_version}."
                         );
-                    } else if let Some(warning) = warning {
-                        self.status_message = format!(
-                            "Applied {count} mappings, but could not save translation memory: {warning}"
-                        );
                     } else {
-                        self.status_message = if remembered {
-                            format!("Applied {count} mappings and saved them to memory.")
-                        } else {
-                            format!("Applied {count} mappings.")
+                        let outcome = match self.pending_remember.take() {
+                            None if remembered => data::MemoryOutcome::Saved,
+                            None => data::MemoryOutcome::NotRequested,
+                            Some((sources, mapped)) => match &self.memory_store {
+                                Some(store) => match data::remember_mappings(store, &sources, &mapped) {
+                                    Ok(()) => data::MemoryOutcome::Saved,
+                                    Err(error) => data::MemoryOutcome::Failed(error),
+                                },
+                                None => data::MemoryOutcome::Failed(
+                                    "no translation memory location is available".to_string(),
+                                ),
+                            },
                         };
+                        let outcome = match (warning, outcome) {
+                            (Some(warning), _) => data::MemoryOutcome::Failed(warning),
+                            (None, outcome) => outcome,
+                        };
+                        if let data::MemoryOutcome::Failed(_) = outcome {
+                            keep_open = true;
+                        }
+                        self.status_message = data::applied_status_message(count, outcome);
+                        if keep_open {
+                            // The Apply itself succeeded; keep the window up so the
+                            // user sees that the memory was not saved.
+                            self.error_message = Some(self.status_message.clone());
+                        }
                     }
-                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    if !keep_open {
+                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
                 }
                 Ok(IpcResponse::Purged {
                     protocol_version,
@@ -331,11 +354,23 @@ impl eframe::App for LayerStandardizerApp {
         }
 
         if let Some(remember) = editor_event.remember {
+            let mappings = self.mapping_editor.current_mappings(&self.matches);
+            // The Rust app owns translation memory: it writes it after AutoCAD confirms
+            // the Apply, so the connector is always told not to.
+            self.pending_remember = remember.then(|| {
+                (
+                    self.source_layers.clone(),
+                    mappings
+                        .iter()
+                        .map(|m| (m.source_layer.clone(), m.target_layer.clone()))
+                        .collect(),
+                )
+            });
             let request = (
                 self.drawing_name.clone(),
                 self.drawing_id.clone(),
-                self.mapping_editor.current_mappings(&self.matches),
-                remember,
+                mappings,
+                false,
                 self.mapping_editor.property_settings(),
             );
             let sender = self.ipc_sender.clone();
@@ -380,7 +415,7 @@ impl eframe::App for LayerStandardizerApp {
         }
 
         if let Some(message) = self.error_message.clone() {
-            egui::Window::new("AutoCAD could not complete that")
+            egui::Window::new("Layer Standardizer")
                 .collapsible(false)
                 .resizable(false)
                 .order(egui::Order::Tooltip)

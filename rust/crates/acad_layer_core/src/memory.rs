@@ -45,6 +45,26 @@ impl TranslationMemory {
     }
 }
 
+impl TranslationMemory {
+    /// Sets a mapping, keeping an existing key that differs only by case (as the C#
+    /// store's case-insensitive dictionary does) instead of adding a duplicate.
+    pub fn set_mapping(&mut self, source: &str, target: &str) {
+        let wanted = source.to_lowercase();
+        let existing = self
+            .mappings
+            .keys()
+            .find(|key| key.to_lowercase() == wanted)
+            .cloned();
+        self.mappings
+            .insert(existing.unwrap_or_else(|| source.to_string()), target.to_string());
+    }
+
+    pub fn remove_mapping(&mut self, source: &str) {
+        let wanted = source.to_lowercase();
+        self.mappings.retain(|key, _| key.to_lowercase() != wanted);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum MemoryError {
     Io(String),
@@ -269,5 +289,22 @@ mod tests {
         assert_eq!(value["schemaVersion"], "1.0");
         assert!(value["lastModified"].as_str().unwrap().ends_with('Z'));
         assert_eq!(value["mappings"]["A-Wall"], "A-WALL");
+    }
+
+    #[test]
+    fn set_mapping_replaces_a_key_that_differs_only_by_case() {
+        let mut memory = TranslationMemory::default();
+        memory.mappings.insert("A-Wall".into(), "OLD".into());
+        memory.set_mapping("a-wall", "NEW");
+        assert_eq!(memory.mappings.len(), 1);
+        assert_eq!(memory.lookup("A-WALL"), Some("NEW"));
+    }
+
+    #[test]
+    fn remove_mapping_ignores_case() {
+        let mut memory = TranslationMemory::default();
+        memory.mappings.insert("A-Wall".into(), "X".into());
+        memory.remove_mapping("a-WALL");
+        assert!(memory.mappings.is_empty());
     }
 }
