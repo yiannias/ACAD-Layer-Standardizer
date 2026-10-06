@@ -437,6 +437,9 @@ impl MappingEditor {
 
         let mut drop_target_rects = Vec::with_capacity(target_positions.len());
         for (index, rect) in &target_positions {
+            if !rect.intersects(canvas_rect) {
+                continue;
+            }
             let name = &standard_layers[*index];
             drop_target_rects.push((name.as_str(), *rect));
             let target_selected = self.selected_target.as_deref() == Some(name.as_str());
@@ -502,6 +505,9 @@ impl MappingEditor {
         }
 
         for (index, rect) in &source_positions {
+            if !rect.intersects(canvas_rect) {
+                continue;
+            }
             let name = &source_layers[*index];
             let result = matches.get(*index);
             let empty = empty_layers.contains(name);
@@ -828,7 +834,7 @@ impl MappingEditor {
                     NODE_WIDTH,
                     NODE_HEIGHT,
                 );
-                rect.intersects(canvas).then_some((*index, rect))
+                Some((*index, rect))
             })
             .collect()
     }
@@ -1383,7 +1389,7 @@ impl MappingEditor {
                     NODE_WIDTH,
                     NODE_HEIGHT,
                 );
-                rect.intersects(canvas).then_some((*index, rect))
+                Some((*index, rect))
             })
             .collect()
     }
