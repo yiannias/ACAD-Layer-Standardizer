@@ -294,11 +294,11 @@ impl MappingEditor {
         if self.column_mode {
             let _canvas_response = ui.allocate_rect(canvas_rect, Sense::hover());
             let max_list_bottom = (footer_rect.top() - 12.0).min(canvas_rect.bottom());
-            let visible_row_slots = ((max_list_bottom - canvas_rect.top() - 97.0)
+            let visible_row_slots = ((max_list_bottom - canvas_rect.top() - 130.0)
                 / COLUMN_ROW_STEP)
                 .floor()
                 .max(1.0);
-            let list_bottom = (canvas_rect.top() + 97.0 + visible_row_slots * COLUMN_ROW_STEP)
+            let list_bottom = (canvas_rect.top() + 130.0 + visible_row_slots * COLUMN_ROW_STEP)
                 .min(canvas_rect.bottom());
             let filter_left =
                 ctx.content_rect().right() - 20.0 - self.target_filter_width.max(210.0);
@@ -886,6 +886,17 @@ impl MappingEditor {
             true,
         );
 
+        for (header_rect, query, hint) in [
+            (source_rect, &mut self.source_query, "Filter source layers"),
+            (target_rect, &mut self.target_query, "Filter target layers"),
+        ] {
+            let field = Rect::from_min_size(
+                Pos2::new(header_rect.left() + 14.0, header_rect.top() + 58.0),
+                Vec2::new((header_rect.width() - 28.0).min(300.0), 24.0),
+            );
+            filter_field(ui, field, query, hint);
+        }
+
         self.update_column_scroll(ctx, source_rows_rect, visible_sources.len(), true);
         self.update_column_scroll(ctx, target_rows_rect, visible_targets.len(), false);
 
@@ -1195,7 +1206,7 @@ impl MappingEditor {
             subtitle_color,
         );
         let rows_rect = Rect::from_min_max(
-            Pos2::new(rect.left() + 10.0, rect.top() + 57.0),
+            Pos2::new(rect.left() + 10.0, rect.top() + 90.0),
             Pos2::new(rect.right() - 10.0, rect.bottom() - 8.0),
         );
         (rows_rect, choose_standard)
@@ -1547,14 +1558,11 @@ impl MappingEditor {
                 let field = Rect::from_min_size(top_left, Vec2::new(width, 24.0));
                 if canvas.contains_rect(field) {
                     let (query, hint) = if is_target {
-                        (&mut self.target_query, "Search target layers")
+                        (&mut self.target_query, "Filter target layers")
                     } else {
-                        (&mut self.source_query, "Search source layers")
+                        (&mut self.source_query, "Filter source layers")
                     };
-                    ui.put(
-                        field,
-                        egui::TextEdit::singleline(query).hint_text(hint),
-                    );
+                    filter_field(ui, field, query, hint);
                 }
             }
         }
@@ -1910,13 +1918,6 @@ impl MappingEditor {
                                 .size(11.0)
                                 .color(Color32::from_rgb(120, 120, 120)),
                         );
-                        if self.column_mode {
-                            ui.add(
-                                egui::TextEdit::singleline(&mut self.source_query)
-                                    .desired_width(130.0)
-                                    .hint_text("Search source layers"),
-                            );
-                        }
                         ui.add_space(4.0);
                         if ui
                             .add_sized([150.0, 24.0], egui::Button::new("Fit to View (F)"))
@@ -2071,13 +2072,6 @@ impl MappingEditor {
                                         .size(9.0)
                                         .color(Color32::from_gray(130)),
                                 );
-                                if !filters.is_empty() && self.column_mode {
-                                    ui.add(
-                                        egui::TextEdit::singleline(&mut self.target_query)
-                                            .desired_width(control_width)
-                                            .hint_text("Search layers"),
-                                    );
-                                }
                                 ui.add_space(7.0);
                                 if !filters.is_empty()
                                     && ui
@@ -2193,6 +2187,19 @@ impl MappingEditor {
     }
 
     fn draw_canvas_help(&self, _ctx: &egui::Context, _rect: Rect) {}
+}
+
+/// A text filter box with a clearly visible light-grey frame.
+fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str) {
+    let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+    let visuals = child.visuals_mut();
+    let frame = Color32::from_gray(150);
+    visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, frame);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_gray(190));
+    child.add_sized(
+        rect.size(),
+        egui::TextEdit::singleline(query).hint_text(hint),
+    );
 }
 
 fn filter_button(ui: &mut egui::Ui, label: &str, color: Color32, enabled: &mut bool) {
