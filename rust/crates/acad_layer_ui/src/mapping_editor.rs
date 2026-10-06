@@ -76,6 +76,7 @@ pub struct MappingEditor {
     source_scroll: f32,
     target_scroll: f32,
     target_filter_width: f32,
+    target_filter_height: Option<f32>,
     drawn_rects: HashMap<(bool, usize), Rect>,
     position_tweens: HashMap<(bool, usize), PositionTween>,
     last_view_transform: Option<(f32, Vec2)>,
@@ -114,6 +115,7 @@ impl Default for MappingEditor {
             source_scroll: 0.0,
             target_scroll: 0.0,
             target_filter_width: 260.0,
+            target_filter_height: None,
             drawn_rects: HashMap::new(),
             position_tweens: HashMap::new(),
             last_view_transform: None,
@@ -1986,26 +1988,25 @@ impl MappingEditor {
             .anchor(Align2::RIGHT_TOP, egui::vec2(-20.0, 20.0))
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
-                let panel_height = (ctx.content_rect().height() - 180.0).max(280.0);
-                egui::Resize::default()
-                    .id_salt("target_filter_panel_resize")
-                    .default_size(Vec2::new(260.0, panel_height))
-                    .min_size(Vec2::new(210.0, 260.0))
-                    .max_size(Vec2::new(
-                        (ctx.content_rect().width() * 0.45).max(260.0),
-                        (ctx.content_rect().height() - 40.0).max(300.0),
-                    ))
-                    .with_stroke(false)
-                    .show(ui, |ui| {
-                        let panel_width = ui.available_width();
-                        self.target_filter_width = panel_width;
-                        ui.set_width(panel_width);
-                        egui::Frame::new()
+                let min_height = 260.0;
+                let max_height = (ctx.content_rect().height() - 40.0).max(300.0);
+                let default_height = (ctx.content_rect().height() - 180.0).max(280.0);
+                let panel_height = self
+                    .target_filter_height
+                    .unwrap_or(default_height)
+                    .clamp(min_height, max_height);
+                self.target_filter_height = Some(panel_height);
+                let panel_width = self.target_filter_width;
+                ui.set_width(panel_width);
+                {
+                    {
+                        let panel = egui::Frame::new()
                             .fill(Color32::from_rgba_unmultiplied(31, 33, 37, 236))
                             .stroke(Stroke::new(1.0, Color32::from_rgb(95, 95, 95)))
                             .corner_radius(8)
                             .inner_margin(egui::Margin::symmetric(14, 12))
                             .show(ui, |ui| {
+                                ui.set_height(panel_height - 24.0);
                                 let control_width = ui.available_width();
                                 ui.label(
                                     RichText::new("Target Filter")
@@ -2113,11 +2114,40 @@ impl MappingEditor {
                                             }
                                         });
                                 }
-                                // Make the painted panel fill the resize allocation so its
-                                // resize grip stays attached to the visible lower-right corner.
-                                ui.set_min_height(ui.available_height());
                             });
-                    });
+                        // Height-only grip, inset so it never covers the rounded corner.
+                        let corner = panel.response.rect.right_bottom();
+                        let grip_rect = Rect::from_min_max(corner - Vec2::splat(22.0), corner);
+                        let grip = ui.interact(
+                            grip_rect,
+                            Id::new("target_filter_height_grip"),
+                            Sense::drag(),
+                        );
+                        if grip.hovered() || grip.dragged() {
+                            ctx.set_cursor_icon(egui::CursorIcon::ResizeVertical);
+                        }
+                        if grip.dragged() {
+                            self.target_filter_height = Some(
+                                (panel_height + grip.drag_delta().y).clamp(min_height, max_height),
+                            );
+                        }
+                        let grip_color = if grip.hovered() || grip.dragged() {
+                            Color32::from_gray(190)
+                        } else {
+                            Color32::from_gray(105)
+                        };
+                        let origin = corner - Vec2::splat(10.0);
+                        for step in [3.0_f32, 6.0, 9.0] {
+                            ui.painter().line_segment(
+                                [
+                                    origin + Vec2::new(0.0, step),
+                                    origin + Vec2::new(step, 0.0),
+                                ],
+                                Stroke::new(1.2, grip_color),
+                            );
+                        }
+                    }
+                }
             });
         choose_standard
     }
