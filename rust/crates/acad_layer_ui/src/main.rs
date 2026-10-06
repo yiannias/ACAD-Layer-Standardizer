@@ -296,7 +296,7 @@ impl eframe::App for LayerStandardizerApp {
             self.apply_pending = true;
             self.status_message = "Applying mappings in AutoCAD…".to_string();
             std::thread::spawn(move || {
-                let result = acad_layer_ipc::apply_plan(request.0, request.1, request.2, request.3);
+                let result = acad_layer_ipc::apply_plan(request.0, String::new(), request.1, request.2, request.3);
                 let _ = sender.send(result);
             });
         }
@@ -310,7 +310,7 @@ impl eframe::App for LayerStandardizerApp {
             self.apply_pending = true;
             self.status_message = "Removing empty layers in AutoCAD…".to_string();
             std::thread::spawn(move || {
-                let result = acad_layer_ipc::purge_empty_layers(request.0, request.1);
+                let result = acad_layer_ipc::purge_empty_layers(request.0, String::new(), request.1);
                 let _ = sender.send(result);
             });
         }

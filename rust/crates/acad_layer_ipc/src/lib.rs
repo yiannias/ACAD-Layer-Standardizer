@@ -2,10 +2,12 @@ use acad_layer_core::{LayerCategorizationResult, MatchResult};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PIPE_NAME: &str = "acad_layer_standardizer";
-pub const IPC_PROTOCOL_VERSION: u32 = 2;
+pub const IPC_PROTOCOL_VERSION: u32 = 3;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingSnapshot {
+    #[serde(default)]
+    pub drawing_id: String,
     pub drawing_name: String,
     #[serde(default = "default_heuristic_threshold")]
     pub heuristic_threshold: f64,
@@ -26,6 +28,15 @@ fn default_heuristic_threshold() -> f64 {
     0.6
 }
 
+/// Lightweight identity of the drawing AutoCAD currently has active.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActiveDrawingInfo {
+    pub drawing_id: String,
+    pub display_name: String,
+    pub layer_fingerprint: String,
+    pub revision: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetFilter {
     pub name: String,
@@ -39,6 +50,9 @@ pub enum IpcRequest {
     Ping,
     GetDrawingLayers,
     GetDrawingSnapshot,
+    GetActiveDrawing {
+        known_revision: Option<u64>,
+    },
     ClassifyLayers {
         source_layers: Vec<String>,
         standard_layers: Vec<String>,
@@ -50,6 +64,8 @@ pub enum IpcRequest {
     ApplyPlan {
         protocol_version: u32,
         drawing_name: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        drawing_id: String,
         mappings: Vec<LayerMapping>,
         remember: bool,
         properties: PropertyMatchSettings,
@@ -57,6 +73,8 @@ pub enum IpcRequest {
     PurgeEmptyLayers {
         protocol_version: u32,
         drawing_name: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        drawing_id: String,
         layers: Vec<String>,
     },
     LoadStandard {
@@ -87,6 +105,9 @@ pub enum IpcResponse {
     Pong,
     Layers(Vec<String>),
     DrawingSnapshot(DrawingSnapshot),
+    ActiveDrawing(ActiveDrawingInfo),
+    ActiveDrawingUnchanged,
+    NoActiveDrawing,
     Classification(Vec<MatchResult>),
     Categorization(LayerCategorizationResult),
     Applied {
@@ -109,8 +130,14 @@ pub fn request_drawing_snapshot() -> Result<IpcResponse, String> {
 }
 
 #[cfg(windows)]
+pub fn get_active_drawing(known_revision: Option<u64>) -> Result<IpcResponse, String> {
+    request(IpcRequest::GetActiveDrawing { known_revision })
+}
+
+#[cfg(windows)]
 pub fn apply_plan(
     drawing_name: String,
+    drawing_id: String,
     mappings: Vec<LayerMapping>,
     remember: bool,
     properties: PropertyMatchSettings,
@@ -118,6 +145,7 @@ pub fn apply_plan(
     request(IpcRequest::ApplyPlan {
         protocol_version: IPC_PROTOCOL_VERSION,
         drawing_name,
+        drawing_id,
         mappings,
         remember,
         properties,
@@ -127,11 +155,13 @@ pub fn apply_plan(
 #[cfg(windows)]
 pub fn purge_empty_layers(
     drawing_name: String,
+    drawing_id: String,
     layers: Vec<String>,
 ) -> Result<IpcResponse, String> {
     request(IpcRequest::PurgeEmptyLayers {
         protocol_version: IPC_PROTOCOL_VERSION,
         drawing_name,
+        drawing_id,
         layers,
     })
 }
@@ -230,8 +260,14 @@ pub fn request_drawing_snapshot() -> Result<IpcResponse, String> {
 }
 
 #[cfg(not(windows))]
+pub fn get_active_drawing(_known_revision: Option<u64>) -> Result<IpcResponse, String> {
+    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(not(windows))]
 pub fn apply_plan(
     _drawing_name: String,
+    _drawing_id: String,
     _mappings: Vec<LayerMapping>,
     _remember: bool,
     _properties: PropertyMatchSettings,
@@ -242,6 +278,7 @@ pub fn apply_plan(
 #[cfg(not(windows))]
 pub fn purge_empty_layers(
     _drawing_name: String,
+    _drawing_id: String,
     _layers: Vec<String>,
 ) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
@@ -250,4 +287,70 @@ pub fn purge_empty_layers(
 #[cfg(not(windows))]
 pub fn load_standard(_path: String) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_without_drawing_id_still_parses() {
+        let json = r#"{"drawing_name":"A.dwg","source_layers":["A"],"standard_layers":["B"],"empty_layers":[],"memory_mappings":{},"target_filters":[]}"#;
+        let snapshot: DrawingSnapshot = serde_json::from_str(json).unwrap();
+        assert_eq!(snapshot.drawing_id, "");
+    }
+
+    #[test]
+    fn get_active_drawing_serializes_known_revision() {
+        let json = serde_json::to_string(&IpcRequest::GetActiveDrawing {
+            known_revision: Some(7),
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"GetActiveDrawing","payload":{"known_revision":7}}"#
+        );
+    }
+
+    #[test]
+    fn active_drawing_response_round_trips() {
+        let json = r#"{"type":"ActiveDrawing","payload":{"drawing_id":"doc-1","display_name":"A.dwg","layer_fingerprint":"ab12","revision":3}}"#;
+        let IpcResponse::ActiveDrawing(info) = serde_json::from_str(json).unwrap() else {
+            panic!("expected ActiveDrawing");
+        };
+        assert_eq!(info.drawing_id, "doc-1");
+        assert_eq!(info.display_name, "A.dwg");
+        assert_eq!(info.layer_fingerprint, "ab12");
+        assert_eq!(info.revision, 3);
+        assert!(matches!(
+            serde_json::from_str::<IpcResponse>(r#"{"type":"ActiveDrawingUnchanged"}"#).unwrap(),
+            IpcResponse::ActiveDrawingUnchanged
+        ));
+        assert!(matches!(
+            serde_json::from_str::<IpcResponse>(r#"{"type":"NoActiveDrawing"}"#).unwrap(),
+            IpcResponse::NoActiveDrawing
+        ));
+    }
+
+    #[test]
+    fn apply_plan_omits_empty_drawing_id() {
+        let request = |drawing_id: &str| {
+            serde_json::to_string(&IpcRequest::ApplyPlan {
+                protocol_version: IPC_PROTOCOL_VERSION,
+                drawing_name: "A.dwg".into(),
+                drawing_id: drawing_id.into(),
+                mappings: vec![],
+                remember: false,
+                properties: PropertyMatchSettings {
+                    match_color: true,
+                    match_linetype: true,
+                    match_lineweight: true,
+                    make_by_layer: false,
+                },
+            })
+            .unwrap()
+        };
+        assert!(!request("").contains("drawing_id"));
+        assert!(request("doc-2").contains(r#""drawing_id":"doc-2""#));
+    }
 }
