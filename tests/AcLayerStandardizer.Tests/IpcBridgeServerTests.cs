@@ -122,4 +122,13 @@ public class IpcBridgeServerTests
         ActiveDrawingRegistry.Clear();
         Assert.Null(ActiveDrawingRegistry.Current);
     }
+
+    [Fact]
+    public void Registry_revisions_start_far_from_a_small_constant_so_processes_do_not_collide()
+    {
+        ActiveDrawingRegistry.Clear();
+        var state = ActiveDrawingRegistry.Publish("p-doc-1", "A.dwg", "aa");
+        Assert.True(state.Revision > 1_000_000, "known_revision from another AutoCAD process must not look current");
+        ActiveDrawingRegistry.Clear();
+    }
 }

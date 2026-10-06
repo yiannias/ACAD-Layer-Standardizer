@@ -79,4 +79,25 @@ public class IpcProtocolTests
         using (var none = JsonDocument.Parse(IpcProtocol.BuildActiveDrawingResponse(null, 3)))
             Assert.Equal("NoActiveDrawing", none.RootElement.GetProperty("type").GetString());
     }
+
+    [Fact]
+    public void Drawing_ids_are_unique_and_share_a_per_process_nonce()
+    {
+        var first = ActiveDrawingIds.Next();
+        var second = ActiveDrawingIds.Next();
+        Assert.NotEqual(first, second);
+        Assert.Equal(first.Substring(0, first.IndexOf("-doc-")), second.Substring(0, second.IndexOf("-doc-")));
+        Assert.True(first.IndexOf("-doc-") >= 8, "id needs a nonce prefix so two AutoCAD processes cannot collide");
+    }
+
+    [Fact]
+    public void Refresh_gate_reports_dirty_once_per_mark()
+    {
+        var gate = new RefreshGate();
+        Assert.False(gate.TryConsume());
+        gate.MarkDirty();
+        gate.MarkDirty();
+        Assert.True(gate.TryConsume());
+        Assert.False(gate.TryConsume());
+    }
 }
