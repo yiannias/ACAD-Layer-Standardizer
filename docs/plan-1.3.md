@@ -112,6 +112,7 @@ The three Phase 3 questions below are resolved (see `docs/superpowers/specs/2026
 
 - Import and export of the translation memory (and a choose-memory-file picker) from the mapping window with a file browser. Today these are typed commands (`STD_ExportMemory`, `STD_ImportMemory`, `STD_SetMemoryFile`) that prompt for a path at the AutoCAD command line.
 - Reuse the live-sync event feed (`EventFeed` / `PollEvents` in the connector, `acad_layer_ipc::feed` in Rust) for other plug-ins. It was built general on purpose (events carry a type and a payload and know nothing about layers); nothing else uses it yet.
+- **License notices for the Rust window.** Generate the per-crate license notices for the crates statically linked into `acad_layer_ui.exe` (for example with `cargo-about`), fill in `THIRD-PARTY-NOTICES.md` and ship them with the installer.
 
 ## Post-1.3 list
 
