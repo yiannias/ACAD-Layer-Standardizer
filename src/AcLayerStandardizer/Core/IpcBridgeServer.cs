@@ -421,9 +421,9 @@ public static class IpcBridgeServer
                 if (current is null)
                     throw new InvalidOperationException(NoDrawingReadMessage);
 
-                var source = MappingsCommand.GetActiveLayerNames(document.Database)
+                var source = LayerReader.GetActiveLayerNames(document.Database)
                     .OrderBy(n => n, NaturalSortComparer.Instance).ToArray();
-                var empty = MappingsCommand.GetEmptyLayers(document.Database)
+                var empty = LayerReader.GetEmptyLayers(document.Database)
                     .OrderBy(n => n, NaturalSortComparer.Instance).ToArray();
                 var updated = current with
                 {
@@ -622,7 +622,7 @@ public static class IpcBridgeServer
             settings.GetProperty("match_lineweight").GetBoolean(),
             settings.GetProperty("make_by_layer").GetBoolean());
 
-        var completion = new TaskCompletionSource<StandardizeCommand.ApplyMappingsResult>(
+        var completion = new TaskCompletionSource<LayerApplier.ApplyMappingsResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         string? memoryWarning = null;
         var remembered = false;
@@ -640,7 +640,7 @@ public static class IpcBridgeServer
                     }
                     else
                     {
-                        var result = StandardizeCommand.ApplyMappings(
+                        var result = LayerApplier.ApplyMappings(
                             snapshot.Document.Database, mappings,
                             snapshot.StandardLayerProperties, propertySettings);
 
@@ -770,7 +770,7 @@ public static class IpcBridgeServer
                     }
                     else
                     {
-                        var stillEmpty = MappingsCommand.GetEmptyLayers(snapshot.Document.Database);
+                        var stillEmpty = LayerReader.GetEmptyLayers(snapshot.Document.Database);
                         var purged = new List<string>();
                         using var transaction = snapshot.Document.Database.TransactionManager.StartTransaction();
                         var table = (Autodesk.AutoCAD.DatabaseServices.LayerTable)transaction.GetObject(

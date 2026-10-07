@@ -45,11 +45,11 @@ public static class MappingsCommand
         {
             // The window is already open: bring it forward before reading any layers.
             if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
-            var rustSource = GetActiveLayerNames(doc.Database)
+            var rustSource = LayerReader.GetActiveLayerNames(doc.Database)
                 .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
             var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
                 doc, Path.GetFileName(doc.Name), config.HeuristicThreshold, rustSource, Array.Empty<string>(),
-                GetEmptyLayers(doc.Database),
+                LayerReader.GetEmptyLayers(doc.Database),
                 new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase),
                 new Dictionary<string, string>(), memPath,
                 Array.Empty<(string Name, string SortGroup, IEnumerable<string> Layers)>(),
@@ -71,7 +71,7 @@ public static class MappingsCommand
             }
         }
 
-        var activeLayers = GetActiveLayerNames(doc.Database);
+        var activeLayers = LayerReader.GetActiveLayerNames(doc.Database);
 
         var store = new MemoryStore(memPath);
         TranslationMemory memory;
@@ -96,7 +96,7 @@ public static class MappingsCommand
             .ThenBy(n => n, Core.NaturalSortComparer.Instance)
             .ToList();
 
-        var emptyLayers = GetEmptyLayers(doc.Database);
+        var emptyLayers = LayerReader.GetEmptyLayers(doc.Database);
 
         var categorized = LayerCategorizer.Classify(sortedStandard, LayerDictionaryDefinition.Load());
         var targetFilters = categorized.VisibleCategories.Select(category => (
@@ -229,7 +229,7 @@ public static class MappingsCommand
 
         if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)
         {
-            var result = StandardizeCommand.ApplyMappings(
+            var result = LayerApplier.ApplyMappings(
                 doc.Database, resultMappings, dialog.StandardLayerProperties, dialog.PropertySettings);
             ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
             ed.WriteMessage($"\n  Properties synced: {result.Synced}");
@@ -246,68 +246,6 @@ public static class MappingsCommand
         if (message is null) return true;
         ed.WriteMessage("\n" + message);
         return false;
-    }
-
-    internal static HashSet<string> GetEmptyLayers(Database db)
-    {
-        var layerCounts = new Dictionary<ObjectId, int>();
-
-        using var tr = db.TransactionManager.StartTransaction();
-
-        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-        foreach (ObjectId id in lt)
-            layerCounts[id] = 0;
-
-        var bt = (BlockTable)tr.GetObject(db.BlockTableId, OpenMode.ForRead);
-        foreach (ObjectId btrId in bt)
-        {
-            var btr = (BlockTableRecord)tr.GetObject(btrId, OpenMode.ForRead);
-            if (btr.IsFromExternalReference || btr.IsFromOverlayReference) continue;
-
-            foreach (ObjectId entId in btr)
-            {
-                var ent = tr.GetObject(entId, OpenMode.ForRead) as Entity;
-                if (ent is null || ent.IsErased) continue;
-                if (layerCounts.ContainsKey(ent.LayerId))
-                    layerCounts[ent.LayerId]++;
-            }
-        }
-
-        tr.Commit();
-
-        var emptyIds = layerCounts.Where(kvp => kvp.Value == 0)
-            .Select(kvp => kvp.Key).ToHashSet();
-
-        var emptyNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using var tr2 = db.TransactionManager.StartTransaction();
-        var lt2 = (LayerTable)tr2.GetObject(db.LayerTableId, OpenMode.ForRead);
-        foreach (var id in emptyIds)
-        {
-            var ltr = (LayerTableRecord)tr2.GetObject(id, OpenMode.ForRead);
-            if (!Core.LayerHelper.ShouldSkip(ltr.Name))
-                emptyNames.Add(ltr.Name);
-        }
-        tr2.Commit();
-
-        return emptyNames;
-    }
-
-    internal static List<string> GetActiveLayerNames(Database db)
-    {
-        var names = new List<string>();
-
-        using var tr = db.TransactionManager.StartTransaction();
-        var lt = (LayerTable)tr.GetObject(db.LayerTableId, OpenMode.ForRead);
-
-        foreach (ObjectId id in lt)
-        {
-            var ltr = (LayerTableRecord)tr.GetObject(id, OpenMode.ForRead);
-            if (!Core.LayerHelper.ShouldSkip(ltr.Name))
-                names.Add(ltr.Name);
-        }
-
-        tr.Commit();
-        return names;
     }
 
 }
