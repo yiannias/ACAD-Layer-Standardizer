@@ -32,7 +32,6 @@ const PASS_UNDER_DARKEN: f32 = 0.7;
 /// The node-mode filter boxes are a fixed screen size, whatever the zoom.
 const FILTER_FIELD_WIDTH: f32 = 260.0;
 const FILTER_FIELD_HEIGHT: f32 = 28.0;
-const FILTER_FIELD_GAP: f32 = 12.0;
 const MIN_ZOOM: f32 = 0.03;
 const MIN_LABEL_PX: f32 = 1.0;
 
@@ -641,7 +640,6 @@ impl MappingEditor {
             }
         }
 
-        self.draw_filter_fields(ui, canvas_rect);
         self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
         let choose_standard =
             self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
@@ -1556,16 +1554,17 @@ impl MappingEditor {
                     subtitle_color,
                 );
             }
+            let field = filter_field_rect(self.world_rect(canvas, x + 18.0, 104.0, 0.0, 0.0).min);
+            if canvas.contains_rect(field) {
+                let (query, hint) = if is_target {
+                    (&mut self.target_query, "Filter target layers")
+                } else {
+                    (&mut self.source_query, "Filter source layers")
+                };
+                filter_field(ui, field, query, hint);
+            }
         }
         target_name_clicked
-    }
-
-    /// Source/Target filter boxes: fixed size and screen position (see
-    /// `filter_field_rects`), drawn after the nodes so they stay on top.
-    fn draw_filter_fields(&mut self, ui: &mut egui::Ui, canvas: Rect) {
-        let [source, target] = filter_field_rects(canvas);
-        filter_field(ui, source, &mut self.source_query, "Filter source layers");
-        filter_field(ui, target, &mut self.target_query, "Filter target layers");
     }
 
     fn draw_connections(
@@ -2246,20 +2245,9 @@ fn line_passes_under(
     source_right < max_source_right - 1.0 || target_left > min_target_left + 1.0
 }
 
-/// Screen rectangles of the Source and Target filter boxes: fixed size, centred at the
-/// top of the canvas, so zooming never resizes them or makes them collide.
-fn filter_field_rects(canvas: Rect) -> [Rect; 2] {
-    let total = FILTER_FIELD_WIDTH * 2.0 + FILTER_FIELD_GAP;
-    let left = canvas.center().x - total / 2.0;
-    let top = canvas.top() + 14.0;
-    let size = Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT);
-    [
-        Rect::from_min_size(Pos2::new(left, top), size),
-        Rect::from_min_size(
-            Pos2::new(left + FILTER_FIELD_WIDTH + FILTER_FIELD_GAP, top),
-            size,
-        ),
-    ]
+/// A filter box anchored at a panel's header corner; its size never changes with zoom.
+fn filter_field_rect(top_left: Pos2) -> Rect {
+    Rect::from_min_size(top_left, Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT))
 }
 
 /// A text filter box with a clearly visible light-grey frame.
@@ -2509,16 +2497,11 @@ mod tests {
     }
 
     #[test]
-    fn filter_boxes_have_a_fixed_size_and_never_overlap() {
-        for width in [700.0, 1200.0, 2400.0] {
-            let canvas = Rect::from_min_size(Pos2::new(0.0, 0.0), Vec2::new(width, 800.0));
-            let [source, target] = filter_field_rects(canvas);
-            assert_eq!(source.size(), target.size());
-            assert_eq!(source.size(), Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT));
-            assert!(source.right() < target.left(), "boxes must not overlap");
-            assert!((canvas.center().x - (source.left() + target.right()) / 2.0).abs() < 0.5);
-            assert!(canvas.contains_rect(source) && canvas.contains_rect(target));
-        }
+    fn a_filter_box_sits_in_its_panel_header_at_a_fixed_size() {
+        let corner = Pos2::new(123.0, 456.0);
+        let field = filter_field_rect(corner);
+        assert_eq!(field.min, corner);
+        assert_eq!(field.size(), Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT));
     }
 
     #[test]
