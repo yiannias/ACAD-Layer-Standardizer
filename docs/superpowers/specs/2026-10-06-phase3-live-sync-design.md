@@ -57,7 +57,7 @@ A `DrawingSessions` structure in the Rust window, independent of egui:
 
 ### 3. Reading a drawing's layers by id
 
-New request `GetDrawingLayers {protocol_version, drawing_id}` returns the drawing's name, Source layers, and empty layers. The connector reads them at a safe moment (`ExecuteInCommandContextAsync`), as `GetStandardLayers` does. If the drawing is not open it answers with a clear "drawing is no longer open" message. If AutoCAD is busy in a command, the window retries quietly on its next poll.
+New request `GetLayersForDrawing {protocol_version, drawing_id}` (the name `GetDrawingLayers` is already taken by an older request) returns the drawing's name, Source layers, and empty layers. The connector reads them at a safe moment (`ExecuteInCommandContextAsync`), as `GetStandardLayers` does. If the drawing is not open it answers with a clear "drawing is no longer open" message. If AutoCAD is busy in a command, the window retries quietly on its next poll.
 
 `ApplyPlan` and `PurgeEmptyLayers` already target a drawing by id and refuse a drawing that is not the active document. That guard stays; the window just always targets the drawing it is displaying. If that drawing is no longer active when Apply is clicked, the window shows a plain message, not a protocol error.
 
@@ -93,7 +93,7 @@ Apply, Discard, Cancel.
 - **Discard** drops that drawing's pending connections.
 - **Cancel** leaves everything as it is.
 
-After Apply or Discard, the connector replays the user's original action (a normal `CLOSE` or `QUIT` command), so AutoCAD's own save prompt appears as usual. Nothing happens behind the user's back.
+After Apply or Discard, the window asks the connector to replay the user's original action (new request `ReplayClose {kind, drawing_id, pending}`, which runs a normal `CLOSE` or `QUIT` command), so AutoCAD's own save prompt appears as usual. Nothing happens behind the user's back.
 
 ### Closing the window itself
 
