@@ -21,6 +21,7 @@ use std::{
     time::Instant,
 };
 
+mod close_dialog;
 mod data;
 mod live_sync;
 mod mapping_editor;
@@ -73,6 +74,8 @@ enum AppMessage {
     Layers(Result<IpcResponse, String>),
     /// A message from the event feed thread.
     Feed(FeedMessage),
+    /// The answer to replaying a close or quit AutoCAD blocked.
+    Replay(Result<IpcResponse, String>),
 }
 
 /// Asks which drawing is active, then reads its layers (the feed's resync path).
@@ -143,6 +146,15 @@ struct LayerStandardizerApp {
     pending_remember: Option<(Vec<String>, HashMap<String, String>)>,
     mapping_editor: mapping_editor::MappingEditor,
     user_preferences: UserPreferences,
+    /// Apply / Discard / Cancel dialogs: the shown one and any waiting their turn.
+    close_dialogs: close_dialog::CloseQueue,
+    /// The window's own close was approved (or needs no dialog): let it through.
+    close_approved: bool,
+    /// The close dialog whose Apply is in flight; on `Applied` a blocked close or
+    /// quit is replayed.
+    apply_for_close: Option<close_dialog::CloseReason>,
+    /// Close the window once the replay was queued (Apply from a blocked close).
+    close_after_replay: bool,
 }
 
 impl LayerStandardizerApp {
@@ -203,6 +215,10 @@ impl LayerStandardizerApp {
             pending_remember: None,
             mapping_editor,
             user_preferences,
+            close_dialogs: close_dialog::CloseQueue::default(),
+            close_approved: false,
+            apply_for_close: None,
+            close_after_replay: false,
         }
     }
 
@@ -289,7 +305,11 @@ impl eframe::App for LayerStandardizerApp {
                     continue;
                 }
                 AppMessage::Feed(message) => {
-                    self.on_feed_message(message);
+                    self.on_feed_message(ui.ctx(), message);
+                    continue;
+                }
+                AppMessage::Replay(result) => {
+                    self.on_replay(ui.ctx(), result);
                     continue;
                 }
             };
@@ -370,8 +390,24 @@ impl eframe::App for LayerStandardizerApp {
                             self.apply_pending = true;
                         }
                     }
+                    let mut replaying = false;
+                    if let Some(reason) = self.apply_for_close.take() {
+                        if reason != close_dialog::CloseReason::WindowClose {
+                            // The connections are in the drawing now: clear them (and, for
+                            // a quit, the other drawings', as the dialog said) so the
+                            // replayed close passes the connector's check.
+                            self.discard_for_close(&reason);
+                            self.replay_close(ui.ctx(), &reason);
+                            replaying = true;
+                        }
+                    }
                     if !keep_open {
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                        if replaying {
+                            // Closing now would end the process before the replay is sent.
+                            self.close_after_replay = true;
+                        } else {
+                            self.close_window(ui.ctx());
+                        }
                     }
                 }
                 Ok(IpcResponse::Purged {
@@ -407,11 +443,25 @@ impl eframe::App for LayerStandardizerApp {
                     self.apply_pending = false;
                     self.status_message = message.clone();
                     self.error_message = Some(message);
+                    // An Apply chosen in a close dialog failed: ask again after the error.
+                    if let Some(reason) = self.apply_for_close.take() {
+                        self.close_dialogs.offer(reason);
+                    }
                 }
                 Ok(_) => {
                     self.status_message = "AutoCAD returned an unexpected IPC response.".to_string()
                 }
             }
+        }
+
+        if ui.ctx().input(|input| input.viewport().close_requested())
+            && !self.close_approved
+            && close_dialog::should_intercept_close(self.mapping_editor.unapplied_count())
+        {
+            ui.ctx()
+                .send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            self.close_dialogs
+                .offer(close_dialog::CloseReason::WindowClose);
         }
 
         self.drive_live_sync(ui.ctx());
@@ -459,36 +509,7 @@ impl eframe::App for LayerStandardizerApp {
         }
 
         if let Some(remember) = editor_event.remember {
-            let mappings = self.mapping_editor.current_mappings(&self.matches);
-            // The Rust app owns translation memory: it writes it after AutoCAD confirms
-            // the Apply, so the connector is always told not to.
-            self.pending_remember = remember.then(|| {
-                (
-                    self.source_layers.clone(),
-                    mappings
-                        .iter()
-                        .map(|m| (m.source_layer.clone(), m.target_layer.clone()))
-                        .collect(),
-                )
-            });
-            let request = (
-                self.drawing_name.clone(),
-                self.drawing_id.clone(),
-                mappings,
-                false,
-                self.mapping_editor.property_settings(),
-            );
-            let sender = self.ipc_sender.clone();
-            let repaint = ui.ctx().clone();
-            self.apply_pending = true;
-            self.status_message = "Applying mappings in AutoCAD…".to_string();
-            std::thread::spawn(move || {
-                let result = acad_layer_ipc::apply_plan(
-                    request.0, request.1, request.2, request.3, request.4,
-                );
-                let _ = sender.send(AppMessage::Ipc(result));
-                repaint.request_repaint();
-            });
+            self.start_apply(ui.ctx(), remember);
         }
 
         if editor_event.purge {
@@ -537,10 +558,12 @@ impl eframe::App for LayerStandardizerApp {
                     if ui.button("OK").clicked() {
                         self.error_message = None;
                         if self.close_after_error {
-                            ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                            self.close_window(ui.ctx());
                         }
                     }
                 });
+        } else {
+            self.show_close_dialog(ui.ctx());
         }
 
         self.capture_user_preferences(ui.ctx());
@@ -694,10 +717,15 @@ impl LayerStandardizerApp {
                 ctx.request_repaint_after(delay);
             }
         }
-        let report = self.sessions.pending_report(
-            self.current_drawing()
-                .map(|id| (id, self.mapping_editor.unapplied_count())),
-        );
+        let report = if self.close_approved {
+            // The window is closing: nothing it holds can be applied any more.
+            Vec::new()
+        } else {
+            self.sessions.pending_report(
+                self.current_drawing()
+                    .map(|id| (id, self.mapping_editor.unapplied_count())),
+            )
+        };
         *self
             .pending_report
             .lock()
@@ -717,7 +745,7 @@ impl LayerStandardizerApp {
         });
     }
 
-    fn on_feed_message(&mut self, message: FeedMessage) {
+    fn on_feed_message(&mut self, ctx: &egui::Context, message: FeedMessage) {
         match message {
             FeedMessage::Events(events) => {
                 let current = self.reads.showing_next(&self.drawing_id).to_string();
@@ -725,10 +753,16 @@ impl LayerStandardizerApp {
                 for id in &plan.forget {
                     self.sessions.forget(id);
                     self.reads.cancel_drawing(id);
+                    self.close_dialogs.forget_drawing(id);
                     if *id == self.drawing_id {
                         // The drawing closed, so its connections go with it.
                         drop(self.mapping_editor.take_edit_state());
                         self.show_no_drawing();
+                    }
+                }
+                for (kind, id) in &plan.blocked {
+                    if !plan.forget.contains(id) {
+                        self.on_close_blocked(ctx, kind, id);
                     }
                 }
                 if let Some(id) = plan.switch_to {
@@ -831,6 +865,249 @@ impl LayerStandardizerApp {
             self.status_message = self.connected_status();
         } else if changed {
             self.status_message = "Layers changed in AutoCAD — list refreshed".to_string();
+        }
+    }
+}
+
+/// Close protection: the Apply / Discard / Cancel dialog (decisions live in
+/// `close_dialog`).
+impl LayerStandardizerApp {
+    /// Plain Apply of the displayed drawing (the editor's Apply, or the dialog's).
+    fn start_apply(&mut self, ctx: &egui::Context, remember: bool) {
+        let mappings = self.mapping_editor.current_mappings(&self.matches);
+        // The Rust app owns translation memory: it writes it after AutoCAD confirms
+        // the Apply, so the connector is always told not to.
+        self.pending_remember = remember.then(|| {
+            (
+                self.source_layers.clone(),
+                mappings
+                    .iter()
+                    .map(|m| (m.source_layer.clone(), m.target_layer.clone()))
+                    .collect(),
+            )
+        });
+        let request = (
+            self.drawing_name.clone(),
+            self.drawing_id.clone(),
+            mappings,
+            false,
+            self.mapping_editor.property_settings(),
+        );
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        self.apply_pending = true;
+        self.status_message = "Applying mappings in AutoCAD…".to_string();
+        std::thread::spawn(move || {
+            let result =
+                acad_layer_ipc::apply_plan(request.0, request.1, request.2, request.3, request.4);
+            let _ = sender.send(AppMessage::Ipc(result));
+            repaint.request_repaint();
+        });
+    }
+
+    /// Closes the window without asking again.
+    fn close_window(&mut self, ctx: &egui::Context) {
+        self.close_approved = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// The drawing the dialog is about: its name and unapplied count.
+    fn close_target(&self, reason: &close_dialog::CloseReason) -> (String, usize) {
+        let displayed = (
+            self.drawing_name.clone(),
+            self.mapping_editor.unapplied_count(),
+        );
+        match reason {
+            close_dialog::CloseReason::DrawingClose(id) if *id != self.drawing_id => {
+                self.sessions.pending_of(id).unwrap_or_default()
+            }
+            _ => displayed,
+        }
+    }
+
+    /// Every connection the close would lose (for a quit, all drawings').
+    fn close_count(&self, reason: &close_dialog::CloseReason) -> usize {
+        let (_, count) = self.close_target(reason);
+        match reason {
+            close_dialog::CloseReason::Quit => {
+                count
+                    + self
+                        .sessions
+                        .others_pending(self.current_drawing())
+                        .iter()
+                        .map(|(_, count)| count)
+                        .sum::<usize>()
+            }
+            _ => count,
+        }
+    }
+
+    /// AutoCAD blocked a close or quit because this window reported unapplied
+    /// connections: ask the user now, in front even if minimized (a direct answer to
+    /// their own close; the only time this window takes focus by itself).
+    fn on_close_blocked(&mut self, ctx: &egui::Context, kind: &str, drawing_id: &str) {
+        let Some(reason) = close_dialog::blocked_reason(kind, drawing_id) else {
+            return;
+        };
+        if self.close_count(&reason) == 0 {
+            // Nothing is pending any more (the block came from an older report):
+            // let the user's close go ahead.
+            self.replay_close(ctx, &reason);
+            return;
+        }
+        self.close_dialogs.offer(reason);
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+    }
+
+    /// Drops the connections the close would lose: that drawing's for a drawing
+    /// close, every drawing's for a quit or the window closing.
+    fn discard_for_close(&mut self, reason: &close_dialog::CloseReason) {
+        match reason {
+            close_dialog::CloseReason::DrawingClose(id) => {
+                if *id == self.drawing_id {
+                    drop(self.mapping_editor.take_edit_state());
+                }
+                self.sessions.forget(id);
+            }
+            close_dialog::CloseReason::WindowClose | close_dialog::CloseReason::Quit => {
+                drop(self.mapping_editor.take_edit_state());
+                self.sessions.forget_all();
+            }
+        }
+    }
+
+    /// Asks the connector to re-run the blocked close or quit. The pending report is
+    /// zeroed for it first, under the lock, so a poll cannot restore the old count
+    /// before the replayed command runs; the request itself runs off the UI thread.
+    fn replay_close(&mut self, ctx: &egui::Context, reason: &close_dialog::CloseReason) {
+        let Some((kind, drawing_id)) = close_dialog::replay_target(reason, &self.drawing_id) else {
+            return;
+        };
+        let report = close_dialog::pending_after_resolving(
+            self.sessions.pending_report(
+                self.current_drawing()
+                    .map(|id| (id, self.mapping_editor.unapplied_count())),
+            ),
+            reason,
+        );
+        *self
+            .pending_report
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = report.clone();
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            let result = acad_layer_ipc::replay_close(kind, drawing_id, report);
+            let _ = sender.send(AppMessage::Replay(result));
+            repaint.request_repaint();
+        });
+    }
+
+    fn on_replay(&mut self, ctx: &egui::Context, result: Result<IpcResponse, String>) {
+        let message = match result {
+            Ok(IpcResponse::Replayed) => {
+                if std::mem::take(&mut self.close_after_replay) {
+                    self.close_window(ctx);
+                }
+                return;
+            }
+            Ok(IpcResponse::Error(message)) | Err(message) => message,
+            Ok(_) => "AutoCAD returned an unexpected IPC response.".to_string(),
+        };
+        // Never swallow a failed replay: show it and keep the window open.
+        self.close_after_replay = false;
+        self.status_message = message.clone();
+        self.error_message = Some(match self.error_message.take() {
+            Some(earlier) => format!("{earlier}\n\n{message}"),
+            None => message,
+        });
+    }
+
+    /// Draws the shown close dialog, if any, and acts on the user's choice.
+    fn show_close_dialog(&mut self, ctx: &egui::Context) {
+        let Some(reason) = self.close_dialogs.current().cloned() else {
+            return;
+        };
+        if self.close_count(&reason) == 0 {
+            // Applied or removed while the dialog was up: nothing left to ask about.
+            self.close_dialogs.resolve();
+            return;
+        }
+        let (name, count) = self.close_target(&reason);
+        let others = close_dialog::others_at_risk(
+            &reason,
+            self.sessions.others_pending(self.current_drawing()),
+        );
+        let shown = if self.no_drawing || self.reads.switch_pending(&self.drawing_id) {
+            ""
+        } else {
+            self.drawing_id.as_str()
+        };
+        let apply_offered = close_dialog::can_apply(&reason, shown, count);
+        let text = close_dialog::dialog_message(&reason, &name, count, &others, apply_offered);
+        let mut choice = None;
+        egui::Window::new("Layer Standardizer")
+            .id(egui::Id::new("close_dialog"))
+            .collapsible(false)
+            .resizable(false)
+            .order(egui::Order::Tooltip)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                ui.label(text);
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(!self.apply_pending, |ui| {
+                        if apply_offered && ui.button("Apply").clicked() {
+                            choice = Some(close_dialog::CloseChoice::Apply);
+                        }
+                        if ui.button("Discard").clicked() {
+                            choice = Some(close_dialog::CloseChoice::Discard);
+                        }
+                    });
+                    if ui.button("Cancel").clicked() {
+                        choice = Some(close_dialog::CloseChoice::Cancel);
+                    }
+                });
+            });
+        if let Some(choice) = choice {
+            self.on_close_choice(ctx, reason, choice);
+        }
+    }
+
+    fn on_close_choice(
+        &mut self,
+        ctx: &egui::Context,
+        reason: close_dialog::CloseReason,
+        choice: close_dialog::CloseChoice,
+    ) {
+        match choice {
+            close_dialog::CloseChoice::Cancel => self.close_dialogs.resolve(),
+            close_dialog::CloseChoice::Discard => {
+                self.close_dialogs.resolve();
+                self.discard_for_close(&reason);
+                if reason == close_dialog::CloseReason::WindowClose {
+                    self.close_window(ctx);
+                } else {
+                    self.status_message = "Unapplied connections discarded.".to_string();
+                    self.replay_close(ctx, &reason);
+                }
+            }
+            close_dialog::CloseChoice::Apply => {
+                if let Some(message) = live_sync::blocked_action_message(
+                    self.no_drawing,
+                    self.reads.switch_pending(&self.drawing_id),
+                ) {
+                    // The dialog stays and is shown again once the error is dismissed.
+                    self.status_message = message.to_string();
+                    self.error_message = Some(message.to_string());
+                    return;
+                }
+                self.close_dialogs.resolve();
+                self.apply_for_close = Some(reason);
+                self.start_apply(ctx, false);
+            }
         }
     }
 }

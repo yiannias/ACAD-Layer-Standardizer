@@ -16,6 +16,9 @@ pub struct FeedPlan {
     pub refresh_current: bool,
     /// Drawings that closed: drop their sessions.
     pub forget: Vec<String>,
+    /// Closes AutoCAD blocked for unapplied connections, as (kind, drawing_id), each
+    /// once, in order (the id is empty for a quit without one).
+    pub blocked: Vec<(String, String)>,
 }
 
 fn event_drawing_id(event: &FeedEvent) -> Option<&str> {
@@ -24,12 +27,25 @@ fn event_drawing_id(event: &FeedEvent) -> Option<&str> {
 
 /// Folds a batch of feed events, in order, into one plan. `current_id` is the drawing
 /// the window shows (or is already switching to); unknown event kinds are ignored.
+/// `CloseBlocked` events are collected for the close dialog.
 pub fn plan_feed_events(current_id: &str, events: &[FeedEvent]) -> FeedPlan {
     let mut plan = FeedPlan::default();
     // Whether the current drawing's layers changed / it closed anywhere in the batch.
     let mut current_changed = false;
     let mut current_closed = false;
     for event in events {
+        if event.kind == "CloseBlocked" {
+            if let Some(kind) = event.payload.get("kind").and_then(|kind| kind.as_str()) {
+                let blocked = (
+                    kind.to_string(),
+                    event_drawing_id(event).unwrap_or_default().to_string(),
+                );
+                if !plan.blocked.contains(&blocked) {
+                    plan.blocked.push(blocked);
+                }
+            }
+            continue;
+        }
         let Some(id) = event_drawing_id(event) else {
             continue;
         };
@@ -343,18 +359,44 @@ mod tests {
     fn unknown_kinds_and_payloads_without_an_id_are_ignored() {
         let mut no_id = event("LayersChanged", "A");
         no_id.payload = serde_json::json!({});
+        let plan = plan_feed_events("A", &[event("SomethingNew", "B"), no_id]);
+        assert_eq!(plan, FeedPlan::default());
+    }
+
+    fn blocked(payload: serde_json::Value) -> FeedEvent {
+        FeedEvent {
+            seq: 1,
+            kind: "CloseBlocked".into(),
+            payload,
+        }
+    }
+
+    #[test]
+    fn blocked_closes_are_collected_once_each_in_order() {
         let plan = plan_feed_events(
             "A",
             &[
-                FeedEvent {
-                    seq: 1,
-                    kind: "CloseBlocked".into(),
-                    payload: serde_json::json!({ "kind": "drawing", "drawing_id": "B" }),
-                },
-                event("SomethingNew", "B"),
-                no_id,
+                blocked(serde_json::json!({ "kind": "drawing", "drawing_id": "B" })),
+                blocked(serde_json::json!({ "kind": "drawing", "drawing_id": "A" })),
+                blocked(serde_json::json!({ "kind": "drawing", "drawing_id": "B" })),
+                blocked(serde_json::json!({ "kind": "quit" })),
             ],
         );
+        assert_eq!(
+            plan.blocked,
+            vec![
+                ("drawing".to_string(), "B".to_string()),
+                ("drawing".to_string(), "A".to_string()),
+                ("quit".to_string(), String::new()),
+            ]
+        );
+        assert_eq!(plan.switch_to, None);
+        assert!(plan.forget.is_empty() && !plan.refresh_current);
+    }
+
+    #[test]
+    fn a_blocked_close_without_a_kind_is_ignored() {
+        let plan = plan_feed_events("A", &[blocked(serde_json::json!({ "drawing_id": "A" }))]);
         assert_eq!(plan, FeedPlan::default());
     }
 

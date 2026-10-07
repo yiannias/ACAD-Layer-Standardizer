@@ -44,6 +44,18 @@ impl DrawingSessions {
         self.entries.remove(id);
     }
 
+    pub fn forget_all(&mut self) {
+        self.entries.clear();
+    }
+
+    /// (name, count) of a stashed drawing with unapplied connections.
+    pub fn pending_of(&self, id: &str) -> Option<(String, usize)> {
+        self.entries
+            .get(id)
+            .filter(|(_, state)| state.pending_count() > 0)
+            .map(|(name, state)| (name.clone(), state.pending_count()))
+    }
+
     /// Applies `retain_valid_targets` to every stashed drawing (a new standard was
     /// loaded); drawings left with no connections are dropped.
     pub fn retain_valid_targets(&mut self, targets: &[String]) {
@@ -221,6 +233,26 @@ mod tests {
         assert_eq!((report[0].drawing_id.as_str(), report[0].count), ("id1", 2));
         assert_eq!((report[1].drawing_id.as_str(), report[1].count), ("id2", 3));
         assert_eq!(sessions.pending_report(Some(("id2", 0))).len(), 1);
+    }
+
+    #[test]
+    fn pending_of_names_a_stashed_drawing_and_its_count() {
+        let mut sessions = DrawingSessions::default();
+        sessions.stash("id1", "Beds.dwg", state(&[("A", None), ("B", None)]));
+        assert_eq!(
+            sessions.pending_of("id1"),
+            Some(("Beds.dwg".to_string(), 2))
+        );
+        assert_eq!(sessions.pending_of("nope"), None);
+    }
+
+    #[test]
+    fn forget_all_drops_every_stashed_drawing() {
+        let mut sessions = DrawingSessions::default();
+        sessions.stash("id1", "Beds.dwg", state(&[("A", None)]));
+        sessions.stash("id2", "Baths.dwg", state(&[("A", None)]));
+        sessions.forget_all();
+        assert!(sessions.pending_report(None).is_empty());
     }
 
     #[test]
