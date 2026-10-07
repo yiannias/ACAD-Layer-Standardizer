@@ -105,6 +105,14 @@ pub enum IpcRequest {
         protocol_version: u32,
         drawing_id: String,
     },
+    /// Re-runs a close the connector blocked. `kind` is "drawing" or "quit";
+    /// `pending` replaces the last report so the replayed close is allowed.
+    ReplayClose {
+        protocol_version: u32,
+        kind: String,
+        drawing_id: String,
+        pending: Vec<PendingEntry>,
+    },
 }
 
 /// A drawing's layer names, read by id (not necessarily the one LSTDR captured).
@@ -177,6 +185,7 @@ pub enum IpcResponse {
         reset: bool,
         events: Vec<FeedEvent>,
     },
+    Replayed,
     Error(String),
 }
 
@@ -258,6 +267,21 @@ pub fn poll_events(since: Option<u64>, pending: Vec<PendingEntry>) -> Result<Ipc
         },
         3,
     )
+}
+
+/// Asks the connector to re-run a blocked drawing close or quit.
+#[cfg(windows)]
+pub fn replay_close(
+    kind: String,
+    drawing_id: String,
+    pending: Vec<PendingEntry>,
+) -> Result<IpcResponse, String> {
+    request(IpcRequest::ReplayClose {
+        protocol_version: IPC_PROTOCOL_VERSION,
+        kind,
+        drawing_id,
+        pending,
+    })
 }
 
 #[cfg(windows)]
@@ -406,6 +430,15 @@ pub fn load_standard(_path: String) -> Result<IpcResponse, String> {
 #[cfg(not(windows))]
 pub fn poll_events(
     _since: Option<u64>,
+    _pending: Vec<PendingEntry>,
+) -> Result<IpcResponse, String> {
+    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn replay_close(
+    _kind: String,
+    _drawing_id: String,
     _pending: Vec<PendingEntry>,
 ) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
@@ -570,5 +603,31 @@ mod tests {
         assert_eq!(info.template_name, "T.dws");
         assert_eq!(info.template_path, "C:/T.dws");
         assert_eq!(info.layers, vec!["0", "A-WALL"]);
+    }
+
+    #[test]
+    fn replay_close_request_shape() {
+        let json = serde_json::to_string(&IpcRequest::ReplayClose {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            kind: "drawing".into(),
+            drawing_id: "d1".into(),
+            pending: vec![PendingEntry {
+                drawing_id: "d2".into(),
+                count: 1,
+            }],
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"ReplayClose","payload":{"protocol_version":4,"kind":"drawing","drawing_id":"d1","pending":[{"drawing_id":"d2","count":1}]}}"#
+        );
+    }
+
+    #[test]
+    fn replayed_response_deserializes() {
+        assert!(matches!(
+            serde_json::from_str::<IpcResponse>(r#"{"type":"Replayed"}"#).unwrap(),
+            IpcResponse::Replayed
+        ));
     }
 }

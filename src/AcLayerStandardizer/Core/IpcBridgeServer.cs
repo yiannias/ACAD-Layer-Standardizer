@@ -195,8 +195,35 @@ public static class IpcBridgeServer
                     if (pollPayload.TryGetProperty("since", out var sinceElement)
                         && sinceElement.ValueKind == JsonValueKind.Number)
                         since = sinceElement.GetInt64();
-                    // "pending" is accepted and ignored here; a later task uses it.
+                    // Every poll is a check-in; a malformed report counts as an empty one.
+                    PendingRegistry.Report(IpcProtocol.ParsePending(pollPayload), DateTime.UtcNow);
                     return IpcProtocol.BuildEventsResponse(EventFeed.Shared.Read(since));
+
+                case "ReplayClose":
+                    if (!root.TryGetProperty("payload", out var replayPayload)
+                        || replayPayload.ValueKind != JsonValueKind.Object
+                        || !replayPayload.TryGetProperty("protocol_version", out var replayVersion)
+                        || replayVersion.ValueKind != JsonValueKind.Number)
+                        return Error("The request is missing its payload or protocol_version.");
+                    if (CheckProtocolVersion(root) is { } versionErrorReplay) return versionErrorReplay;
+                    if (!replayPayload.TryGetProperty("kind", out var kindElement)
+                        || kindElement.ValueKind != JsonValueKind.String
+                        || kindElement.GetString() is not ("drawing" or "quit"))
+                        return Error("The request's kind must be \"drawing\" or \"quit\".");
+                    var replayKind = kindElement.GetString()!;
+                    string? replayDrawingId = null;
+                    if (replayKind == "drawing")
+                    {
+                        if (!replayPayload.TryGetProperty("drawing_id", out var replayIdElement)
+                            || replayIdElement.ValueKind != JsonValueKind.String
+                            || string.IsNullOrEmpty(replayIdElement.GetString()))
+                            return Error("The request is missing drawing_id.");
+                        replayDrawingId = replayIdElement.GetString();
+                    }
+                    // The carried report no longer lists what the user just applied or
+                    // discarded, so the replayed close passes the close guard.
+                    PendingRegistry.Report(IpcProtocol.ParsePending(replayPayload), DateTime.UtcNow);
+                    return await ReplayCloseAsync(replayKind, replayDrawingId).ConfigureAwait(false);
 
                 case "GetLayersForDrawing":
                     if (!root.TryGetProperty("payload", out var layersPayload)
@@ -373,6 +400,63 @@ public static class IpcBridgeServer
                     _drawingSnapshot = updated;
                 }
                 completion.TrySetResult(updated);
+            }
+            catch (Exception ex) { completion.TrySetException(ex); }
+            return Task.CompletedTask;
+        }, null);
+
+    // Re-runs a close the close guard blocked, as a normal CLOSE or QUIT command,
+    // so AutoCAD's own save prompt appears as usual.
+    private static async Task<string> ReplayCloseAsync(string kind, string? drawingId)
+    {
+        var completion = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            await QueueReplayCloseAsync(kind, drawingId, completion).ConfigureAwait(false);
+            var error = await completion.Task.ConfigureAwait(false);
+            return error is null ? JsonSerializer.Serialize(new { type = "Replayed" }) : Error(error);
+        }
+        catch (Exception ex)
+        {
+            Log($"ReplayClose ({kind}) failed: {ex.GetType().Name}: {ex.Message}");
+            var what = kind == "quit" ? "quit AutoCAD" : "close the drawing";
+            return Error($"Could not {what}: {ex.GetBaseException().Message}");
+        }
+    }
+
+    // Kept out of line so that loading the AutoCAD assemblies happens inside the
+    // caller's try block (it fails in a process with no AutoCAD). Completes with
+    // an error message for the client, or null once the command is queued.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static async Task QueueReplayCloseAsync(
+        string kind, string? drawingId, TaskCompletionSource<string?> completion) =>
+        await Application.DocumentManager.ExecuteInCommandContextAsync(_ =>
+        {
+            try
+            {
+                var active = Application.DocumentManager.MdiActiveDocument;
+                if (kind == "quit")
+                {
+                    if (active is null)
+                    {
+                        completion.TrySetResult("No drawing is active to quit from.");
+                    }
+                    else
+                    {
+                        active.SendStringToExecute("_.QUIT ", true, false, false);
+                        completion.TrySetResult(null);
+                    }
+                }
+                else
+                {
+                    var document = ActiveDrawingTracker.TryFindDocument(drawingId!);
+                    var error = IpcProtocol.CheckReplayTarget(
+                        found: document is not null,
+                        isActive: document is not null && ReferenceEquals(document, active));
+                    if (error is null)
+                        document!.SendStringToExecute("_.CLOSE ", true, false, false);
+                    completion.TrySetResult(error);
+                }
             }
             catch (Exception ex) { completion.TrySetException(ex); }
             return Task.CompletedTask;

@@ -23,6 +23,48 @@ public static class IpcProtocol
         return matches ? null : "The mapping window belongs to a different drawing. Close it and run LSTDR again.";
     }
 
+    // Reads the window's "pending" report from a request payload. Never throws:
+    // a missing, null or non-array report is empty, and entries without a
+    // non-empty string drawing_id or a non-negative integer count are skipped.
+    public static IReadOnlyList<PendingDrawing> ParsePending(JsonElement payload)
+    {
+        var result = new List<PendingDrawing>();
+        try
+        {
+            if (payload.ValueKind != JsonValueKind.Object
+                || !payload.TryGetProperty("pending", out var pending)
+                || pending.ValueKind != JsonValueKind.Array)
+                return result;
+
+            foreach (var entry in pending.EnumerateArray())
+            {
+                if (entry.ValueKind != JsonValueKind.Object) continue;
+                if (!entry.TryGetProperty("drawing_id", out var idElement)
+                    || idElement.ValueKind != JsonValueKind.String) continue;
+                var id = idElement.GetString();
+                if (string.IsNullOrEmpty(id)) continue;
+                if (!entry.TryGetProperty("count", out var countElement)
+                    || countElement.ValueKind != JsonValueKind.Number
+                    || !countElement.TryGetInt32(out var count)
+                    || count < 0) continue;
+                result.Add(new PendingDrawing(id!, count));
+            }
+        }
+        catch (Exception)
+        {
+            // Unreachable in practice; an unreadable report is an empty one.
+            result.Clear();
+        }
+        return result;
+    }
+
+    // Which error a ReplayClose for a drawing answers with, or null when the
+    // close can be replayed. Only a drawing that is actually gone is "no longer open".
+    public static string? CheckReplayTarget(bool found, bool isActive) =>
+        !found ? "The drawing is no longer open."
+        : !isActive ? "Switch to that drawing and close it again."
+        : null;
+
     public static string BuildEventsResponse(FeedPage page) =>
         JsonSerializer.Serialize(new
         {

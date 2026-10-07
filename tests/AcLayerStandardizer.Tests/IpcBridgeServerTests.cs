@@ -8,6 +8,8 @@ using AcLayerStandardizer.Core;
 
 namespace AcLayerStandardizer.Tests;
 
+// PollEvents and ReplayClose write the process-wide PendingRegistry.
+[Collection("Pending registry")]
 public class IpcBridgeServerTests
 {
     static IpcBridgeServerTests()
@@ -237,5 +239,129 @@ public class IpcBridgeServerTests
         Assert.Equal("Error", noPayload.GetProperty("type").GetString());
         var noId = await SendAsync(new { type = "GetLayersForDrawing", payload = new { protocol_version = 4 } });
         Assert.Equal("Error", noId.GetProperty("type").GetString());
+    }
+
+    private static object PollWithPending(object pending) => new
+    {
+        type = "PollEvents",
+        payload = new { protocol_version = 4, since = (long?)null, pending }
+    };
+
+    [Fact]
+    public async Task PollEvents_records_the_pending_report()
+    {
+        var before = DateTime.UtcNow;
+        var response = await SendAsync(PollWithPending(new object[]
+        {
+            new { drawing_id = "rec-1", count = 3 },
+            new { drawing_id = "rec-2", count = 0 }
+        }));
+        Assert.Equal("Events", response.GetProperty("type").GetString());
+
+        var (pending, at) = PendingRegistry.Current;
+        Assert.Equal(new[] { new PendingDrawing("rec-1", 3), new PendingDrawing("rec-2", 0) }, pending);
+        Assert.NotNull(at);
+        Assert.True(at >= before, "the poll counts as a check-in");
+
+        // The next report replaces the whole previous one.
+        await SendAsync(PollWithPending(Array.Empty<object>()));
+        Assert.Empty(PendingRegistry.Current.Pending);
+    }
+
+    public static IEnumerable<object[]> MalformedPendingReports() =>
+    [
+        [null],
+        ["rec-1"],
+        [42],
+        [new { drawing_id = "rec-1", count = 3 }],
+        [new object[] { "rec-1", null, 4, new { count = 2 }, new { drawing_id = 9, count = 2 }, new { drawing_id = "neg", count = -2 }, new { drawing_id = "frac", count = 1.5 } }],
+    ];
+
+    [Theory]
+    [MemberData(nameof(MalformedPendingReports))]
+    public async Task PollEvents_treats_a_malformed_pending_report_as_an_empty_check_in(object pending)
+    {
+        PendingRegistry.Report(new[] { new PendingDrawing("stale", 5) }, DateTime.UtcNow - TimeSpan.FromMinutes(1));
+        var before = DateTime.UtcNow;
+
+        var response = await SendAsync(PollWithPending(pending));
+
+        Assert.Equal("Events", response.GetProperty("type").GetString());
+        var (recorded, at) = PendingRegistry.Current;
+        Assert.Empty(recorded);
+        Assert.True(at >= before, "a malformed report still counts as a check-in");
+    }
+
+    [Fact]
+    public async Task PollEvents_without_a_pending_field_is_an_empty_check_in()
+    {
+        PendingRegistry.Report(new[] { new PendingDrawing("stale", 5) }, DateTime.UtcNow - TimeSpan.FromMinutes(1));
+        var before = DateTime.UtcNow;
+
+        var response = await SendAsync(new { type = "PollEvents", payload = new { protocol_version = 4 } });
+
+        Assert.Equal("Events", response.GetProperty("type").GetString());
+        Assert.Empty(PendingRegistry.Current.Pending);
+        Assert.True(PendingRegistry.Current.LastCheckInUtc >= before);
+    }
+
+    private static object ReplayRequest(int version, string kind, string drawingId, object pending) => new
+    {
+        type = "ReplayClose",
+        payload = new { protocol_version = version, kind, drawing_id = drawingId, pending }
+    };
+
+    [Fact]
+    public async Task ReplayClose_reports_an_unknown_drawing()
+    {
+        // No AutoCAD in this process: the command context cannot run, so the
+        // request must come back as an Error (not a crash or a dropped pipe), and
+        // the carried pending report must already be recorded.
+        PendingRegistry.Report(new[] { new PendingDrawing("no-such-drawing", 4) }, DateTime.UtcNow);
+        var response = await SendAsync(ReplayRequest(4, "drawing", "no-such-drawing", Array.Empty<object>()));
+
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.StartsWith("Could not close the drawing", response.GetProperty("payload").GetString());
+        Assert.Empty(PendingRegistry.Current.Pending);
+
+        // The connection still serves requests afterwards.
+        var ping = await SendAsync(new { type = "Ping" });
+        Assert.Equal("Pong", ping.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public async Task ReplayClose_rejects_an_unsupported_version_before_touching_the_registry()
+    {
+        PendingRegistry.Report(new[] { new PendingDrawing("keep", 2) }, DateTime.UtcNow);
+        var response = await SendAsync(ReplayRequest(1, "drawing", "d1", Array.Empty<object>()));
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Contains("Unsupported", response.GetProperty("payload").GetString());
+        Assert.Equal(new[] { new PendingDrawing("keep", 2) }, PendingRegistry.Current.Pending);
+    }
+
+    [Fact]
+    public async Task ReplayClose_rejects_malformed_payloads_without_dropping_the_connection()
+    {
+        PendingRegistry.Report(new[] { new PendingDrawing("keep", 2) }, DateTime.UtcNow);
+        var requests = new object[]
+        {
+            new { type = "ReplayClose" },
+            new { type = "ReplayClose", payload = "nope" },
+            new { type = "ReplayClose", payload = new { kind = "drawing", drawing_id = "d1" } },
+            new { type = "ReplayClose", payload = new { protocol_version = "4", kind = "drawing", drawing_id = "d1" } },
+            ReplayRequest(4, "explode", "d1", null),
+            new { type = "ReplayClose", payload = new { protocol_version = 4, drawing_id = "d1" } },
+            new { type = "ReplayClose", payload = new { protocol_version = 4, kind = 3, drawing_id = "d1" } },
+            ReplayRequest(4, "drawing", null, null),
+            ReplayRequest(4, "drawing", "", null),
+            new { type = "ReplayClose", payload = new { protocol_version = 4, kind = "drawing", drawing_id = 12 } },
+        };
+        foreach (var request in requests)
+        {
+            var response = await SendAsync(request);
+            Assert.Equal("Error", response.GetProperty("type").GetString());
+        }
+        // A rejected request does not change what the close guard decides from.
+        Assert.Equal(new[] { new PendingDrawing("keep", 2) }, PendingRegistry.Current.Pending);
     }
 }

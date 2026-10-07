@@ -117,4 +117,59 @@ public class IpcProtocolTests
         Assert.True(gate.TryConsume());
         Assert.False(gate.TryConsume());
     }
+
+    private static IReadOnlyList<PendingDrawing> ParsePending(string payloadJson)
+    {
+        using var document = JsonDocument.Parse(payloadJson);
+        return IpcProtocol.ParsePending(document.RootElement);
+    }
+
+    [Fact]
+    public void ParsePending_reads_well_formed_entries()
+    {
+        var pending = ParsePending("""{"pending":[{"drawing_id":"d1","count":2},{"drawing_id":"d2","count":0}]}""");
+        Assert.Equal(new[] { new PendingDrawing("d1", 2), new PendingDrawing("d2", 0) }, pending);
+    }
+
+    [Theory]
+    [InlineData("""{}""")]
+    [InlineData("""{"pending":null}""")]
+    [InlineData("""{"pending":"d1"}""")]
+    [InlineData("""{"pending":{"drawing_id":"d1","count":2}}""")]
+    [InlineData("""{"pending":7}""")]
+    [InlineData("""[]""")]
+    [InlineData("""null""")]
+    public void ParsePending_treats_a_missing_or_non_array_report_as_empty(string payloadJson)
+    {
+        Assert.Empty(ParsePending(payloadJson));
+    }
+
+    [Fact]
+    public void ParsePending_skips_malformed_entries_and_keeps_the_rest()
+    {
+        var pending = ParsePending("""
+            {"pending":[
+              {"drawing_id":"ok","count":3},
+              {"count":1},
+              {"drawing_id":null,"count":1},
+              {"drawing_id":5,"count":1},
+              {"drawing_id":"","count":1},
+              {"drawing_id":"neg","count":-1},
+              {"drawing_id":"frac","count":1.5},
+              {"drawing_id":"str","count":"2"},
+              {"drawing_id":"huge","count":99999999999},
+              {"drawing_id":"nocount"},
+              "d1", null, 4, []
+            ]}
+            """);
+        Assert.Equal(new[] { new PendingDrawing("ok", 3) }, pending);
+    }
+
+    [Fact]
+    public void Replay_target_maps_only_a_missing_drawing_to_no_longer_open()
+    {
+        Assert.Equal("The drawing is no longer open.", IpcProtocol.CheckReplayTarget(found: false, isActive: false));
+        Assert.Equal("Switch to that drawing and close it again.", IpcProtocol.CheckReplayTarget(found: true, isActive: false));
+        Assert.Null(IpcProtocol.CheckReplayTarget(found: true, isActive: true));
+    }
 }

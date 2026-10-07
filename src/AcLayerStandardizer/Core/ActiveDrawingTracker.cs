@@ -111,6 +111,7 @@ public static class ActiveDrawingTracker
     // events also mark the state dirty; the refresh itself waits for idle time.
     private static void Watch(Document document)
     {
+        document.BeginDocumentClose += OnBeginDocumentClose;
         document.CommandEnded += OnCommandEnded;
         document.Database.ObjectAppended += OnLayerObjectChanged;
         document.Database.ObjectModified += OnLayerObjectChanged;
@@ -119,10 +120,33 @@ public static class ActiveDrawingTracker
 
     private static void Unwatch(Document document)
     {
+        document.BeginDocumentClose -= OnBeginDocumentClose;
         document.CommandEnded -= OnCommandEnded;
         document.Database.ObjectAppended -= OnLayerObjectChanged;
         document.Database.ObjectModified -= OnLayerObjectChanged;
         document.Database.ObjectErased -= OnLayerObjectErased;
+    }
+
+    // Cancels the close when the mapping window reported unapplied connections
+    // for this drawing within the last few seconds. Decides instantly from the
+    // last report and never waits on the window or the pipe; any failure here
+    // allows the close, because the warning must never trap the user.
+    private static void OnBeginDocumentClose(object? sender, DocumentBeginCloseEventArgs e)
+    {
+        try
+        {
+            if (sender is not Document document) return;
+            var drawingId = GetDrawingId(document);
+            var (pending, lastCheckIn) = PendingRegistry.Current;
+            if (!CloseGuard.ShouldVeto(pending, lastCheckIn, DateTime.UtcNow, drawingId)) return;
+
+            e.Veto();
+            TryPublish("CloseBlocked", () => new { kind = "drawing", drawing_id = drawingId });
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer close check failed; allowing the close: {ex.Message}");
+        }
     }
 
     private static void OnCommandEnded(object? sender, CommandEventArgs e) => Gate.MarkDirty();
