@@ -59,6 +59,55 @@ fn default_fold_threshold() -> usize {
     5
 }
 
+/// Every key the dictionary format uses, spelled as serde expects it.
+const DICTIONARY_KEYS: [&str; 15] = [
+    "schemaVersion",
+    "description",
+    "delimiter",
+    "fieldsScanned",
+    "foldThreshold",
+    "excludedPrefixes",
+    "excludedLayers",
+    "categories",
+    "name",
+    "tokens",
+    "matchAnywhere",
+    "exclusive",
+    "fallbackGroup",
+    "sortGroup",
+    "alwaysShow",
+];
+
+/// Rewrites object keys that differ from a known key only by case to the known
+/// spelling (the C# loader reads the file with case-insensitive property names).
+fn canonicalize_keys(value: serde_json::Value) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::Object(map) => Value::Object(
+            map.into_iter()
+                .map(|(key, inner)| {
+                    let key = DICTIONARY_KEYS
+                        .iter()
+                        .find(|known| known.eq_ignore_ascii_case(&key))
+                        .map_or(key, |known| (*known).to_string());
+                    (key, canonicalize_keys(inner))
+                })
+                .collect(),
+        ),
+        Value::Array(items) => Value::Array(items.into_iter().map(canonicalize_keys).collect()),
+        other => other,
+    }
+}
+
+impl LayerDictionaryDefinition {
+    /// Parses a dictionary file the way the C# loader does: a leading BOM is ignored
+    /// and property names match in any case.
+    pub fn from_json_str(text: &str) -> Result<Self, serde_json::Error> {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+        serde_json::from_value(canonicalize_keys(serde_json::from_str(text)?))
+    }
+}
+
 impl Default for LayerDictionaryDefinition {
     fn default() -> Self {
         Self {

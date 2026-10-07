@@ -99,7 +99,7 @@ pub fn remember_mappings(
 pub fn load_dictionary(dir: &Path) -> LayerDictionaryDefinition {
     std::fs::read_to_string(dir.join("layer_dictionary.json"))
         .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
+        .and_then(|text| LayerDictionaryDefinition::from_json_str(&text).ok())
         .unwrap_or_default()
 }
 
@@ -266,6 +266,22 @@ mod tests {
         )
         .unwrap();
         assert!(!load_dictionary(&dir).categories.is_empty());
+    }
+
+    #[test]
+    fn dictionary_is_read_like_csharp_with_a_bom_and_any_key_case() {
+        let dir = std::env::temp_dir().join(format!("acad_ui_dict_bom_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        let text = r#"{"Delimiter":"_","FIELDSSCANNED":2,
+            "categories":[{"NAME":"Walls","Tokens":["WALL"],"sortgroup":"Discipline"}]}"#;
+        fs::write(dir.join("layer_dictionary.json"), format!("\u{feff}{text}")).unwrap();
+        let dictionary = load_dictionary(&dir);
+        assert_eq!(dictionary.delimiter, "_");
+        assert_eq!(dictionary.fields_scanned, 2);
+        assert_eq!(dictionary.categories.len(), 1);
+        assert_eq!(dictionary.categories[0].name, "Walls");
+        assert_eq!(dictionary.categories[0].sort_group, "Discipline");
     }
 
     #[test]

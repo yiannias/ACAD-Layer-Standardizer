@@ -74,9 +74,7 @@ public static class SettingsCommand
         var ed = doc.Editor;
 
         var config = PluginConfig.Load();
-        var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
-            ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
-            : config.MemoryFilePath;
+        var memPath = config.GetEffectiveMemoryPath();
 
         if (!File.Exists(memPath))
         {
@@ -112,9 +110,7 @@ public static class SettingsCommand
         var ed = doc.Editor;
 
         var config = PluginConfig.Load();
-        var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
-            ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
-            : config.MemoryFilePath;
+        var memPath = config.GetEffectiveMemoryPath();
 
         var pr = ed.GetString("\nEnter path to memory JSON file to import: ");
         if (pr.Status != PromptStatus.OK) return;

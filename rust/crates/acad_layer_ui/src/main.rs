@@ -175,48 +175,62 @@ impl LayerStandardizerApp {
             return;
         }
 
-        let matcher = HeuristicMatcher::new(self.standard_layers.clone(), self.min_confidence);
-        let standards_by_name = self
-            .standard_layers
-            .iter()
-            .map(|name| (name.to_ascii_lowercase(), name.as_str()))
-            .collect::<HashMap<_, _>>();
-        let memory_by_source = self
-            .memory_mappings
-            .iter()
-            .map(|(source, target)| (source.to_ascii_lowercase(), target.as_str()))
-            .collect::<HashMap<_, _>>();
-        self.matches = self
-            .source_layers
-            .iter()
-            .map(|name| {
-                if let Some(target) = standards_by_name.get(&name.to_ascii_lowercase()) {
+        self.matches = compute_matches(
+            &self.source_layers,
+            &self.standard_layers,
+            &self.memory_mappings,
+            self.min_confidence,
+        );
+    }
+}
+
+/// Exact name, then remembered mapping, then heuristic. Names compare ignoring case
+/// the way the C# `OrdinalIgnoreCase` dictionaries do, so non-ASCII letters count too.
+fn compute_matches(
+    source_layers: &[String],
+    standard_layers: &[String],
+    memory_mappings: &HashMap<String, String>,
+    min_confidence: f64,
+) -> Vec<MatchResult> {
+    let matcher = HeuristicMatcher::new(standard_layers.to_vec(), min_confidence);
+    let standards_by_name = standard_layers
+        .iter()
+        .map(|name| (name.to_lowercase(), name.as_str()))
+        .collect::<HashMap<_, _>>();
+    let memory_by_source = memory_mappings
+        .iter()
+        .map(|(source, target)| (source.to_lowercase(), target.as_str()))
+        .collect::<HashMap<_, _>>();
+    source_layers
+        .iter()
+        .map(|name| {
+            let lower = name.to_lowercase();
+            if let Some(target) = standards_by_name.get(&lower) {
+                return MatchResult {
+                    source_layer: name.clone(),
+                    target_layer: Some((*target).to_string()),
+                    confidence: 1.0,
+                    source: MatchSource::Exact,
+                };
+            }
+            if let Some(target) = memory_by_source.get(&lower) {
+                if let Some(target) = standards_by_name.get(&target.to_lowercase()) {
                     return MatchResult {
                         source_layer: name.clone(),
                         target_layer: Some((*target).to_string()),
                         confidence: 1.0,
-                        source: MatchSource::Exact,
+                        source: MatchSource::Memory,
                     };
                 }
-                if let Some(target) = memory_by_source.get(&name.to_ascii_lowercase()) {
-                    if let Some(target) = standards_by_name.get(&target.to_ascii_lowercase()) {
-                        return MatchResult {
-                            source_layer: name.clone(),
-                            target_layer: Some((*target).to_string()),
-                            confidence: 1.0,
-                            source: MatchSource::Memory,
-                        };
-                    }
-                }
-                matcher.try_match(name).unwrap_or(MatchResult {
-                    source_layer: name.clone(),
-                    target_layer: None,
-                    confidence: 0.0,
-                    source: MatchSource::Unmatched,
-                })
+            }
+            matcher.try_match(name).unwrap_or(MatchResult {
+                source_layer: name.clone(),
+                target_layer: None,
+                confidence: 0.0,
+                source: MatchSource::Unmatched,
             })
-            .collect();
-    }
+        })
+        .collect()
 }
 
 impl eframe::App for LayerStandardizerApp {
@@ -255,14 +269,6 @@ impl eframe::App for LayerStandardizerApp {
                     {
                         self.remember_template_path(info.template_path);
                     }
-                }
-                Ok(IpcResponse::TemplateLoaded(snapshot)) => {
-                    self.apply_pending = false;
-                    self.set_snapshot(snapshot);
-                    self.status_message = format!(
-                        "Loaded {}. Existing assignments were kept where target names matched.",
-                        self.template_name
-                    );
                 }
                 Ok(IpcResponse::Applied {
                     protocol_version,
@@ -541,12 +547,12 @@ impl LayerStandardizerApp {
     /// Remembers the chosen standard for next launch, unless the config file was
     /// unreadable (saving would replace it with defaults).
     fn remember_template_path(&mut self, path: String) {
-        self.plugin_config.template_dwg_path = path;
+        self.plugin_config.template_dwg_path = path.clone();
         if !self.config_writable {
             return;
         }
         if let Some(config_path) = &self.config_path {
-            if let Err(error) = self.plugin_config.save_to(config_path) {
+            if let Err(error) = PluginConfig::set_template_path(config_path, &path) {
                 self.error_message =
                     Some(format!("Could not remember the chosen standard: {error}"));
             }
@@ -666,6 +672,17 @@ fn main() -> eframe::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn memory_matching_ignores_case_for_non_ascii_names_like_csharp() {
+        let standard = vec!["É-WALL".to_string(), "A-DOOR".to_string()];
+        let source = vec!["é-sourcé".to_string()];
+        let memory = HashMap::from([("É-SOURCÉ".to_string(), "é-wall".to_string())]);
+        let matches = compute_matches(&source, &standard, &memory, 0.6);
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].target_layer.as_deref(), Some("É-WALL"));
+        assert_eq!(matches[0].source, MatchSource::Memory);
+    }
 
     #[test]
     fn standard_picker_accepts_dws_templates() {

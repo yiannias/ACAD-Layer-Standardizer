@@ -35,14 +35,13 @@ public static class MappingsCommand
         if (templatePath.Length == 0)
             ed.WriteMessage("\nReference file unavailable. Opening without targets; click the Target header to choose one.");
 
-        var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
-            ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
-            : config.MemoryFilePath;
+        var memPath = config.GetEffectiveMemoryPath();
 
         // Rust window first: it reads the template, categorizes, and loads memory
         // itself, so only the active drawing's layers are captured here. The full
         // load below is for the WPF fallback.
-        if (RustUiLauncher.IsAvailable())
+        var rustAttempted = RustUiLauncher.IsAvailable();
+        if (rustAttempted)
         {
             var rustSource = GetActiveLayerNames(doc.Database)
                 .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
@@ -107,7 +106,9 @@ public static class MappingsCommand
 
         // Capture drawing data in this AutoCAD command context. The IPC worker
         // only serves this snapshot and never accesses the drawing database.
-        if (RustUiLauncher.TryLaunchFromActiveAutoCad(
+        // A Rust launch that already failed above is not retried (it would only fail,
+        // and print its error, a second time); go straight to the WPF fallback.
+        if (!rustAttempted && RustUiLauncher.TryLaunchFromActiveAutoCad(
                 doc, Path.GetFileName(doc.Name), configThreshold, sortedSource, sortedStandard,
                 emptyLayers, standardLayers, memory.Mappings, store.FilePath, targetFilters,
                 templatePath, categorized.AlwaysHidden)) return;

@@ -24,6 +24,17 @@ public class PluginConfig
     public static string ConfigPath =>
         Path.Combine(ConfigDirectory, "config.json");
 
+    // A blank setting means the default file in the config folder; a relative one is
+    // relative to the config folder too (the Rust window applies the same rule).
+    public string GetEffectiveMemoryPath()
+    {
+        if (string.IsNullOrWhiteSpace(MemoryFilePath))
+            return Path.Combine(ConfigDirectory, "standards_memory.json");
+        return Path.IsPathRooted(MemoryFilePath)
+            ? MemoryFilePath
+            : Path.Combine(ConfigDirectory, MemoryFilePath);
+    }
+
     public static PluginConfig Load()
     {
         if (!File.Exists(ConfigPath))

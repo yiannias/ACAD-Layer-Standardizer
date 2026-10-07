@@ -297,9 +297,7 @@ public partial class NodeGraphWindow : Window
             : null;
 
         var config = PluginConfig.Load();
-        var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
-            ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
-            : config.MemoryFilePath;
+        var memPath = config.GetEffectiveMemoryPath();
 
         Dictionary<string, string> memoryMappings;
         try

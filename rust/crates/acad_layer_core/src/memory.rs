@@ -108,6 +108,20 @@ fn utc_now_iso() -> String {
     )
 }
 
+/// How many `.bak-` copies of the memory file are kept beside it.
+const MAX_BACKUPS: usize = 10;
+
+/// `2026-10-06T19:51:16.876Z` -> `20261006-195116-876`, the C# store's backup suffix
+/// (`yyyyMMdd-HHmmss-fff`).
+fn backup_stamp(iso: &str) -> String {
+    let digits: String = iso.chars().filter(char::is_ascii_digit).collect();
+    if digits.len() == 17 {
+        format!("{}-{}-{}", &digits[..8], &digits[8..14], &digits[14..])
+    } else {
+        digits
+    }
+}
+
 pub struct MemoryStore {
     file_path: PathBuf,
 }
@@ -179,9 +193,10 @@ impl MemoryStore {
             if self.file_path.exists() {
                 let backup = self.file_path.with_file_name(format!(
                     "{file_name}.bak-{}",
-                    stamped.last_modified.as_deref().unwrap_or("").replace([':', '.'], "")
+                    backup_stamp(stamped.last_modified.as_deref().unwrap_or(""))
                 ));
                 fs::copy(&self.file_path, backup)?;
+                self.prune_backups(&file_name);
             }
             fs::rename(&temp, &self.file_path)
         })();
@@ -189,6 +204,29 @@ impl MemoryStore {
             let _ = fs::remove_file(&temp);
         }
         result
+    }
+
+    /// Deletes all but the newest `MAX_BACKUPS` `.bak-` copies (their names sort by
+    /// time). Best effort: a backup that cannot be removed is left alone.
+    fn prune_backups(&self, file_name: &str) {
+        let Some(dir) = self.file_path.parent() else {
+            return;
+        };
+        let dir = if dir.as_os_str().is_empty() { Path::new(".") } else { dir };
+        let prefix = format!("{file_name}.bak-");
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        let mut backups: Vec<String> = entries
+            .filter_map(|entry| entry.ok())
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with(&prefix))
+            .collect();
+        backups.sort();
+        let excess = backups.len().saturating_sub(MAX_BACKUPS);
+        for name in backups.into_iter().take(excess) {
+            let _ = fs::remove_file(dir.join(name));
+        }
     }
 
     pub fn merge(mut current: TranslationMemory, imported: TranslationMemory) -> TranslationMemory {
@@ -276,6 +314,58 @@ mod tests {
         assert!(!names.iter().any(|n| n.ends_with(".tmp")), "{names:?}");
         assert!(names.iter().any(|n| n.contains(".bak-")), "second save keeps the prior file: {names:?}");
         assert_eq!(store.load_checked().unwrap().mappings.len(), 2);
+    }
+
+    fn backup_names(dir: &std::path::Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.contains(".bak-"))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn backups_are_named_like_the_csharp_store() {
+        let dir = temp_dir("memory_bak_name");
+        let store = MemoryStore::new(dir.join("standards_memory.json"));
+        let memory = TranslationMemory::default();
+        store.save(&memory).unwrap();
+        store.save(&memory).unwrap();
+        let names = backup_names(&dir);
+        assert_eq!(names.len(), 1, "{names:?}");
+        // C#: ".bak-" + yyyyMMdd-HHmmss-fff
+        let stamp = names[0].strip_prefix("standards_memory.json.bak-").unwrap();
+        let shape: String = stamp
+            .chars()
+            .map(|c| if c.is_ascii_digit() { '9' } else { c })
+            .collect();
+        assert_eq!(shape, "99999999-999999-999", "{stamp}");
+    }
+
+    #[test]
+    fn only_the_newest_backups_are_kept() {
+        let dir = temp_dir("memory_bak_prune");
+        let store = MemoryStore::new(dir.join("standards_memory.json"));
+        let memory = TranslationMemory::default();
+        store.save(&memory).unwrap();
+        for n in 0..12 {
+            std::fs::write(
+                dir.join(format!("standards_memory.json.bak-20200101-0000{n:02}-000")),
+                "{}",
+            )
+            .unwrap();
+        }
+        store.save(&memory).unwrap();
+        let names = backup_names(&dir);
+        assert_eq!(names.len(), MAX_BACKUPS, "{names:?}");
+        assert!(!names.iter().any(|n| n.ends_with("20200101-000000-000")), "{names:?}");
+        assert!(
+            !names.iter().any(|n| n.ends_with("20200101-000001-000")),
+            "oldest go first: {names:?}"
+        );
+        assert!(names.iter().any(|n| n.ends_with("20200101-000011-000")), "{names:?}");
     }
 
     #[test]

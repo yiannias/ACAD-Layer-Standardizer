@@ -81,12 +81,30 @@ impl PluginConfig {
         result
     }
 
+    /// A blank setting means the default file next to the config; a relative one is
+    /// relative to the config folder (the same rule the C# connector applies).
     pub fn effective_memory_path(&self, dir: &Path) -> PathBuf {
         if self.memory_file_path.trim().is_empty() {
             dir.join("standards_memory.json")
         } else {
-            PathBuf::from(&self.memory_file_path)
+            let configured = PathBuf::from(&self.memory_file_path);
+            if configured.is_absolute() {
+                configured
+            } else {
+                dir.join(configured)
+            }
         }
+    }
+
+    /// Records the chosen standard. Re-reads the file first so settings changed while
+    /// the window was open are kept, and a corrupt file is an error, never replaced.
+    pub fn set_template_path(path: &Path, template: &str) -> Result<PluginConfig, ConfigError> {
+        let mut config = PluginConfig::load_from(path)?;
+        config.template_dwg_path = template.to_string();
+        config
+            .save_to(path)
+            .map_err(|e| ConfigError::Io(e.to_string()))?;
+        Ok(config)
     }
 }
 
@@ -158,5 +176,53 @@ mod tests {
             ..PluginConfig::default()
         };
         assert_eq!(custom.effective_memory_path(&dir), PathBuf::from("D:/shared/mem.json"));
+    }
+
+    #[test]
+    fn a_blank_memory_path_means_the_default() {
+        let dir = PathBuf::from("C:/cfg");
+        let blank = PluginConfig {
+            memory_file_path: "   ".into(),
+            ..PluginConfig::default()
+        };
+        assert_eq!(blank.effective_memory_path(&dir), dir.join("standards_memory.json"));
+    }
+
+    #[test]
+    fn a_relative_memory_path_is_relative_to_the_config_folder() {
+        let dir = PathBuf::from("C:/cfg");
+        let relative = PluginConfig {
+            memory_file_path: "shared/mem.json".into(),
+            ..PluginConfig::default()
+        };
+        assert_eq!(relative.effective_memory_path(&dir), dir.join("shared/mem.json"));
+    }
+
+    #[test]
+    fn remembering_the_template_keeps_settings_changed_while_the_window_was_open() {
+        let dir = temp_dir("config_update");
+        let path = dir.join("config.json");
+        fs::write(&path, r#"{"TemplateDwgPath":"","HeuristicThreshold":0.6}"#).unwrap();
+        // Another session changes the file after this window loaded its copy.
+        fs::write(
+            &path,
+            r#"{"TemplateDwgPath":"","HeuristicThreshold":0.9,"InstallRibbon":false}"#,
+        )
+        .unwrap();
+        let saved = PluginConfig::set_template_path(&path, "S.dws").unwrap();
+        assert_eq!(saved.template_dwg_path, "S.dws");
+        let reloaded = PluginConfig::load_from(&path).unwrap();
+        assert_eq!(reloaded.template_dwg_path, "S.dws");
+        assert_eq!(reloaded.heuristic_threshold, 0.9);
+        assert!(!reloaded.install_ribbon);
+    }
+
+    #[test]
+    fn remembering_the_template_never_overwrites_a_corrupt_config() {
+        let dir = temp_dir("config_update_corrupt");
+        let path = dir.join("config.json");
+        fs::write(&path, "{ not json").unwrap();
+        assert!(PluginConfig::set_template_path(&path, "S.dws").is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ not json");
     }
 }

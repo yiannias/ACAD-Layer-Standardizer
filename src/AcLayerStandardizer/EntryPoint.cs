@@ -16,7 +16,7 @@ public class EntryPoint : IExtensionApplication
     {
         var config = PluginConfig.Load();
 
-        if (string.IsNullOrEmpty(config.MemoryFilePath))
+        if (string.IsNullOrWhiteSpace(config.MemoryFilePath))
         {
             config.MemoryFilePath = Path.Combine(
                 PluginConfig.ConfigDirectory, "standards_memory.json");

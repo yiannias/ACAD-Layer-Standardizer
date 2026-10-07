@@ -341,9 +341,7 @@ public static class StandardizeCommand
             return null;
         }
 
-        var memPath = string.IsNullOrEmpty(config.MemoryFilePath)
-            ? Path.Combine(PluginConfig.ConfigDirectory, "standards_memory.json")
-            : config.MemoryFilePath;
+        var memPath = config.GetEffectiveMemoryPath();
 
         ed.WriteMessage("\nAcLayerStandardizer: Loading standard layers from template...");
 

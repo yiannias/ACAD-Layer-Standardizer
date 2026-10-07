@@ -248,7 +248,14 @@ public static class IpcBridgeServer
                         StandardLayers = names,
                         StandardLayerProperties = properties
                     };
-                    lock (SnapshotLock) _drawingSnapshot = updated;
+                    // Another LSTDR may have stored a newer snapshot while the standard was
+                    // loading; replacing it with this one would resurrect a stale drawing.
+                    lock (SnapshotLock)
+                    {
+                        if (!ReferenceEquals(_drawingSnapshot, current))
+                            throw new InvalidOperationException("The drawing window was replaced while the standard was loading. Run LSTDR again.");
+                        _drawingSnapshot = updated;
+                    }
                     current.Document.Editor.WriteMessage($"\nStandard loaded: {Path.GetFileName(path)} ({names.Length} layers).");
                     completion.TrySetResult(updated);
                 }
