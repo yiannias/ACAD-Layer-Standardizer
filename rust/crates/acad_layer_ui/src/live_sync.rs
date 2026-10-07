@@ -26,20 +26,21 @@ fn event_drawing_id(event: &FeedEvent) -> Option<&str> {
 /// the window shows (or is already switching to); unknown event kinds are ignored.
 pub fn plan_feed_events(current_id: &str, events: &[FeedEvent]) -> FeedPlan {
     let mut plan = FeedPlan::default();
+    // Whether the current drawing's layers changed / it closed anywhere in the batch.
+    let mut current_changed = false;
+    let mut current_closed = false;
     for event in events {
         let Some(id) = event_drawing_id(event) else {
             continue;
         };
         match event.kind.as_str() {
             "DrawingActivated" => {
-                // A switch reads the new drawing's layers, so no refresh is needed;
-                // coming back to the displayed drawing cancels an earlier switch.
+                // Coming back to the displayed drawing cancels an earlier switch.
                 plan.switch_to = (id != current_id).then(|| id.to_string());
-                plan.refresh_current = false;
             }
             "LayersChanged" => {
-                if plan.switch_to.is_none() && id == current_id && !current_id.is_empty() {
-                    plan.refresh_current = true;
+                if id == current_id && !current_id.is_empty() {
+                    current_changed = true;
                 }
             }
             "DrawingClosed" => {
@@ -47,7 +48,7 @@ pub fn plan_feed_events(current_id: &str, events: &[FeedEvent]) -> FeedPlan {
                     plan.switch_to = None;
                 }
                 if id == current_id {
-                    plan.refresh_current = false;
+                    current_closed = true;
                 }
                 if !plan.forget.iter().any(|known| known == id) {
                     plan.forget.push(id.to_string());
@@ -56,6 +57,9 @@ pub fn plan_feed_events(current_id: &str, events: &[FeedEvent]) -> FeedPlan {
             _ => {}
         }
     }
+    // A switch reads the new drawing's layers, so it needs no refresh; a change seen
+    // before switching away and back within the batch still refreshes.
+    plan.refresh_current = plan.switch_to.is_none() && current_changed && !current_closed;
     plan
 }
 
@@ -261,6 +265,35 @@ mod tests {
                 ..FeedPlan::default()
             }
         );
+    }
+
+    #[test]
+    fn a_change_survives_switching_away_and_back_in_one_batch() {
+        let plan = plan_feed_events(
+            "A",
+            &[
+                event("LayersChanged", "A"),
+                event("DrawingActivated", "B"),
+                event("DrawingActivated", "A"),
+            ],
+        );
+        assert_eq!(
+            plan,
+            FeedPlan {
+                refresh_current: true,
+                ..FeedPlan::default()
+            }
+        );
+        // A change made while B was planned still counts once A is back.
+        let plan = plan_feed_events(
+            "A",
+            &[
+                event("DrawingActivated", "B"),
+                event("LayersChanged", "A"),
+                event("DrawingActivated", "A"),
+            ],
+        );
+        assert!(plan.refresh_current && plan.switch_to.is_none());
     }
 
     #[test]

@@ -44,6 +44,16 @@ impl DrawingSessions {
         self.entries.remove(id);
     }
 
+    /// Applies `retain_valid_targets` to every stashed drawing (a new standard was
+    /// loaded); drawings left with no connections are dropped.
+    pub fn retain_valid_targets(&mut self, targets: &[String]) {
+        for (_, state) in self.entries.values_mut() {
+            retain_valid_targets(state, targets);
+        }
+        self.entries
+            .retain(|_, (_, state)| state.pending_count() > 0);
+    }
+
     /// Pending counts for every drawing: stashed ones plus the current one.
     pub fn pending_report(&self, current: Option<(&str, usize)>) -> Vec<PendingEntry> {
         let mut report: Vec<PendingEntry> = self
@@ -105,9 +115,62 @@ pub fn drop_missing_sources(overrides: &mut Overrides, source_layers: &[String])
     before - overrides.len()
 }
 
+/// Removes connections to targets the loaded standard no longer has, from the
+/// connections and from every undo/redo snapshot; explicit disconnects (`None`) stay.
+/// Names compare ignoring ASCII case, like `MappingEditor::retain_valid_targets`.
+pub fn retain_valid_targets(state: &mut EditState, targets: &[String]) {
+    let names: std::collections::HashSet<String> = targets
+        .iter()
+        .map(|name| name.to_ascii_lowercase())
+        .collect();
+    let keep = |overrides: &mut Overrides| {
+        overrides.retain(|_, target| {
+            target
+                .as_ref()
+                .is_none_or(|name| names.contains(&name.to_ascii_lowercase()))
+        });
+    };
+    keep(&mut state.overrides);
+    state.undo.iter_mut().for_each(keep);
+    state.redo.iter_mut().for_each(keep);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_targets_are_removed_from_connections_and_history() {
+        let mut edit = state(&[("A", Some("t-wall")), ("B", Some("GONE")), ("C", None)]);
+        edit.undo
+            .push(state(&[("B", Some("Gone")), ("A", Some("T-WALL"))]).overrides);
+        edit.redo
+            .push(state(&[("C", Some("gone")), ("D", None)]).overrides);
+        retain_valid_targets(&mut edit, &["T-WALL".to_string()]);
+        assert_eq!(
+            edit.overrides,
+            state(&[("A", Some("t-wall")), ("C", None)]).overrides
+        );
+        assert_eq!(edit.undo, vec![state(&[("A", Some("T-WALL"))]).overrides]);
+        assert_eq!(edit.redo, vec![state(&[("D", None)]).overrides]);
+    }
+
+    #[test]
+    fn a_new_standard_filters_stashed_drawings_and_drops_emptied_ones() {
+        let mut sessions = DrawingSessions::default();
+        sessions.stash("id1", "Beds.dwg", state(&[("A", Some("GONE"))]));
+        sessions.stash(
+            "id2",
+            "Baths.dwg",
+            state(&[("A", Some("T-WALL")), ("B", Some("GONE"))]),
+        );
+        sessions.retain_valid_targets(&["T-WALL".to_string()]);
+        assert_eq!(
+            sessions.others_pending(None),
+            vec![("Baths.dwg".to_string(), 1)]
+        );
+        assert_eq!(sessions.take("id1").pending_count(), 0);
+    }
 
     fn state(pairs: &[(&str, Option<&str>)]) -> EditState {
         EditState {

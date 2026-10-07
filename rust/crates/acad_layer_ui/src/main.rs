@@ -311,6 +311,7 @@ impl eframe::App for LayerStandardizerApp {
                     self.target_filters = view.filters;
                     self.always_hidden_targets = view.always_hidden.into_iter().collect();
                     self.mapping_editor.retain_valid_targets(&info.layers);
+                    self.sessions.retain_valid_targets(&info.layers);
                     let source = std::mem::take(&mut self.source_layers);
                     self.set_layers(source, info.layers);
                     self.status_message = format!(
@@ -813,6 +814,8 @@ impl LayerStandardizerApp {
             self.mapping_editor.clear_selection();
             let mut state = self.sessions.take(&info.drawing_id);
             sessions::drop_missing_sources(&mut state.overrides, &info.source_layers);
+            // The standard may have changed since this state was stashed.
+            sessions::retain_valid_targets(&mut state, &self.standard_layers);
             self.mapping_editor.restore_edit_state(state);
         } else {
             sessions::drop_missing_sources(&mut self.mapping_editor.overrides, &info.source_layers);
