@@ -207,4 +207,35 @@ public class IpcBridgeServerTests
         Assert.Equal("Error", response.GetProperty("type").GetString());
         Assert.Contains("could not be found", response.GetProperty("payload").GetString());
     }
+
+    private static object LayersForDrawingRequest(int version, string drawingId) => new
+    {
+        type = "GetLayersForDrawing",
+        payload = new { protocol_version = version, drawing_id = drawingId }
+    };
+
+    [Fact]
+    public async Task GetLayersForDrawing_rejects_an_unsupported_version()
+    {
+        var response = await SendAsync(LayersForDrawingRequest(1, "x"));
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Contains("Unsupported", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task GetLayersForDrawing_reports_an_unknown_drawing()
+    {
+        var response = await SendAsync(LayersForDrawingRequest(4, "no-such-drawing"));
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Contains("no longer open", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task GetLayersForDrawing_rejects_malformed_payloads_without_dropping_the_connection()
+    {
+        var noPayload = await SendAsync(new { type = "GetLayersForDrawing" });
+        Assert.Equal("Error", noPayload.GetProperty("type").GetString());
+        var noId = await SendAsync(new { type = "GetLayersForDrawing", payload = new { protocol_version = 4 } });
+        Assert.Equal("Error", noId.GetProperty("type").GetString());
+    }
 }

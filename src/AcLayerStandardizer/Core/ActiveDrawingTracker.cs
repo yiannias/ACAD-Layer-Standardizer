@@ -18,6 +18,14 @@ public static class ActiveDrawingTracker
     public static string GetDrawingId(Document document) =>
         Ids.GetValue(document, _ => ActiveDrawingIds.Next());
 
+    // Must run on AutoCAD's thread (inside a command context).
+    public static Document? TryFindDocument(string drawingId)
+    {
+        foreach (Document document in Application.DocumentManager)
+            if (GetDrawingId(document) == drawingId) return document;
+        return null;
+    }
+
     public static void Start()
     {
         if (_started) return;

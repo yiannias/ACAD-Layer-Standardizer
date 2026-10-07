@@ -101,6 +101,19 @@ pub enum IpcRequest {
         since: Option<u64>,
         pending: Vec<PendingEntry>,
     },
+    GetLayersForDrawing {
+        protocol_version: u32,
+        drawing_id: String,
+    },
+}
+
+/// A drawing's layer names, read by id (not necessarily the one LSTDR captured).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DrawingLayersInfo {
+    pub drawing_id: String,
+    pub drawing_name: String,
+    pub source_layers: Vec<String>,
+    pub empty_layers: Vec<String>,
 }
 
 /// One entry in the connector's change feed.
@@ -158,6 +171,7 @@ pub enum IpcResponse {
         layers: Vec<String>,
     },
     TemplateLoaded(DrawingSnapshot),
+    DrawingLayers(DrawingLayersInfo),
     Events {
         head: u64,
         reset: bool,
@@ -176,6 +190,14 @@ pub fn get_standard_layers(path: String) -> Result<IpcResponse, String> {
     request(IpcRequest::GetStandardLayers {
         protocol_version: IPC_PROTOCOL_VERSION,
         path,
+    })
+}
+
+#[cfg(windows)]
+pub fn get_layers_for_drawing(drawing_id: String) -> Result<IpcResponse, String> {
+    request(IpcRequest::GetLayersForDrawing {
+        protocol_version: IPC_PROTOCOL_VERSION,
+        drawing_id,
     })
 }
 
@@ -347,6 +369,11 @@ pub fn get_standard_layers(_path: String) -> Result<IpcResponse, String> {
 }
 
 #[cfg(not(windows))]
+pub fn get_layers_for_drawing(_drawing_id: String) -> Result<IpcResponse, String> {
+    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(not(windows))]
 pub fn get_active_drawing(_known_revision: Option<u64>) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
 }
@@ -494,6 +521,31 @@ mod tests {
         assert_eq!(events[0].seq, 4);
         assert_eq!(events[0].kind, "DrawingActivated");
         assert_eq!(events[0].payload["drawing_id"], "d1");
+    }
+
+    #[test]
+    fn get_layers_for_drawing_request_shape() {
+        let json = serde_json::to_string(&IpcRequest::GetLayersForDrawing {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            drawing_id: "d1".into(),
+        })
+        .unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"GetLayersForDrawing","payload":{"protocol_version":4,"drawing_id":"d1"}}"#
+        );
+    }
+
+    #[test]
+    fn drawing_layers_response_deserializes() {
+        let json = r#"{"type":"DrawingLayers","payload":{"drawing_id":"d1","drawing_name":"A.dwg","source_layers":["0","WALL"],"empty_layers":["WALL"]}}"#;
+        let IpcResponse::DrawingLayers(info) = serde_json::from_str(json).unwrap() else {
+            panic!("expected DrawingLayers");
+        };
+        assert_eq!(info.drawing_id, "d1");
+        assert_eq!(info.drawing_name, "A.dwg");
+        assert_eq!(info.source_layers, vec!["0", "WALL"]);
+        assert_eq!(info.empty_layers, vec!["WALL"]);
     }
 
     #[test]

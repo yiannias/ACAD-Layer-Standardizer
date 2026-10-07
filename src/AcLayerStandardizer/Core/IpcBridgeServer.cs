@@ -198,6 +198,19 @@ public static class IpcBridgeServer
                     // "pending" is accepted and ignored here; a later task uses it.
                     return IpcProtocol.BuildEventsResponse(EventFeed.Shared.Read(since));
 
+                case "GetLayersForDrawing":
+                    if (!root.TryGetProperty("payload", out var layersPayload)
+                        || layersPayload.ValueKind != JsonValueKind.Object
+                        || !layersPayload.TryGetProperty("protocol_version", out var layersVersion)
+                        || layersVersion.ValueKind != JsonValueKind.Number)
+                        return Error("The request is missing its payload or protocol_version.");
+                    if (CheckProtocolVersion(root) is { } versionErrorLayers) return versionErrorLayers;
+                    if (!layersPayload.TryGetProperty("drawing_id", out var layersIdElement)
+                        || layersIdElement.ValueKind != JsonValueKind.String
+                        || string.IsNullOrEmpty(layersIdElement.GetString()))
+                        return Error("The request is missing drawing_id.");
+                    return await GetLayersForDrawingAsync(layersIdElement.GetString()!).ConfigureAwait(false);
+
                 case "GetDrawingSnapshot":
                     var snapshot = GetDrawingSnapshot();
                     if (snapshot is null)
@@ -292,6 +305,78 @@ public static class IpcBridgeServer
         }
         catch (Exception ex) { return Error($"Could not load the standard file: {ex.GetBaseException().Message}"); }
     }
+
+    private sealed class DrawingClosedException : Exception { }
+
+    // Reads another open drawing's layers for the Rust window and makes it the
+    // drawing Apply/Purge act on, keeping the standard-layer data.
+    private static async Task<string> GetLayersForDrawingAsync(string drawingId)
+    {
+        var current = GetDrawingSnapshot();
+        var completion = new TaskCompletionSource<DrawingSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            try { await QueueLayerReadAsync(drawingId, current, completion).ConfigureAwait(false); }
+            catch (Exception)
+            {
+                // The command context itself could not run (for example no AutoCAD
+                // host): no drawing can be found, so the drawing counts as closed.
+                throw new DrawingClosedException();
+            }
+            var read = await completion.Task.ConfigureAwait(false);
+            return JsonSerializer.Serialize(new
+            {
+                type = "DrawingLayers",
+                payload = new
+                {
+                    drawing_id = read.DrawingId,
+                    drawing_name = read.DrawingName,
+                    source_layers = read.SourceLayers,
+                    empty_layers = read.EmptyLayers
+                }
+            });
+        }
+        catch (DrawingClosedException) { return Error("The drawing is no longer open."); }
+        catch (Exception ex) { return Error($"Could not read the drawing's layers: {ex.GetBaseException().Message}"); }
+    }
+
+    // Kept out of line so that loading the AutoCAD assemblies happens inside the
+    // caller's try block (it fails in a process with no AutoCAD).
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static async Task QueueLayerReadAsync(
+        string drawingId, DrawingSnapshot? current, TaskCompletionSource<DrawingSnapshot> completion) =>
+        await Application.DocumentManager.ExecuteInCommandContextAsync(_ =>
+        {
+            try
+            {
+                var document = ActiveDrawingTracker.TryFindDocument(drawingId);
+                if (document is null) throw new DrawingClosedException();
+                if (current is null)
+                    throw new InvalidOperationException("No active drawing snapshot is available. Run LSTDR again.");
+
+                var source = MappingsCommand.GetActiveLayerNames(document.Database)
+                    .OrderBy(n => n, NaturalSortComparer.Instance).ToArray();
+                var empty = MappingsCommand.GetEmptyLayers(document.Database)
+                    .OrderBy(n => n, NaturalSortComparer.Instance).ToArray();
+                var updated = current with
+                {
+                    Document = document,
+                    DrawingId = drawingId,
+                    DrawingName = Path.GetFileName(document.Name),
+                    SourceLayers = source,
+                    EmptyLayers = empty
+                };
+                lock (SnapshotLock)
+                {
+                    if (!ReferenceEquals(_drawingSnapshot, current))
+                        throw new InvalidOperationException("The drawing window was replaced while its layers were being read. Try again.");
+                    _drawingSnapshot = updated;
+                }
+                completion.TrySetResult(updated);
+            }
+            catch (Exception ex) { completion.TrySetException(ex); }
+            return Task.CompletedTask;
+        }, null);
 
     private static async Task<string> LoadStandardAsync(JsonElement root)
     {

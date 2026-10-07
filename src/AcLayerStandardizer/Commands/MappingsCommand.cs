@@ -275,7 +275,7 @@ public static class MappingsCommand
         return emptyNames;
     }
 
-    private static List<string> GetActiveLayerNames(Database db)
+    internal static List<string> GetActiveLayerNames(Database db)
     {
         var names = new List<string>();
 
