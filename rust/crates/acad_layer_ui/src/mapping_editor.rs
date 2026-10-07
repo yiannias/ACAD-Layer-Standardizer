@@ -69,6 +69,8 @@ pub struct MappingEditor {
     show_manual: bool,
     show_unmatched: bool,
     column_mode: bool,
+    /// Node columns per side chosen with the footer slider; `None` is Auto.
+    node_columns: Option<usize>,
     highlight_empty: bool,
     match_color: bool,
     match_linetype: bool,
@@ -108,6 +110,7 @@ impl Default for MappingEditor {
             show_manual: true,
             show_unmatched: true,
             column_mode: false,
+            node_columns: None,
             highlight_empty: false,
             match_color: true,
             match_linetype: true,
@@ -245,6 +248,14 @@ impl MappingEditor {
                                         }
                                         ui.separator();
                                         self.column_mode = draw_mode_switch(ui, self.column_mode);
+                                        if !self.column_mode {
+                                            ui.add_space(8.0);
+                                            let stop = draw_columns_slider(
+                                                ui,
+                                                stop_for_node_columns(self.node_columns),
+                                            );
+                                            self.node_columns = node_columns_for_stop(stop);
+                                        }
                                     });
                         });
                     });
@@ -768,9 +779,9 @@ impl MappingEditor {
     }
 
     /// World-space bounds of the source and target groups, matching `draw_group_headers`.
-    fn content_bounds(sources: usize, targets: usize) -> Rect {
-        let (source_columns, source_rows) = column_layout(sources);
-        let (target_columns, target_rows) = column_layout(targets);
+    fn content_bounds(sources: usize, targets: usize, columns: Option<usize>) -> Rect {
+        let (source_columns, source_rows) = column_layout(sources, columns);
+        let (target_columns, target_rows) = column_layout(targets, columns);
         let right = if targets > 0 {
             TARGET_X + (target_columns - 1) as f32 * TARGET_STEP + NODE_WIDTH + 24.0
         } else {
@@ -786,7 +797,7 @@ impl MappingEditor {
 
     /// Centers and scales the view so all content is visible, clear of the floating panels.
     fn fit_to_content(&mut self, canvas: Rect, sources: usize, targets: usize, has_filters: bool) {
-        let bounds = Self::content_bounds(sources, targets);
+        let bounds = Self::content_bounds(sources, targets, self.node_columns);
         let mut usable = canvas.shrink(16.0);
         usable.min.x += 190.0;
         if has_filters {
@@ -830,7 +841,7 @@ impl MappingEditor {
     }
 
     fn source_positions(&self, visible: &[usize], canvas: Rect) -> HashMap<usize, Rect> {
-        let (columns, rows) = column_layout(visible.len());
+        let (columns, rows) = column_layout(visible.len(), self.node_columns);
         visible
             .iter()
             .enumerate()
@@ -1389,7 +1400,7 @@ impl MappingEditor {
     }
 
     fn target_positions(&self, visible: &[usize], canvas: Rect) -> HashMap<usize, Rect> {
-        let (_, rows) = column_layout(visible.len());
+        let (_, rows) = column_layout(visible.len(), self.node_columns);
         visible
             .iter()
             .enumerate()
@@ -1480,8 +1491,8 @@ impl MappingEditor {
         sources: &[usize],
         targets: &[usize],
     ) -> bool {
-        let (source_columns, source_rows) = column_layout(sources.len());
-        let (target_columns, target_rows) = column_layout(targets.len());
+        let (source_columns, source_rows) = column_layout(sources.len(), self.node_columns);
+        let (target_columns, target_rows) = column_layout(targets.len(), self.node_columns);
         let source_left = source_group_left(source_columns);
         let source_right = SOURCE_X + NODE_WIDTH + 24.0;
         let source_bottom =
@@ -2218,9 +2229,46 @@ fn highlight_color(match_color: Color32) -> Color32 {
 /// Splits `count` nodes into the fewest columns of at most
 /// `MAX_NODE_COLUMN_HEIGHT`, balanced so no column is much shorter than the rest.
 /// Returns `(columns, rows_per_column)`.
-fn column_layout(count: usize) -> (usize, usize) {
-    let columns = count.div_ceil(MAX_NODE_COLUMN_HEIGHT).max(1);
-    (columns, count.div_ceil(columns).max(1))
+///
+/// With `requested` columns (the footer slider) the nodes are split evenly across at
+/// most that many columns instead; a side with few layers uses fewer, never leaving a
+/// column empty.
+fn column_layout(count: usize, requested: Option<usize>) -> (usize, usize) {
+    match requested {
+        None => {
+            let columns = count.div_ceil(MAX_NODE_COLUMN_HEIGHT).max(1);
+            (columns, count.div_ceil(columns).max(1))
+        }
+        Some(chosen) => {
+            let rows = count.div_ceil(chosen.max(1)).max(1);
+            (count.div_ceil(rows).max(1), rows)
+        }
+    }
+}
+
+/// The footer slider's stops: 0 is "Auto", 1..=8 are that many node columns.
+const MAX_COLUMN_STOP: usize = 8;
+
+fn node_columns_for_stop(stop: usize) -> Option<usize> {
+    (stop > 0).then(|| stop.min(MAX_COLUMN_STOP))
+}
+
+fn stop_for_node_columns(columns: Option<usize>) -> usize {
+    columns.map_or(0, |columns| columns.min(MAX_COLUMN_STOP))
+}
+
+fn column_stop_label(stop: usize) -> String {
+    match stop {
+        0 => "Auto".to_string(),
+        1 => "1 column".to_string(),
+        n => format!("{n} columns"),
+    }
+}
+
+/// The slider stop nearest to pointer x, for a track running from `left` to `right`.
+fn stop_at_position(x: f32, left: f32, right: f32) -> usize {
+    let fraction = ((x - left) / (right - left)).clamp(0.0, 1.0);
+    (fraction * MAX_COLUMN_STOP as f32).round() as usize
 }
 
 /// World x of the left edge of the Source group: its last column sits beside the
@@ -2290,6 +2338,58 @@ fn filter_button(ui: &mut egui::Ui, label: &str, color: Color32, enabled: &mut b
     {
         *enabled = !*enabled;
     }
+}
+
+/// Slider in the footer's mode-switch style: a dark pill with a blue thumb that snaps
+/// between "Auto" and 1..=8 node columns. Returns the (possibly changed) stop.
+fn draw_columns_slider(ui: &mut egui::Ui, stop: usize) -> usize {
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(262.0, 34.0), Sense::click_and_drag());
+    let painter = ui.painter();
+    painter.rect_filled(rect, 17.0, Color32::from_rgb(37, 37, 37));
+    painter.rect_stroke(
+        rect,
+        17.0,
+        Stroke::new(1.0, Color32::from_rgb(102, 102, 102)),
+        egui::StrokeKind::Inside,
+    );
+
+    let track_left = rect.left() + 96.0;
+    let track_right = rect.right() - 18.0;
+    let stop_x = |stop: usize| {
+        track_left + (track_right - track_left) * stop as f32 / MAX_COLUMN_STOP as f32
+    };
+    let stop = if response.dragged() || response.is_pointer_button_down_on() {
+        response
+            .interact_pointer_pos()
+            .map_or(stop, |pos| stop_at_position(pos.x, track_left, track_right))
+    } else {
+        stop
+    };
+
+    painter.text(
+        Pos2::new(rect.left() + 16.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        column_stop_label(stop),
+        FontId::proportional(13.0),
+        Color32::WHITE,
+    );
+    painter.line_segment(
+        [
+            Pos2::new(track_left, rect.center().y),
+            Pos2::new(track_right, rect.center().y),
+        ],
+        Stroke::new(2.0, Color32::from_rgb(102, 102, 102)),
+    );
+    for tick in 0..=MAX_COLUMN_STOP {
+        painter.circle_filled(
+            Pos2::new(stop_x(tick), rect.center().y),
+            2.5,
+            Color32::from_rgb(130, 130, 130),
+        );
+    }
+    painter.circle_filled(Pos2::new(stop_x(stop), rect.center().y), 11.0, BLUE);
+    response.on_hover_text("Node columns per side (Auto wraps at 25 nodes per column)");
+    stop
 }
 
 fn draw_mode_switch(ui: &mut egui::Ui, column_mode: bool) -> bool {
@@ -2446,18 +2546,92 @@ mod tests {
 
     #[test]
     fn column_layout_never_exceeds_the_maximum_height_and_stays_balanced() {
-        assert_eq!(column_layout(0), (1, 1));
-        assert_eq!(column_layout(25), (1, 25));
-        assert_eq!(column_layout(26), (2, 13));
-        assert_eq!(column_layout(129), (6, 22));
-        assert_eq!(column_layout(321), (13, 25));
+        assert_eq!(column_layout(0, None), (1, 1));
+        assert_eq!(column_layout(25, None), (1, 25));
+        assert_eq!(column_layout(26, None), (2, 13));
+        assert_eq!(column_layout(129, None), (6, 22));
+        assert_eq!(column_layout(321, None), (13, 25));
         for count in 1..=2000 {
-            let (columns, rows) = column_layout(count);
+            let (columns, rows) = column_layout(count, None);
             assert!(rows <= MAX_NODE_COLUMN_HEIGHT, "{count}: {rows} rows");
             assert!(
                 columns * rows >= count,
                 "{count}: layout cannot hold every node"
             );
+        }
+    }
+
+    #[test]
+    fn a_chosen_column_count_splits_the_nodes_evenly() {
+        assert_eq!(column_layout(100, Some(1)), (1, 100));
+        assert_eq!(column_layout(100, Some(4)), (4, 25));
+        assert_eq!(column_layout(100, Some(8)), (8, 13));
+        assert_eq!(column_layout(0, Some(3)), (1, 1));
+        for count in 1..=300 {
+            for chosen in 1..=8 {
+                let (columns, rows) = column_layout(count, Some(chosen));
+                assert!(columns <= chosen, "{count}/{chosen}: {columns} columns");
+                assert!(
+                    columns * rows >= count,
+                    "{count}/{chosen}: cannot hold every node"
+                );
+                assert!(
+                    (columns - 1) * rows < count,
+                    "{count}/{chosen}: the last column would be empty"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn few_layers_never_get_empty_columns() {
+        assert_eq!(column_layout(3, Some(8)), (3, 1));
+        assert_eq!(column_layout(10, Some(8)), (5, 2));
+        assert_eq!(column_layout(1, Some(5)), (1, 1));
+    }
+
+    #[test]
+    fn slider_stops_map_to_auto_then_one_to_eight_columns() {
+        assert_eq!(node_columns_for_stop(0), None);
+        assert_eq!(node_columns_for_stop(1), Some(1));
+        assert_eq!(node_columns_for_stop(8), Some(8));
+        assert_eq!(node_columns_for_stop(99), Some(8));
+        for stop in 0..=MAX_COLUMN_STOP {
+            assert_eq!(stop_for_node_columns(node_columns_for_stop(stop)), stop);
+        }
+        assert_eq!(column_stop_label(0), "Auto");
+        assert_eq!(column_stop_label(1), "1 column");
+        assert_eq!(column_stop_label(3), "3 columns");
+    }
+
+    #[test]
+    fn a_pointer_position_picks_the_nearest_slider_stop() {
+        assert_eq!(stop_at_position(100.0, 100.0, 180.0), 0);
+        assert_eq!(stop_at_position(180.0, 100.0, 180.0), MAX_COLUMN_STOP);
+        assert_eq!(stop_at_position(140.0, 100.0, 180.0), 4);
+        assert_eq!(
+            stop_at_position(-50.0, 100.0, 180.0),
+            0,
+            "clamped on the left"
+        );
+        assert_eq!(
+            stop_at_position(900.0, 100.0, 180.0),
+            MAX_COLUMN_STOP,
+            "clamped on the right"
+        );
+    }
+
+    #[test]
+    fn the_chosen_column_count_drives_node_placement_and_bounds() {
+        let mut editor = unit_editor();
+        editor.node_columns = Some(3);
+        let sources = editor.source_positions(&indices(100), canvas());
+        let targets = editor.target_positions(&indices(100), canvas());
+        assert_eq!(column_count(&sources), 3);
+        assert_eq!(column_count(&targets), 3);
+        let bounds = MappingEditor::content_bounds(100, 100, Some(3));
+        for rect in sources.values().chain(targets.values()) {
+            assert!(bounds.contains_rect(*rect), "{rect:?} outside {bounds:?}");
         }
     }
 
@@ -2492,7 +2666,7 @@ mod tests {
         let editor = unit_editor();
         let sources = editor.source_positions(&indices(129), canvas());
         let targets = editor.target_positions(&indices(321), canvas());
-        let bounds = MappingEditor::content_bounds(129, 321);
+        let bounds = MappingEditor::content_bounds(129, 321, None);
         for rect in sources.values().chain(targets.values()) {
             assert!(bounds.contains_rect(*rect), "{rect:?} outside {bounds:?}");
         }
