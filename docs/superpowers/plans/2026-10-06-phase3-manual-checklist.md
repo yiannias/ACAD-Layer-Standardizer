@@ -20,13 +20,17 @@ Rules for the whole checklist:
 
 ## Setup (do once)
 
+This checklist only ever uses throwaway test copies: `LayerTest_A\Beds_in_plan.dwg` and `LayerTest_B\Beds_in_plan.dwg` on your Desktop (called **drawing A** and **drawing B** below). You may edit and save them freely. Your original drawings (for example in `D:\CAD WAREHOUSE`) are never opened by this checklist.
+
 - [ ] 1. Back up `%APPDATA%\AcLayerStandardizer` (your usual zip).
-- [ ] 2. Close AutoCAD.
-- [ ] 3. Run the installer `D:\Projects\ACAD-Layer-Standardizer\dist\AcLayerStandardizer_BETA-1.2.4.exe`.
-- [ ] 4. Start AutoCAD 2027.
-- [ ] 5. Open the two test drawings: the LayerTest_A and LayerTest_B copies on your Desktop.
-- [ ] 6. In drawing A add the layers `A-WALL-TEST`, `A-DOOR-TEST`, `A-SPARE-1` and `A-SPARE-2`. In drawing B add `B-FURN-TEST` and `B-LITE-TEST`. Also add a layer named `SHARED-TEST` to **both** drawings (same name in each).
-- [ ] 7. Save both drawings (QSAVE).
+- [ ] 2. Safety copy, because later steps (Choose Standard in J, Apply & Remember in K) can change your saved Standardizer files. In File Explorer type `%APPDATA%` in the address bar. If the folder `AcLayerStandardizer` exists, copy it to your Desktop and rename the copy `AcLayerStandardizer_aside`. If it does not exist yet, write "none" here: ______ and skip the restore in section K.
+- [ ] 3. Open `%APPDATA%\AcLayerStandardizer\config.json` in Notepad (if it exists) and look for a line containing `MemoryFilePath`. If it has a value pointing **outside** `%APPDATA%\AcLayerStandardizer`, write "memory elsewhere" here: ______ and skip step 5 of section K (tell Claude instead). Do not change the file.
+- [ ] 4. Close AutoCAD.
+- [ ] 5. Run the installer `D:\Projects\ACAD-Layer-Standardizer\dist\AcLayerStandardizer_BETA-1.2.4.exe`.
+- [ ] 6. Start AutoCAD 2027.
+- [ ] 7. Open the two test drawings: `LayerTest_A\Beds_in_plan.dwg` and `LayerTest_B\Beds_in_plan.dwg` on your Desktop.
+- [ ] 8. In drawing A add the layers `A-WALL-TEST`, `A-DOOR-TEST`, `A-SPARE-1` and `A-SPARE-2`. In drawing B add `B-FURN-TEST` and `B-LITE-TEST`. Also add a layer named `SHARED-TEST` to **both** drawings (same name in each).
+- [ ] 9. Save both drawings (QSAVE).
 
 ---
 
@@ -120,7 +124,7 @@ Start state: mapping window open, A and B open.
 
 Start state: mapping window open.
 
-Set up (do not touch your real LayerTest drawings): on the Desktop make two new folders named `SameName_1` and `SameName_2`. Copy the LayerTest_A drawing into `SameName_1` and rename the copy `Beds_in_plan.dwg`. Copy the LayerTest_B drawing into `SameName_2` and rename that copy `Beds_in_plan.dwg`. (They now have the same file name but different layers.)
+Set up: on the Desktop make two new folders named `SameName_1` and `SameName_2`. Copy the file `LayerTest_A\Beds_in_plan.dwg` into `SameName_1` and the file `LayerTest_B\Beds_in_plan.dwg` into `SameName_2` (both copies keep the name `Beds_in_plan.dwg`). They now have the same file name but different layers. This section uses ONLY these two new copies.
 
 1. Close the mapping window with X (Discard if asked). Open both `Beds_in_plan.dwg` files in AutoCAD. Make `SameName_1\Beds_in_plan.dwg` active and type LSTDR. Make a connection.
 2. Switch to `SameName_2\Beds_in_plan.dwg`.
@@ -139,10 +143,10 @@ Set up (do not touch your real LayerTest drawings): on the Desktop make two new 
 5. Refusal test. Type LSTDR on the `SameName_1` drawing (the window closed after Apply) and make a connection. Now **minimize** the mapping window. Switch to the `SameName_2` drawing. Restore the mapping window and **click Apply immediately** (the window may refresh to the new drawing within a second, so be quick).
 
 - [ ] If a plain message appears saying the window's drawing is not the active one, and nothing changed in either drawing: PASS.
-- [ ] If the window had already refreshed to `SameName_2` and the Apply went to `SameName_2` (the one that was active): also acceptable; write "window refreshed first".
+- [ ] If the window had already refreshed to `SameName_2` (the active drawing), there is nothing to apply there, so Apply is greyed out or does nothing: also acceptable; write "window refreshed first".
 - [ ] FAIL if Apply changed the `SameName_1` drawing while `SameName_2` was active, or if you saw a technical error message.
 
-6. Close the two `Beds_in_plan.dwg` drawings (No to save prompts) and make sure drawing A and drawing B are open (open them again if needed).
+6. Close the two `Beds_in_plan.dwg` drawings with CLOSE. The `SameName_1` drawing still has an unapplied connection, so the Apply / Discard / Cancel dialog appears: choose **Discard**. Answer **No** to any save prompt. Then make sure drawing A and drawing B are open (open them again if needed) and the mapping window is closed.
 
 ## F. Close a drawing that has unapplied connections
 
@@ -167,7 +171,7 @@ Choose **Cancel**.
 4. **Minimized window.** Reopen drawing A, type LSTDR (the window closed after Apply), make 2 connections, then **minimize** the mapping window. Type CLOSE.
 
 - [ ] Within about a second the mapping window comes to the front by itself and shows the dialog.
-- [ ] Choose Cancel. Then minimize the window again and switch between drawings A and B with no unapplied connections pending in a drawing you are leaving (Discard first if needed): the window does NOT come to the front by itself at any other time.
+- [ ] Choose Cancel. Then minimize the window again and switch between drawings A and B after first getting rid of the pending connections (click each connection to remove it by hand, or close the mapping window with X, choose Discard, and reopen it with LSTDR): the window does NOT come to the front by itself at any other time.
 
 5. Make sure the mapping window is closed (X, Discard if asked) and A and B are both open.
 
@@ -252,7 +256,7 @@ Start state: AutoCAD closed.
 
 1. Start AutoCAD and open A and B. Type LSTDR with A active. Connect any layer in drawing A to a Target layer. Note that Target layer's name.
 2. Switch to drawing B.
-3. In the mapping window click **Choose Standard** and pick a different standard that does **not** contain the Target layer you used in step 1.
+3. In the mapping window click **Choose Standard** and pick a different standard that does **not** contain the Target layer you used in step 1. If you have no such standard, make one: copy your standard file to a new name on the Desktop, delete that Target layer from the copy, and pick the copy. If you have no second standard and cannot make one, skip J and tell Claude.
 4. Switch back to A.
 
 - [ ] The connection to the missing Target layer is not kept (no connection pointing at something that no longer exists).
@@ -260,12 +264,12 @@ Start state: AutoCAD closed.
 
 5. Close the mapping window with X and choose **Discard** if asked.
 
-## K. Phase 2 still works (and keeping your real data safe)
+## K. Phase 2 still works (and keeping your saved settings safe)
 
-This section changes your saved Standardizer files, so do the safety steps first and last. **Do not skip steps 1, 2 or 8.**
+This section changes your saved Standardizer files. The safety copy was made in Setup step 2 (the folder `AcLayerStandardizer_aside` on your Desktop). **Do not skip step 1 or step 8.** If you wrote "memory elsewhere" in Setup step 3, skip steps 5 and 6 (tell Claude instead).
 
-1. Close AutoCAD.
-2. **Safety copy.** In File Explorer type `%APPDATA%` in the address bar. Copy the whole folder `AcLayerStandardizer` to your Desktop and rename the copy `AcLayerStandardizer_aside`. Check that the copy contains `config.json` and `standards_memory.json` (if the originals exist).
+1. Check that `AcLayerStandardizer_aside` still exists on your Desktop (unless you wrote "none" in Setup step 2). If it is missing, STOP and do not continue. Close AutoCAD.
+2. Check that the aside copy contains `config.json` and `standards_memory.json` (if the originals existed).
 3. In the original `%APPDATA%\AcLayerStandardizer` folder, delete `config.json` and `standards_memory.json` (so there is no saved setup).
 4. Start AutoCAD, open drawing A, type LSTDR.
 
@@ -280,9 +284,9 @@ This section changes your saved Standardizer files, so do the safety steps first
 - [ ] `SHARED-TEST` is suggested automatically with the same Target (the remembered match).
 
 7. Close the mapping window and quit AutoCAD (No to save prompts).
-8. **Restore your real data.** In `%APPDATA%`, delete the whole `AcLayerStandardizer` folder (it now holds only test data). Copy `AcLayerStandardizer_aside` from your Desktop into `%APPDATA%` and rename it back to `AcLayerStandardizer`. (If anything looks wrong, unzip your Setup backup instead.)
+8. **Restore your saved settings.** In `%APPDATA%`, delete the whole `AcLayerStandardizer` folder (it now holds only test data). Copy `AcLayerStandardizer_aside` from your Desktop into `%APPDATA%` and rename it back to `AcLayerStandardizer`. (If you wrote "none" in Setup step 2, just delete the test-written folder. If anything looks wrong, unzip your Setup backup instead.) Section J's Choose Standard may also have changed your settings; this restore undoes that too.
 
-- [ ] `config.json` and `standards_memory.json` are back in `%APPDATA%\AcLayerStandardizer`.
+- [ ] `config.json` and `standards_memory.json` are back in `%APPDATA%\AcLayerStandardizer` (or "none" case: folder removed).
 
 ---
 
