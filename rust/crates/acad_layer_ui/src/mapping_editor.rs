@@ -2231,6 +2231,28 @@ impl MappingEditor {
         self.redo_stack.clear();
     }
 
+    // Task 6 wires the three edit-state methods into the UI.
+    #[allow(dead_code)]
+    pub fn take_edit_state(&mut self) -> crate::sessions::EditState {
+        crate::sessions::EditState {
+            overrides: std::mem::take(&mut self.overrides),
+            undo: std::mem::take(&mut self.undo_stack),
+            redo: std::mem::take(&mut self.redo_stack),
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn restore_edit_state(&mut self, state: crate::sessions::EditState) {
+        self.overrides = state.overrides;
+        self.undo_stack = state.undo;
+        self.redo_stack = state.redo;
+    }
+
+    #[allow(dead_code)]
+    pub fn unapplied_count(&self) -> usize {
+        self.overrides.len()
+    }
+
     fn draw_canvas_help(&self, _ctx: &egui::Context, _rect: Rect) {}
 }
 
@@ -2550,6 +2572,21 @@ mod tests {
 
     fn canvas() -> Rect {
         Rect::from_min_size(Pos2::ZERO, Vec2::new(10_000.0, 10_000.0))
+    }
+
+    #[test]
+    fn edit_state_round_trips_through_the_editor() {
+        let mut editor = unit_editor();
+        editor.overrides.insert("A".into(), Some("B".into()));
+        editor.undo_stack.push(HashMap::new());
+        assert_eq!(editor.unapplied_count(), 1);
+        let state = editor.take_edit_state();
+        assert_eq!(editor.unapplied_count(), 0);
+        assert!(editor.undo_stack.is_empty() && editor.redo_stack.is_empty());
+        assert_eq!(state.pending_count(), 1);
+        editor.restore_edit_state(state);
+        assert_eq!(editor.overrides.get("A"), Some(&Some("B".to_string())));
+        assert_eq!(editor.undo_stack.len(), 1);
     }
 
     fn indices(count: usize) -> Vec<usize> {

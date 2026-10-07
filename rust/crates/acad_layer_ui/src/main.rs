@@ -17,6 +17,7 @@ use std::{
 
 mod data;
 mod mapping_editor;
+mod sessions;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
