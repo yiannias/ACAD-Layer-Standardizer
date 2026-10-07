@@ -132,6 +132,70 @@ public class IpcBridgeServerTests
         ActiveDrawingRegistry.Clear();
     }
 
+    private static object PollRequest(long? since, int version = 4) => new
+    {
+        type = "PollEvents",
+        payload = new { protocol_version = version, since, pending = Array.Empty<object>() }
+    };
+
+    [Fact]
+    public async Task PollEvents_without_since_returns_a_reset()
+    {
+        var response = await SendAsync(PollRequest(null));
+        Assert.Equal("Events", response.GetProperty("type").GetString());
+        var payload = response.GetProperty("payload");
+        Assert.True(payload.GetProperty("reset").GetBoolean());
+        Assert.Equal(EventFeed.Shared.Head, payload.GetProperty("head").GetInt64());
+    }
+
+    [Fact]
+    public async Task PollEvents_returns_events_published_after_since()
+    {
+        var before = EventFeed.Shared.Head;
+        var seq = EventFeed.Shared.Publish("LayersChanged", new { drawing_id = "poll-doc", fingerprint = "ab12" });
+        var response = await SendAsync(PollRequest(before));
+        Assert.Equal("Events", response.GetProperty("type").GetString());
+        var payload = response.GetProperty("payload");
+        Assert.False(payload.GetProperty("reset").GetBoolean());
+        var events = payload.GetProperty("events").EnumerateArray().ToList();
+        var ours = events.Single(e => e.GetProperty("seq").GetInt64() == seq);
+        Assert.Equal("LayersChanged", ours.GetProperty("type").GetString());
+        Assert.Equal("poll-doc", ours.GetProperty("payload").GetProperty("drawing_id").GetString());
+    }
+
+    [Fact]
+    public async Task PollEvents_rejects_an_unsupported_version()
+    {
+        var response = await SendAsync(PollRequest(null, 1));
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Contains("Unsupported", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
+    public async Task PollEvents_is_not_written_to_the_ipc_log()
+    {
+        // The log is shared with other test processes and earlier runs, so only
+        // lines stamped after this test started are considered.
+        var started = DateTime.UtcNow;
+        for (var i = 0; i < 3; i++) await SendAsync(PollRequest(null));
+        await Task.Delay(200);
+
+        var logPath = Path.Combine(Path.GetTempPath(), "AcLayerStandardizer-ipc.log");
+        string all;
+        using (var stream = new FileStream(logPath, FileMode.OpenOrCreate, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var reader = new StreamReader(stream, Encoding.UTF8))
+            all = reader.ReadToEnd();
+        var tail = all.Length > 50000 ? all.Substring(all.Length - 50000) : all;
+
+        var recent = tail.Split('\n')
+            .Where(l => l.Contains("PollEvents"))
+            .Where(l => l.Length >= 28
+                && DateTime.TryParse(l.Substring(0, 28), null, System.Globalization.DateTimeStyles.RoundtripKind, out var at)
+                && at >= started)
+            .ToList();
+        Assert.Empty(recent);
+    }
+
     [Fact]
     public async Task GetStandardLayers_with_missing_file_returns_Error_without_touching_AutoCAD()
     {

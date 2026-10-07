@@ -48,15 +48,26 @@ public static class ActiveDrawingTracker
         ActiveDrawingRegistry.Clear();
     }
 
-    private static void OnDocumentActivated(object? sender, DocumentCollectionEventArgs e) => Refresh(e.Document);
+    private static void OnDocumentActivated(object? sender, DocumentCollectionEventArgs e)
+    {
+        if (e.Document is not null)
+            EventFeed.Shared.Publish("DrawingActivated", new
+            {
+                drawing_id = GetDrawingId(e.Document),
+                display_name = Path.GetFileName(e.Document.Name)
+            });
+        Refresh(e.Document);
+    }
 
     private static void OnDocumentCreated(object? sender, DocumentCollectionEventArgs e) => Watch(e.Document);
 
     private static void OnDocumentToBeDestroyed(object? sender, DocumentCollectionEventArgs e)
     {
         Unwatch(e.Document);
+        var closedId = GetDrawingId(e.Document);
+        EventFeed.Shared.Publish("DrawingClosed", new { drawing_id = closedId });
         var current = ActiveDrawingRegistry.Current;
-        if (current is not null && current.DrawingId == GetDrawingId(e.Document))
+        if (current is not null && current.DrawingId == closedId)
             ActiveDrawingRegistry.Clear();
     }
 
@@ -106,10 +117,19 @@ public static class ActiveDrawingTracker
                 return;
             }
 
-            ActiveDrawingRegistry.Publish(
+            var before = ActiveDrawingRegistry.Current;
+            var state = ActiveDrawingRegistry.Publish(
                 GetDrawingId(document),
                 Path.GetFileName(document.Name),
                 LayerFingerprint.Compute(ReadLayerNames(document.Database)));
+            // Publish returns the same state (same revision) when nothing changed,
+            // so idle refreshes stay silent on the feed.
+            if (before is null || before.Revision != state.Revision)
+                EventFeed.Shared.Publish("LayersChanged", new
+                {
+                    drawing_id = state.DrawingId,
+                    fingerprint = state.LayerFingerprint
+                });
         }
         catch (System.Exception ex)
         {

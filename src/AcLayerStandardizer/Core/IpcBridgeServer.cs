@@ -101,6 +101,9 @@ public static class IpcBridgeServer
 
     private static async Task ServerLoop(CancellationToken ct)
     {
+        // The Rust window polls once a second on a fresh connection each time;
+        // none of that traffic is logged, or the log would drown everything else.
+        var previousWasPoll = false;
         while (!ct.IsCancellationRequested)
         {
             try
@@ -115,9 +118,10 @@ public static class IpcBridgeServer
                     4096,
                     4096);
 
-                Log("Pipe listening.");
+                if (!previousWasPoll) Log("Pipe listening.");
                 await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
-                Log("Client connected.");
+                previousWasPoll = false;
+                var clientLogged = false;
 
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, leaveOpen: true);
                 // Do not emit a UTF-8 BOM on the pipe. The Rust client expects
@@ -130,10 +134,17 @@ public static class IpcBridgeServer
                     string? line = await reader.ReadLineAsync().ConfigureAwait(false);
                     if (string.IsNullOrEmpty(line)) break;
 
-                    Log($"Request received: {GetMessageType(line)}.");
+                    var requestType = GetMessageType(line);
+                    var isPoll = requestType == "PollEvents";
+                    previousWasPoll = isPoll;
+                    if (!isPoll)
+                    {
+                        if (!clientLogged) { Log("Client connected."); clientLogged = true; }
+                        Log($"Request received: {requestType}.");
+                    }
                     string responseJson = await HandleMessageAsync(line).ConfigureAwait(false);
                     await writer.WriteLineAsync(responseJson).ConfigureAwait(false);
-                    Log($"Response sent: {GetMessageType(responseJson)}.");
+                    if (!isPoll) Log($"Response sent: {GetMessageType(responseJson)}.");
                 }
 #pragma warning restore CA1416
             }
@@ -176,6 +187,16 @@ public static class IpcBridgeServer
                         && known.ValueKind == JsonValueKind.Number)
                         knownRevision = known.GetInt64();
                     return IpcProtocol.BuildActiveDrawingResponse(ActiveDrawingRegistry.Current, knownRevision);
+
+                case "PollEvents":
+                    if (CheckProtocolVersion(root) is { } versionErrorPoll) return versionErrorPoll;
+                    long? since = null;
+                    var pollPayload = root.GetProperty("payload");
+                    if (pollPayload.TryGetProperty("since", out var sinceElement)
+                        && sinceElement.ValueKind == JsonValueKind.Number)
+                        since = sinceElement.GetInt64();
+                    // "pending" is accepted and ignored here; a later task uses it.
+                    return IpcProtocol.BuildEventsResponse(EventFeed.Shared.Read(since));
 
                 case "GetDrawingSnapshot":
                     var snapshot = GetDrawingSnapshot();
