@@ -18,7 +18,7 @@ Done when: switching drawings updates the Source side within about a second, per
 |---|---|
 | Unapplied connections across an AutoCAD restart | No. Warn on close only; nothing is written to disk. |
 | Switching away from a drawing with unapplied connections | Keep them per drawing, and show a footer note. Text only, no click-to-switch. |
-| Poll rate | Once a second always, whether or not the window is focused. Pause only when the window is minimized or hidden. |
+| Poll rate | Once a second always, whether or not the window is focused. Pause only while the window is minimized AND no drawing has unapplied connections. |
 | Architecture | A general-purpose polling event feed (approach A). Other plug-ins may reuse it later, so the feed knows nothing about layers or mapping. |
 
 ## Architecture
@@ -63,9 +63,10 @@ New request `GetLayersForDrawing {protocol_version, drawing_id}` (the name `GetD
 
 ### 4. Window behavior
 
-- The one-second poll runs whenever the window is open and not minimized or hidden.
+- The one-second poll runs whenever the window is open. It pauses only while the window is minimized AND no drawing (displayed or stashed) has unapplied connections; a minimized window with pending connections keeps polling, follows the active drawing and still protects closes.
+- One mapping window per AutoCAD session: typing LSTDR again while it is open opens nothing; it restores the window if minimized, brings it to the front and prints "The Layer Standardizer window is already open; it follows the active drawing." on the command line.
 - No refresh while an Apply, Purge or Load Standard is in flight; a change that arrives meanwhile is applied right after it finishes.
-- Apply still closes the window afterwards, as today.
+- Apply still closes the window afterwards, as today, unless other drawings still have unapplied connections: then the window stays open and the status line says "Applied N mappings. Other drawings still have unapplied connections, so this window stays open."
 - No drawing open: the Source side shows "No drawing is open" and Apply is disabled; it recovers when a drawing is activated.
 - Unsaved drawings such as `Drawing1` work because identity is the connector-assigned id, not the file name.
 - The Target side does not change when drawings switch.
@@ -97,7 +98,7 @@ After Apply or Discard, the window asks the connector to replay the user's origi
 
 ### Closing the window itself
 
-If the displayed drawing has unapplied connections, the same dialog appears; no connector involvement. The text also lists other drawings whose pending connections would be lost. Apply applies the displayed drawing only.
+If ANY drawing (displayed or stashed) has unapplied connections, the same dialog appears; no connector involvement. The text also lists other drawings whose pending connections would be lost. Apply applies the displayed drawing only. When only other drawings have unapplied connections, the dialog names them and does not offer Apply; it offers Discard and Cancel.
 
 ### Quit
 
@@ -114,7 +115,7 @@ Not yet verified: the QUIT detection itself (that `CommandInProgress` reads QUIT
 
 ## Errors
 
-- Pipe down or request fails: the window keeps its state, shows "AutoCAD connection lost", and keeps retrying quietly. On reconnect it re-reads the active drawing.
+- Pipe down or request fails: the window keeps its state, shows "AutoCAD connection lost" only after 3 failed polls in a row, and keeps retrying quietly. On reconnect it does not re-read by itself: it catches up through the event list, and a `reset` (for example after a connector restart) re-reads the active drawing.
 - `reset` from the feed: re-read the active drawing, keep each drawing's pending connections, continue.
 - AutoCAD busy in a command: quiet retry on the next poll.
 - Any failure in the connector's close decision means the close is allowed. The warning is a courtesy and must never trap the user in AutoCAD.

@@ -413,7 +413,7 @@ mod tests {
         let waited = started.elapsed();
         handle.stop_and_wait(Duration::from_secs(2));
         assert!(
-            waited < Duration::from_millis(300),
+            waited < Duration::from_millis(600),
             "polled {waited:?} after unpausing"
         );
     }

@@ -152,11 +152,13 @@ Set up: on the Desktop make two new folders named `SameName_1` and `SameName_2`.
 
 - [ ] The change happens in the `SameName_1` drawing (check its layer list). The `SameName_2` drawing is unchanged.
 
-5. Refusal test. Type LSTDR on the `SameName_1` drawing (the window closed after Apply) and make a connection. Now **minimize** the mapping window. Switch to the `SameName_2` drawing. Restore the mapping window and **click Apply immediately** (the window may refresh to the new drawing within a second, so be quick).
+5. Wrong-drawing test. Type LSTDR on the `SameName_1` drawing (the window closed after Apply) and make a connection. Now **minimize** the mapping window. Switch to the `SameName_2` drawing. Restore the mapping window and **click Apply immediately** (be quick). Because the window has an unapplied connection, it keeps following the active drawing even while minimized, so it has most likely already switched to `SameName_2`. That is the normal result.
 
-- [ ] If a plain message appears saying the window's drawing is not the active one, and nothing changed in either drawing: PASS.
-- [ ] If the window had already refreshed to `SameName_2` (the active drawing), there is nothing to apply there, so Apply is greyed out or does nothing: also acceptable; write "window refreshed first".
-- [ ] FAIL if Apply changed the `SameName_1` drawing while `SameName_2` was active, or if you saw a technical error message.
+Either of these outcomes is fine:
+
+- [ ] The window had already switched to `SameName_2` (its layers are shown), so there is nothing to apply there: Apply is greyed out or does nothing. Write "window refreshed first". This is the normal outcome.
+- [ ] You were quick enough that the window still showed `SameName_1`: a plain message appears saying the window's drawing is not the active one, and nothing changed in either drawing.
+- [ ] FAIL only if Apply changed the `SameName_1` drawing (the one that is NOT shown or active) while `SameName_2` was active, or if you saw a technical error message. Neither outcome above is a failure by itself.
 
 6. Close the mapping window with X (choose **Discard** if asked). Then close the two `Beds_in_plan.dwg` drawings with CLOSE. If any still shows the Apply / Discard / Cancel dialog, choose **Discard**. The `SameName_1` drawing still has an unapplied connection, so the Apply / Discard / Cancel dialog appears: choose **Discard**. Answer **No** to any save prompt. Then make sure drawing A and drawing B are open (open them again if needed) and the mapping window is closed.
 
@@ -209,6 +211,51 @@ Start state: A and B open, mapping window closed.
 5. Make 2 connections in A again (the window is open from the last step; if not, type LSTDR first). Click X and choose **Apply**.
 
 - [ ] The connections are applied and the window closes.
+
+## G2. Closing or applying while ANOTHER drawing has unapplied connections
+
+Start state: A and B open, mapping window closed.
+
+1. **X with only the other drawing pending.** Type LSTDR with A active and make 2 connections in A. Switch to B (make no connections there). Close the mapping window with its X button.
+
+- [ ] A dialog appears that names drawing A as having unapplied connections.
+- [ ] The dialog does NOT offer Apply. It offers Discard and Cancel.
+
+2. Choose **Cancel**.
+
+- [ ] The window stays open. Switch to A: its 2 connections are still there.
+
+3. Click X again and choose **Discard**. Type LSTDR to reopen the window.
+
+- [ ] The window closes. After reopening, A's connections are gone.
+
+4. **Apply while another drawing is pending.** With A active, make 2 connections in A. Switch to B and make 1 connection in B. Click the **Apply** button (this applies B's connection only).
+
+- [ ] B's connection is applied.
+- [ ] The window stays open (it does not close).
+- [ ] The status line says "Applied 1 mappings. Other drawings still have unapplied connections, so this window stays open." (the number may read differently; write down the exact words you see).
+
+5. Switch back to A.
+
+- [ ] A's 2 connections are still there.
+
+6. Close the mapping window with X and choose **Discard**. Type LSTDR to reopen it (no connections; leave it open).
+
+## G3. Typing LSTDR while the window is already open
+
+Start state: A and B open, mapping window open, no unapplied connections.
+
+1. Type LSTDR again.
+
+- [ ] No second mapping window opens. The existing window comes to the front.
+- [ ] The AutoCAD command line shows: "The Layer Standardizer window is already open; it follows the active drawing."
+
+2. **Minimize** the mapping window. Type LSTDR again.
+
+- [ ] The window is restored from the taskbar and comes to the front. Still only one mapping window exists.
+- [ ] The same message appears on the command line.
+
+3. Close the mapping window with X (no dialog is expected). Leave A and B open.
 
 ## H. Quit AutoCAD with unapplied connections
 
@@ -313,6 +360,8 @@ This section changes your saved Standardizer files. The safety copy was made in 
 | E. Same filename, two folders | | |
 | F. Close a drawing (Apply / Discard / Cancel, minimized) | | |
 | G. Close the mapping window | | |
+| G2. X and Apply while another drawing is pending (include the status line wording) | | |
+| G3. LSTDR typed while the window is open | | |
 | H. Quit AutoCAD | | |
 | I. Never trapped | | |
 | J. New standard with pending connections | | |
