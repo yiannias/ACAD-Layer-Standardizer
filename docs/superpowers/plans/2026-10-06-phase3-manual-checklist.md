@@ -180,7 +180,7 @@ Choose **Cancel**.
 
 - [ ] The connections are applied, then the drawing closes (or the save prompt appears) promptly, without a keypress. Same failure note if it waits for a key. (Choose No if a save prompt appears.)
 
-4. **Minimized window.** Reopen drawing A, type LSTDR (the window closed after Apply), make 2 connections, then **minimize** the mapping window. Type CLOSE.
+4. **Minimized window.** Reopen drawing A, type LSTDR (the window closed after Apply), make 2 connections, then **minimize** the mapping window. **Wait 10 seconds**, then type CLOSE. (The wait proves the protection still works while the window is minimized: a minimized window that stopped checking in would be treated as gone after 5 seconds, and the drawing would close without asking.)
 
 - [ ] Within about a second the mapping window comes to the front by itself and shows the dialog.
 - [ ] Choose Cancel. Then minimize the window again and switch between drawings A and B after first getting rid of the pending connections (close the mapping window with X, choose Discard, and reopen it with LSTDR): the window does NOT come to the front by itself at any other time.
