@@ -75,11 +75,26 @@ public static class ActiveDrawingTracker
 
     private static void OnDocumentToBeDestroyed(object? sender, DocumentCollectionEventArgs e)
     {
-        Unwatch(e.Document);
-        var closedDocument = e.Document;
-        TryPublish("DrawingClosed", () => new { drawing_id = GetDrawingId(closedDocument) });
+        try { Unwatch(e.Document); }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not unwatch the closing drawing: {ex.Message}");
+        }
+
+        string? closedId = null;
+        try { closedId = GetDrawingId(e.Document); }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not identify the closing drawing: {ex.Message}");
+        }
+
+        if (closedId is not null)
+            TryPublish("DrawingClosed", () => new { drawing_id = closedId });
+
+        // If the id is unknown, clear unconditionally: a stale registry for a
+        // closed drawing is worse than a redundant clear.
         var current = ActiveDrawingRegistry.Current;
-        if (current is not null && current.DrawingId == GetDrawingId(closedDocument))
+        if (closedId is null || (current is not null && current.DrawingId == closedId))
             ActiveDrawingRegistry.Clear();
     }
 
