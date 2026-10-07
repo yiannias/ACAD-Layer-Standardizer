@@ -111,3 +111,32 @@ The three Phase 3 questions below are resolved (see `docs/superpowers/specs/2026
 ## Wanted, not yet scheduled
 
 - Import and export of the translation memory (and a choose-memory-file picker) from the mapping window with a file browser. Today these are typed commands (`STD_ExportMemory`, `STD_ImportMemory`, `STD_SetMemoryFile`) that prompt for a path at the AutoCAD command line.
+- Reuse the live-sync event feed (`EventFeed` / `PollEvents` in the connector, `acad_layer_ipc::feed` in Rust) for other plug-ins. It was built general on purpose (events carry a type and a payload and know nothing about layers); nothing else uses it yet.
+
+## Post-1.3 list
+
+What is known to be open after Phase 4. Nothing here blocks a release; none of it risks data. Items are grouped, not ordered.
+
+### Verify (cheap, do first)
+
+- **A test that has never run.** `LayerConnectionViewModelTests.Confidence_defaults_to_1_0_for_non_heuristic_sources` is not discovered by xunit, because its theory takes an enum-typed `InlineData` parameter, which this repo's xunit setup silently drops. Change the parameter to a plain type (as `ClassifyCloseTests` now does) and check the test total rises.
+- **Check test totals when adding tests.** The same trap hid a whole Phase 3 test class until the total was checked. Whoever adds a theory should confirm the count goes up.
+
+### Phase 3 small issues (all fail safe)
+
+- **Spurious "try again" while choosing a standard.** `GetStandardLayers` can race a slow `GetLayersForDrawing` (the pipe now serves requests concurrently) and refuse with "The drawing changed while the standard was loading". Fix: under the snapshot lock, re-read the latest snapshot and refuse only if its `Document` differs from the one captured at the start. The legacy `LoadStandardAsync` still replaces the snapshot with no guard (the Rust window does not use it).
+- **Handle leak.** `RustUiLauncher` replaces its stored `Process` without disposing the previous one: one handle per relaunch.
+- **One-window guard is per AutoCAD session.** It cannot see a window left over after a plug-in reload or one opened by a second AutoCAD.
+- **"AutoCAD connection lost" takes about 4 seconds** to appear (three failed polls).
+- **After a plain Apply that leaves the window open** (other drawings still have unapplied connections), that drawing's undo history is cleared.
+- **A read that fails permanently** for a pending switch target retries every second and keeps Apply and Purge blocked with "AutoCAD has switched…" until a resync, activation or close. A retry cap or a resync after N failures would help.
+- **Smaller window items:** `Up` can overwrite an in-progress status such as "Applying…"; a read that finishes during an in-flight Apply/Purge/Load Standard is applied immediately; after a layer refresh a selected Source layer that was just deleted is not deselected; `drop_missing_sources` does not prune the undo and redo stacks; a failed first snapshot never starts the feed; restoring a stashed drawing while no standard is loaded would drop its connections (cannot normally happen).
+- **Close-dialog edges:** pressing the editor's own Apply while a blocked-close dialog is open closes the window without replaying the close (close the drawing again); `apply_for_close` can survive an unexpected response; the close dialog waits behind the error dialog; a poll already in flight when the replay is sent can briefly re-publish old counts (self-heals while the window is open).
+- **Connector robustness:** `ReplayCloseAsync` waits on the command-context callback with no timeout; `PollEvents` parsing of a malformed `since` or missing `payload` returns an Error instead of ignoring it; `_drawingSnapshot` is not cleared when its document closes (the active-document check keeps it safe); a blanket catch in `GetLayersForDrawing` reports every command-context failure as "The drawing is no longer open".
+- **Logging:** a permanently failing read logs several lines per retry; the pipe log suppression for polls is approximate (a connection that sends nothing is no longer logged).
+- **Small code and test polish:** stale `#[allow(dead_code)]` on `set_layers` and one other item in `acad_layer_ui/src/main.rs`; `ClassifyClose` has no test rows for `_.QUIT` / `_EXIT`; `CLOSEALL` is treated as a drawing close (undocumented); the manual checklist's restore block lists an exception step after the steps it overrides.
+
+### Housekeeping that comes with Phase 4
+
+- With the WPF editor gone there is no fallback if the Rust program file is missing, so the installer must always include it and the launcher should say so plainly.
+- `docs/plan-1.3.md` line "closing the Standardizer … (Rust side only)" in Phase 3 predates the connector's close and quit protection; reword it when the plan is next edited.
