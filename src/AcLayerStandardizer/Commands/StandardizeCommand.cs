@@ -14,8 +14,6 @@ namespace AcLayerStandardizer.Commands;
 
 public static class StandardizeCommand
 {
-    [CommandMethod("LSR", CommandFlags.Modal)]
-    [CommandMethod("ACLAYERSTD", "StandardizeLayers", CommandFlags.Modal)]
     public static void StandardizeLayers()
     {
         WelcomeCommand.ShowWelcome();

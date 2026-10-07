@@ -13,13 +13,13 @@ namespace AcLayerStandardizer.Commands;
 
 public static class MappingsCommand
 {
+    // The single handler for every entry point (ribbon/menu send LSR).
     [CommandMethod("LSTDR")]
-    public static void LaunchStandardizer()
-    {
-        ShowMappingsEditor();
-    }
-
+    [CommandMethod("LSR", CommandFlags.Modal)]
     [CommandMethod("ACLAYERSTD", "STD_Mappings", CommandFlags.Modal)]
+    [CommandMethod("ACLAYERSTD", "StandardizeLayers", CommandFlags.Modal)]
+    [CommandMethod("LAYERSTANDARDIZER", CommandFlags.Modal)]
+    [CommandMethod("ACLAYERSTD", "LAYERSTANDARDIZER", CommandFlags.Modal)]
     public static void ShowMappingsEditor()
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
