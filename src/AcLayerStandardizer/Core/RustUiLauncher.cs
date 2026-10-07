@@ -99,8 +99,10 @@ internal static class RustUiLauncher
     // first one passes the first-run notice.
     private static bool _noticeShown;
 
-    // Never throws for a launch failure: the outcome (and detail) says what happened
-    // and the caller prints LaunchGuard.DescribeFailure for it.
+    // A missing program file, AutoCAD not being ready, or a failed process start is
+    // reported through the outcome (and detail), not thrown; the caller prints
+    // LaunchGuard.DescribeFailure for it. IpcBridgeServer.Start and
+    // SetDrawingSnapshot run outside that guard and can still throw, as before.
     public static LaunchOutcome TryLaunchFromActiveAutoCad(
         Document document,
         string drawingName,
@@ -117,11 +119,11 @@ internal static class RustUiLauncher
         out string? detail)
     {
         detail = null;
-        var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc is null)
+        // The caller has already checked the document; this only guards a null.
+        if (document is null)
         {
-            detail = "no drawing is active";
-            return LaunchOutcome.StartFailed;
+            detail = "no drawing is open";
+            return LaunchOutcome.NotReady;
         }
 
         var executable = FindUiExecutable(out var searched);
@@ -132,7 +134,7 @@ internal static class RustUiLauncher
         }
 
         // One window only; its snapshot is not replaced under it.
-        if (TryFocusExistingWindow(doc)) return LaunchOutcome.AlreadyOpen;
+        if (TryFocusExistingWindow(document)) return LaunchOutcome.AlreadyOpen;
 
         // Initialize may have attempted to start the pipe before AutoCAD was
         // ready. Recheck it in the command context before launching the client.
@@ -145,7 +147,7 @@ internal static class RustUiLauncher
         if (owner == IntPtr.Zero)
         {
             detail = "AutoCAD's main window was not found";
-            return LaunchOutcome.StartFailed;
+            return LaunchOutcome.NotReady;
         }
 
         var passNotice = NoticePolicy.ShouldPassNotice(_noticeShown);
