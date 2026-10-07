@@ -158,6 +158,43 @@ pub fn load_startup_from(dir: Option<&Path>) -> StartupData {
     }
 }
 
+/// The result of pointing the app at a different memory file.
+// Task 5 (the settings panel) is the first caller of this and `switch_memory_file`.
+#[allow(dead_code)]
+pub struct MemoryChange {
+    pub config: PluginConfig,
+    pub store: MemoryStore,
+    pub memory: TranslationMemory,
+}
+
+/// Switches to another memory file. The target is read first (a file that does not
+/// exist yet is fine: empty memory); if it cannot be read the config is left
+/// untouched and the old memory stays in use.
+#[allow(dead_code)]
+pub fn switch_memory_file(
+    config_path: &Path,
+    config_dir: &Path,
+    new_path: &str,
+) -> Result<MemoryChange, String> {
+    if let Err(error) = MemoryStore::new(new_path).load_checked() {
+        return Err(format!(
+            "Could not use {new_path}: {error}. The old memory stays in use."
+        ));
+    }
+    let config = PluginConfig::set_memory_path(config_path, new_path).map_err(|error| {
+        format!("Could not save the new memory location: {error}. The old memory stays in use.")
+    })?;
+    let store = MemoryStore::new(config.effective_memory_path(config_dir));
+    let memory = store
+        .load_checked()
+        .map_err(|error| format!("Could not read {}: {error}", store.file_path().display()))?;
+    Ok(MemoryChange {
+        config,
+        store,
+        memory,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,6 +427,67 @@ mod tests {
         let memory = store.load_checked().unwrap();
         assert_eq!(memory.mappings.len(), 1);
         assert_eq!(memory.lookup("A-WALL"), Some("NEW"));
+    }
+
+    fn switch_dir(name: &str) -> std::path::PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("acad_ui_switch_{name}_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn switching_to_a_valid_memory_file_updates_the_config_and_loads_it() {
+        let dir = switch_dir("valid");
+        let config_path = dir.join("config.json");
+        let target = dir.join("other_memory.json");
+        let store = MemoryStore::new(&target);
+        let mut seed = TranslationMemory::default();
+        seed.mappings.insert("A-OLD".into(), "A-WALL".into());
+        store.save(&seed).unwrap();
+
+        let change = switch_memory_file(&config_path, &dir, target.to_str().unwrap()).unwrap();
+        assert_eq!(change.memory.lookup("A-OLD"), Some("A-WALL"));
+        assert_eq!(change.config.memory_file_path, target.to_str().unwrap());
+        assert_eq!(change.store.file_path(), target.as_path());
+        let reloaded = PluginConfig::load_from(&config_path).unwrap();
+        assert_eq!(reloaded.memory_file_path, target.to_str().unwrap());
+    }
+
+    #[test]
+    fn switching_to_a_corrupt_file_changes_nothing() {
+        let dir = switch_dir("corrupt");
+        let config_path = dir.join("config.json");
+        let original = r#"{"TemplateDwgPath":"keep.dwg"}"#;
+        fs::write(&config_path, original).unwrap();
+        let target = dir.join("bad_memory.json");
+        fs::write(&target, "{ nope").unwrap();
+
+        let error = match switch_memory_file(&config_path, &dir, target.to_str().unwrap()) {
+            Ok(_) => panic!("a corrupt target must be refused"),
+            Err(error) => error,
+        };
+        assert!(error.contains("bad_memory.json"), "{error}");
+        assert!(error.contains("old memory"), "{error}");
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
+        assert_eq!(fs::read_to_string(&target).unwrap(), "{ nope");
+    }
+
+    #[test]
+    fn switching_to_a_new_path_starts_with_empty_memory() {
+        let dir = switch_dir("new");
+        let config_path = dir.join("config.json");
+        let target = dir.join("not_yet.json");
+        let change = switch_memory_file(&config_path, &dir, target.to_str().unwrap()).unwrap();
+        assert!(change.memory.mappings.is_empty());
+        assert_eq!(change.store.file_path(), target.as_path());
+        assert_eq!(
+            PluginConfig::load_from(&config_path)
+                .unwrap()
+                .memory_file_path,
+            target.to_str().unwrap()
+        );
     }
 
     #[test]

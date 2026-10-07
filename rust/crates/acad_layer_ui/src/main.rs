@@ -23,6 +23,7 @@ use std::{
 
 mod close_dialog;
 mod data;
+mod launch;
 mod live_sync;
 mod mapping_editor;
 mod sessions;
@@ -1222,13 +1223,11 @@ fn attach_native_window_to_owner(_frame: &eframe::Frame, _owner_hwnd: isize) -> 
 }
 
 fn main() -> eframe::Result<()> {
-    let owner_hwnd = std::env::args().skip(1).find_map(|arg| {
-        arg.strip_prefix("--owner-hwnd=").map(|value| {
-            value
-                .parse::<isize>()
-                .expect("--owner-hwnd must be a decimal HWND")
-        })
-    });
+    let args = launch::parse_launch_args(std::env::args().skip(1));
+    let owner_hwnd = args.owner_hwnd;
+    // Task 5 shows the first-run notice from this.
+    #[allow(unused_variables)]
+    let first_run_notice = args.first_run_notice;
 
     let user_preferences = load_preferences();
     let storage_path = preferences_path().map(|path| path.with_file_name("rust_ui_state.ron"));
