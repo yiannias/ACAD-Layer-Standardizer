@@ -26,6 +26,7 @@ mod data;
 mod live_sync;
 mod mapping_editor;
 mod sessions;
+mod settings_panel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
