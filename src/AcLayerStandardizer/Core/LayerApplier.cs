@@ -3,7 +3,6 @@ using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.ApplicationServices;
 using Autodesk.AutoCAD.DatabaseServices;
 using AcLayerStandardizer.Data;
-using AcLayerStandardizer.Matching;
 
 namespace AcLayerStandardizer.Core;
 

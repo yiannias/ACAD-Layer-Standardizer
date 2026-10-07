@@ -1,13 +1,7 @@
 using System.IO;
-using System.Windows.Interop;
 using Autodesk.AutoCAD.Runtime;
 using Autodesk.AutoCAD.ApplicationServices;
-using Autodesk.AutoCAD.DatabaseServices;
-using Autodesk.AutoCAD.EditorInput;
 using AcLayerStandardizer.Core;
-using AcLayerStandardizer.Data;
-using AcLayerStandardizer.Matching;
-using AcLayerStandardizer.UI;
 
 namespace AcLayerStandardizer.Commands;
 
@@ -27,194 +21,34 @@ public static class MappingsCommand
 
         var ed = doc.Editor;
 
-        var config = PluginConfig.Load();
-
-        var templatePath = !string.IsNullOrEmpty(config.TemplateDwgPath) && File.Exists(config.TemplateDwgPath)
-            ? config.TemplateDwgPath
-            : string.Empty;
-        if (templatePath.Length == 0)
-            ed.WriteMessage("\nReference file unavailable. Opening without targets; click the Target header to choose one.");
-
-        var memPath = config.GetEffectiveMemoryPath();
-
-        // The Rust window reads the template, categorizes, and loads memory itself,
-        // so only the active drawing's layers are captured here. It is tried once;
-        // the full load below is only for the WPF fallback when it cannot start.
-        // The window is already open: bring it forward before reading any layers.
-        if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
-        var rustSource = LayerReader.GetActiveLayerNames(doc.Database)
-            .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
-        var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
-            doc, rustSource, LayerReader.GetEmptyLayers(doc.Database), templatePath, out var detail);
-        if (LaunchSucceeded(ed, outcome, detail)) return;
-
-        IReadOnlyDictionary<string, LayerProperties> standardLayers =
-            new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase);
-        if (templatePath.Length > 0)
-        {
-            try
-            {
-                standardLayers = SideDatabase.LoadStandardLayers(templatePath);
-            }
-            catch (System.Exception ex)
-            {
-                ed.WriteMessage($"\nCould not read saved standard: {ex.Message}. Choose a standard in the editor.");
-            }
-        }
-
-        var activeLayers = LayerReader.GetActiveLayerNames(doc.Database);
-
-        var store = new MemoryStore(memPath);
-        TranslationMemory memory;
-        var memoryLoaded = true;
+        // The Rust window is the only editor: it reads the template, categorizes
+        // and loads memory itself, so only the active drawing's layers are read
+        // here. A failure is printed at the command line; nothing is thrown.
         try
         {
-            memory = store.Load();
+            var config = PluginConfig.Load();
+
+            var templatePath = !string.IsNullOrEmpty(config.TemplateDwgPath) && File.Exists(config.TemplateDwgPath)
+                ? config.TemplateDwgPath
+                : string.Empty;
+            if (templatePath.Length == 0)
+                ed.WriteMessage("\nReference file unavailable. Opening without targets; click the Target header to choose one.");
+
+            // The window is already open: bring it forward before reading any layers.
+            if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
+            var source = LayerReader.GetActiveLayerNames(doc.Database)
+                .OrderBy(n => n, NaturalSortComparer.Instance).ToList();
+            var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
+                doc, source, LayerReader.GetEmptyLayers(doc.Database), templatePath, out var detail);
+
+            var message = LaunchGuard.DescribeFailure(outcome, detail);
+            if (message is not null) ed.WriteMessage("\n" + message);
         }
         catch (System.Exception ex)
         {
-            memory = new TranslationMemory();
-            memoryLoaded = false;
-            ed.WriteMessage($"\nTranslation memory could not be read and will not be overwritten: {memPath}");
-            ed.WriteMessage($"\n  {ex.GetType().Name}: {ex.Message}");
-        }
-
-        var configThreshold = config.HeuristicThreshold;
-
-        var sortedSource = activeLayers.OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
-        var sortedStandard = standardLayers.Keys
-            .OrderBy(n => n == "0" ? 0 : 1)
-            .ThenBy(n => n, Core.NaturalSortComparer.Instance)
-            .ToList();
-
-        var emptyLayers = LayerReader.GetEmptyLayers(doc.Database);
-
-        // Run heuristic matching for all source layers not already in memory
-        var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
-        var heuristicResults = new List<MatchResult>();
-        foreach (var layer in sortedSource)
-        {
-            if (memory.Mappings.ContainsKey(layer)) continue;
-            var result = heuristicMatcher.TryMatch(layer);
-            if (result is not null)
-                heuristicResults.Add(result);
-        }
-
-        NodeGraphWindow dialog;
-        try
-        {
-            dialog = new NodeGraphWindow(
-                sortedSource,
-                sortedStandard,
-                memory.Mappings,
-                heuristicResults,
-                emptyLayers,
-                names =>
-                {
-                    using var purgeTr = doc.Database.TransactionManager.StartTransaction();
-                    var purgeLt = (LayerTable)purgeTr.GetObject(doc.Database.LayerTableId, OpenMode.ForRead);
-                    foreach (var name in names)
-                    {
-                        if (!purgeLt.Has(name)) continue;
-                        var ltr = (LayerTableRecord)purgeTr.GetObject(purgeLt[name], OpenMode.ForWrite);
-                        try { ltr.Erase(true); }
-                        catch { }
-                    }
-                    purgeTr.Commit();
-                },
-                sourceFileName: Path.GetFileName(doc.Name),
-                templatePath: templatePath,
-                standardLayerProperties: standardLayers,
-                onTemplateChanged: newPath =>
-                {
-                    // Remember the switch for next launch too, not just this session.
-                    config.TemplateDwgPath = newPath;
-                    config.Save();
-                });
-        }
-        catch (System.Exception ex)
-        {
-            var logPath = System.IO.Path.Combine(
-                System.Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-                "std_mappings_error.log");
-            System.IO.File.WriteAllText(logPath,
-                $"=== STD_Mappings Error ===\nTime: {DateTime.UtcNow:O}\n\n{ex}\n");
-            ed.WriteMessage($"\nError creating editor — details written to {logPath}");
-            ed.WriteMessage($"\n  Exception: {ex.GetType().Name}: {ex.Message}");
-            if (ex.InnerException != null)
-                ed.WriteMessage($"\n  Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}");
-            return;
-        }
-
-        new WindowInteropHelper(dialog) { Owner = Application.MainWindow.Handle };
-
-        if (dialog.ShowDialog() != true)
-        {
-            ed.WriteMessage("\nCancelled.");
-            return;
-        }
-
-        var resultMappings = dialog.ResultMappings;
-        var action = dialog.ResultAction;
-
-        if (action is MappingEditorAction.ApplyAndSave)
-        {
-            if (!memoryLoaded)
-            {
-                ed.WriteMessage("\nTranslation memory was not saved because the existing file could not be read. Apply the mappings, then repair or choose another memory file before remembering them.");
-            }
-            else
-            {
-                var beforeCount = memory.Mappings.Count;
-
-                // Only touch the source layers this session actually loaded and
-                // judged -- clearing the whole dictionary here used to wipe out
-                // every mapping remembered from other drawings, since
-                // resultMappings only ever covers layers present in *this*
-                // drawing. A layer the session loaded but left unmatched (e.g.
-                // explicitly un-matched) is forgotten; everything else survives.
-                foreach (var sourceLayer in dialog.SourceLayerNames)
-                {
-                    if (resultMappings.TryGetValue(sourceLayer, out var target))
-                        memory.Mappings[sourceLayer] = target;
-                    else
-                        memory.Mappings.Remove(sourceLayer);
-                }
-                try
-                {
-                    store.Save(memory);
-                    var diff = memory.Mappings.Count - beforeCount;
-                    if (diff != 0)
-                        ed.WriteMessage($"\nTranslation memory synced ({memory.Mappings.Count} mappings, Δ={diff:+0;-0}).");
-                    else
-                        ed.WriteMessage($"\nTranslation memory unchanged ({memory.Mappings.Count} mappings).");
-                }
-                catch (System.Exception ex)
-                {
-                    ed.WriteMessage($"\nFailed to save translation memory to {store.FilePath}: {ex.Message}");
-                }
-            }
-        }
-
-        if (action is MappingEditorAction.Apply or MappingEditorAction.ApplyAndSave)
-        {
-            var result = LayerApplier.ApplyMappings(
-                doc.Database, resultMappings, dialog.StandardLayerProperties, dialog.PropertySettings);
-            ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
-            ed.WriteMessage($"\n  Properties synced: {result.Synced}");
-            ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");
-            ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
+            // The pipe server start, the drawing snapshot or the layer read failed.
+            try { ed.WriteMessage($"\nThe Layer Standardizer window could not start ({ex.Message})."); }
+            catch (System.Exception) { /* the command line is unavailable: nothing else to do */ }
         }
     }
-
-    // True when the Rust window is now up (launched or brought forward). Otherwise
-    // prints why it could not start; the caller then falls back to the old editor.
-    private static bool LaunchSucceeded(Editor ed, LaunchOutcome outcome, string? detail)
-    {
-        var message = LaunchGuard.DescribeFailure(outcome, detail);
-        if (message is null) return true;
-        ed.WriteMessage("\n" + message);
-        return false;
-    }
-
 }
