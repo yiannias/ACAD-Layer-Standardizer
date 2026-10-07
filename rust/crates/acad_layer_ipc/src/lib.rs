@@ -243,6 +243,12 @@ fn request(request: IpcRequest) -> Result<IpcResponse, String> {
     request_with_attempts(request, 50)
 }
 
+/// Polls fire about once a second; tracing them would grow the log without bound.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn should_trace(request: &IpcRequest) -> bool {
+    !matches!(request, IpcRequest::PollEvents { .. })
+}
+
 #[cfg(windows)]
 fn request_with_attempts(request: IpcRequest, attempts: u32) -> Result<IpcResponse, String> {
     use std::{
@@ -252,7 +258,7 @@ fn request_with_attempts(request: IpcRequest, attempts: u32) -> Result<IpcRespon
         time::{Duration, SystemTime, UNIX_EPOCH},
     };
 
-    fn trace(message: &str) {
+    fn trace_to_file(message: &str) {
         use std::{fs::OpenOptions, io::Write};
         let Ok(mut file) = OpenOptions::new()
             .create(true)
@@ -267,6 +273,13 @@ fn request_with_attempts(request: IpcRequest, attempts: u32) -> Result<IpcRespon
             .unwrap_or_default();
         let _ = writeln!(file, "{millis} pid={} {message}", std::process::id());
     }
+
+    let tracing = should_trace(&request);
+    let trace = |message: &str| {
+        if tracing {
+            trace_to_file(message);
+        }
+    };
 
     let pipe_path = format!(r"\\.\pipe\{DEFAULT_PIPE_NAME}");
     let mut last_error = String::from("AutoCAD IPC pipe is not available");
@@ -451,6 +464,18 @@ mod tests {
         assert_eq!(json["payload"]["since"], 3);
         assert_eq!(json["payload"]["pending"][0]["drawing_id"], "d1");
         assert_eq!(json["payload"]["pending"][0]["count"], 2);
+    }
+
+    #[test]
+    fn polls_are_not_traced_but_other_requests_are() {
+        let poll = IpcRequest::PollEvents {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            since: None,
+            pending: vec![],
+        };
+        assert!(!should_trace(&poll));
+        assert!(should_trace(&IpcRequest::Ping));
+        assert!(should_trace(&IpcRequest::GetDrawingSnapshot));
     }
 
     #[test]
