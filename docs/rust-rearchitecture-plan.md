@@ -38,7 +38,7 @@ One visible mapping window
 
 Shared Rust crates
   acad_layer_core: domain algorithms, configuration models, memory
-  acad_layer_ffi: stable C ABI used in-process by the .NET plugin
+  acad_layer_ffi: (removed in Phase 4 because nothing consumed it)
   acad_layer_ipc: shared request/response schema and transport support
   acad_layer_ui: optional companion application
 ```

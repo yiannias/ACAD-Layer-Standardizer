@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/acad_layer_core",
-    "crates/acad_layer_ffi",
     "crates/acad_layer_ipc",
     "crates/acad_layer_ui",
 ]

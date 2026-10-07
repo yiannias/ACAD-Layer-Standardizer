@@ -12,19 +12,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "acad_layer_ffi"
-version = "0.1.0"
-dependencies = [
- "acad_layer_core",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "acad_layer_ipc"
 version = "0.1.0"
 dependencies = [
- "acad_layer_core",
  "serde",
  "serde_json",
 ]

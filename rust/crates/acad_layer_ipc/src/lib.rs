@@ -1,4 +1,3 @@
-use acad_layer_core::{LayerCategorizationResult, MatchResult};
 use serde::{Deserialize, Serialize};
 
 mod feed;
@@ -59,7 +58,6 @@ pub struct TargetFilter {
 #[serde(tag = "type", content = "payload")]
 pub enum IpcRequest {
     Ping,
-    GetDrawingLayers,
     GetDrawingSnapshot,
     GetStandardLayers {
         protocol_version: u32,
@@ -67,14 +65,6 @@ pub enum IpcRequest {
     },
     GetActiveDrawing {
         known_revision: Option<u64>,
-    },
-    ClassifyLayers {
-        source_layers: Vec<String>,
-        standard_layers: Vec<String>,
-        min_confidence: f64,
-    },
-    CategorizeLayers {
-        layers: Vec<String>,
     },
     ApplyPlan {
         protocol_version: u32,
@@ -91,10 +81,6 @@ pub enum IpcRequest {
         #[serde(default, skip_serializing_if = "String::is_empty")]
         drawing_id: String,
         layers: Vec<String>,
-    },
-    LoadStandard {
-        protocol_version: u32,
-        path: String,
     },
     PollEvents {
         protocol_version: u32,
@@ -160,14 +146,11 @@ pub struct PropertyMatchSettings {
 #[serde(tag = "type", content = "payload")]
 pub enum IpcResponse {
     Pong,
-    Layers(Vec<String>),
     DrawingSnapshot(DrawingSnapshot),
     ActiveDrawing(ActiveDrawingInfo),
     StandardLayers(StandardLayersInfo),
     ActiveDrawingUnchanged,
     NoActiveDrawing,
-    Classification(Vec<MatchResult>),
-    Categorization(LayerCategorizationResult),
     Applied {
         protocol_version: u32,
         count: usize,
@@ -178,7 +161,6 @@ pub enum IpcResponse {
         protocol_version: u32,
         layers: Vec<String>,
     },
-    TemplateLoaded(DrawingSnapshot),
     DrawingLayers(DrawingLayersInfo),
     Events {
         head: u64,
@@ -244,14 +226,6 @@ pub fn purge_empty_layers(
         drawing_name,
         drawing_id,
         layers,
-    })
-}
-
-#[cfg(windows)]
-pub fn load_standard(path: String) -> Result<IpcResponse, String> {
-    request(IpcRequest::LoadStandard {
-        protocol_version: IPC_PROTOCOL_VERSION,
-        path,
     })
 }
 
@@ -419,11 +393,6 @@ pub fn purge_empty_layers(
     _drawing_id: String,
     _layers: Vec<String>,
 ) -> Result<IpcResponse, String> {
-    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
-}
-
-#[cfg(not(windows))]
-pub fn load_standard(_path: String) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
 }
 
