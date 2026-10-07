@@ -58,6 +58,8 @@ Define the slim IPC surface between the Rust app and the AutoCAD connector.
 
 ### Phase 3: Live-sync and unsaved-mapping protection
 
+**Status:** implemented on main, awaiting manual verification (see docs/superpowers/plans/2026-10-06-phase3-manual-checklist.md).
+
 **Live-sync**
 - Rust polls the change token about once a second while the window is open and visible; the connector also raises a "changed" flag from `DocumentActivated` so drawing switches show up immediately.
 - On change, fetch the new drawing's layers, replace the Source side, and recompute matches. The Target (standard) side is unchanged.
@@ -99,6 +101,8 @@ Define the slim IPC surface between the Rust app and the AutoCAD connector.
 - Each phase ends with a full `build.ps1` run (tests on net48, net8, net10) before tagging.
 
 ## Open questions
+
+The three Phase 3 questions below are resolved (see `docs/superpowers/specs/2026-10-06-phase3-live-sync-design.md`): unapplied mappings warn only, with no persistence; the drawing-switch indicator is a footer note with no click-to-switch; the poll interval is 1 second always.
 
 1. Should unsaved mappings persist across an AutoCAD restart, or only warn on close?
 2. On a drawing switch with unapplied mappings in the drawing being left: keep silently per-drawing (current proposal), or also show a small indicator on the window?
