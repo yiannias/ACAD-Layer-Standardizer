@@ -31,12 +31,29 @@ public class IpcProtocolTests
     }
 
     [Fact]
-    public void Supports_versions_2_and_3_only()
+    public void Version_4_is_supported_and_5_is_not()
     {
         Assert.True(IpcProtocol.IsSupportedVersion(2));
         Assert.True(IpcProtocol.IsSupportedVersion(3));
+        Assert.True(IpcProtocol.IsSupportedVersion(4));
         Assert.False(IpcProtocol.IsSupportedVersion(1));
-        Assert.False(IpcProtocol.IsSupportedVersion(4));
+        Assert.False(IpcProtocol.IsSupportedVersion(5));
+        Assert.Equal(4, IpcProtocol.CurrentVersion);
+    }
+
+    [Fact]
+    public void Events_response_has_head_reset_and_events()
+    {
+        var page = new FeedPage(12, false, new[] { new FeedEvent(12, "Saved", new { name = "A.dwg" }) });
+        using var doc = JsonDocument.Parse(IpcProtocol.BuildEventsResponse(page));
+        Assert.Equal("Events", doc.RootElement.GetProperty("type").GetString());
+        var payload = doc.RootElement.GetProperty("payload");
+        Assert.Equal(12, payload.GetProperty("head").GetInt64());
+        Assert.False(payload.GetProperty("reset").GetBoolean());
+        var ev = payload.GetProperty("events")[0];
+        Assert.Equal(12, ev.GetProperty("seq").GetInt64());
+        Assert.Equal("Saved", ev.GetProperty("type").GetString());
+        Assert.Equal("A.dwg", ev.GetProperty("payload").GetProperty("name").GetString());
     }
 
     [Fact]

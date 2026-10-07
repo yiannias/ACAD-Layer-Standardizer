@@ -2,7 +2,7 @@ use acad_layer_core::{LayerCategorizationResult, MatchResult};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_PIPE_NAME: &str = "acad_layer_standardizer";
-pub const IPC_PROTOCOL_VERSION: u32 = 3;
+pub const IPC_PROTOCOL_VERSION: u32 = 4;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DrawingSnapshot {
@@ -389,7 +389,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             json,
-            r#"{"type":"GetStandardLayers","payload":{"protocol_version":3,"path":"X.dwg"}}"#
+            r#"{"type":"GetStandardLayers","payload":{"protocol_version":4,"path":"X.dwg"}}"#
         );
     }
 

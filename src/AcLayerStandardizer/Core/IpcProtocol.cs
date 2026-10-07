@@ -5,7 +5,7 @@ namespace AcLayerStandardizer.Core;
 // Pure protocol rules shared by the pipe server; no AutoCAD dependency.
 public static class IpcProtocol
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     public const int MinSupportedVersion = 2;
 
     public static bool IsSupportedVersion(int version) =>
@@ -22,6 +22,18 @@ public static class IpcProtocol
             : string.Equals(requestDrawingId, snapshotDrawingId, StringComparison.Ordinal);
         return matches ? null : "The mapping window belongs to a different drawing. Close it and run LSTDR again.";
     }
+
+    public static string BuildEventsResponse(FeedPage page) =>
+        JsonSerializer.Serialize(new
+        {
+            type = "Events",
+            payload = new
+            {
+                head = page.Head,
+                reset = page.Reset,
+                events = page.Events.Select(e => new { seq = e.Seq, type = e.Type, payload = e.Payload })
+            }
+        });
 
     public static string BuildActiveDrawingResponse(ActiveDrawingState? state, long? knownRevision)
     {
