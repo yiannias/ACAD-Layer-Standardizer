@@ -33,12 +33,26 @@ public static class PendingRegistry
     }
 }
 
+public enum CloseKind { Drawing, Quit }
+
 // Decides, instantly and without waiting for the window, whether a close must
 // be cancelled. AutoCAD's thread is blocked while it asks, so this never calls
 // anything that could wait.
 public static class CloseGuard
 {
     public static readonly TimeSpan CheckInFreshness = TimeSpan.FromSeconds(5);
+
+    // AutoCAD closes drawings one at a time during QUIT, so the command still
+    // running when a drawing closes tells a quit from a plain drawing close.
+    public static CloseKind ClassifyClose(string? commandInProgress)
+    {
+        if (commandInProgress is null) return CloseKind.Drawing;
+        var name = commandInProgress.Trim().TrimStart('_', '.', '\'');
+        return string.Equals(name, "QUIT", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(name, "EXIT", StringComparison.OrdinalIgnoreCase)
+            ? CloseKind.Quit
+            : CloseKind.Drawing;
+    }
 
     // drawingId == null means a quit: veto if ANY drawing has pending connections.
     public static bool ShouldVeto(IReadOnlyList<PendingDrawing> pending, DateTime? lastCheckInUtc, DateTime nowUtc, string? drawingId)

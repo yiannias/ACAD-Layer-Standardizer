@@ -10,7 +10,7 @@ While the Rust mapping window is open:
 2. Each drawing keeps its own unapplied connections, so switching away and back restores them.
 3. Closing the window, closing a drawing, or quitting AutoCAD with unapplied connections asks the user: Apply, Discard, or Cancel.
 
-Done when: switching drawings updates the Source side within about a second, per-drawing connections survive switching, and every close path (window, drawing, quit) prompts when connections are unapplied, or, for quit, degrades as described under "Quit".
+Done when: switching drawings updates the Source side within about a second, per-drawing connections survive switching, and every close path (window, drawing, quit) prompts when connections are unapplied.
 
 ## Decisions already made
 
@@ -81,7 +81,7 @@ An early idea was for the connector to hold a close request open and wait for th
 On every `PollEvents`, the window reports its pending counts. On a drawing close or a quit request the connector:
 
 - allows it immediately if no window has checked in within the last 5 seconds, or if the drawing (or, for quit, every drawing) has nothing pending;
-- otherwise cancels it (`Veto()` for a drawing close) and raises `CloseBlocked`.
+- otherwise cancels it (`Veto()` of the drawing close, which for a quit is the first drawing closed) and raises `CloseBlocked`.
 
 The window picks up `CloseBlocked` within a second and shows the dialog for the affected drawing.
 
@@ -101,11 +101,16 @@ If the displayed drawing has unapplied connections, the same dialog appears; no 
 
 ### Quit
 
-Closing a drawing is cancellable (`Document.BeginDocumentClose` plus `Veto()`, documented in Autodesk's .NET guide). Whether a quit can be cancelled from .NET is unconfirmed: the .NET `Application.BeginQuit` is documented without a cancel mechanism, forum reports say it has none while the older COM `BeginQuit` has a Cancel flag, and quitting closes each drawing in turn, so vetoing at that point might stop the quit. Plan:
+Measured, not assumed: a probe was run in AutoCAD 2027 on 2026-10-07 (log: `.superpowers/sdd/2026-10-06-phase3-live-sync/quitprobe-result.log`). When the user types QUIT, AutoCAD closes the open drawings one at a time first (`Document.BeginDocumentClose` fires per drawing). The application-level `BeginQuit` (COM and .NET) and `QuitWillStart` fire only after all drawings are closed, so they are too late to cancel anything. Vetoing `BeginDocumentClose` during a QUIT aborted the whole quit (AutoCAD stayed open), so a quit can be blocked by the same per-drawing veto used for CLOSE.
 
-1. A small, throwaway test inside AutoCAD (I will ask before launching anything) tries, in order: the COM `BeginQuit` cancel, then a veto of the per-drawing close during a quit.
-2. Use whichever works, with the same rule and dialog as above.
-3. If neither works, quit cannot be blocked. AutoCAD closes normally and the window tells the user which pending connections were lost. If this turns out to be the case, we revisit whether that is acceptable before relying on it.
+Rule implemented:
+
+- In `BeginDocumentClose` the connector reads `Document.CommandInProgress`; `CloseGuard.ClassifyClose` treats `QUIT` and `EXIT` (ignoring case, whitespace and a leading `_`, `.` or `'`) as a quit and anything else as a drawing close.
+- For a quit it vetoes at the first drawing closed if any drawing has pending connections (so no earlier drawing is closed before the veto), and publishes `CloseBlocked {kind: "quit", drawing_id: <the drawing being closed>}`.
+- After Apply or Discard, `ReplayClose` with kind `quit` re-issues `QUIT`.
+- Any failure reading the command or deciding means the close is allowed; if detection fails the behavior degrades to a drawing close and the user re-issues QUIT.
+
+Not yet verified: the QUIT detection itself (that `CommandInProgress` reads QUIT during the per-drawing close) has not been seen in a live AutoCAD; it is on the manual checklist.
 
 ## Errors
 
@@ -121,7 +126,7 @@ Each step ends with all tests green before the next begins, and the whole suite 
 1. **Event feed.** C# `EventFeed` (ring buffer, reset rules, sequence base) and the `PollEvents` request, tested like the existing `IpcBridgeServer` tests; Rust `FeedClient` and request/response types. Protocol version 4.
 2. **Per-drawing sessions.** `DrawingSessions` in Rust: save/restore, pending counts, footer text, layer-change reconciliation. Pure logic, unit tests only.
 3. **Integration.** `GetDrawingLayers`, the poll loop in the window, drawing switching, the no-drawing state, the footer note.
-4. **Close protection.** The pending report, the connector's veto rule (a pure function: pending map, last check-in time, now), `Veto()` on drawing close and replay, the window-close dialog, and the quit handling per the test above.
+4. **Close protection.** The pending report, the connector's veto rule (a pure function: pending map, last check-in time, now), `Veto()` on drawing close and replay, the window-close dialog, and quit handling (detected from `CommandInProgress`, per "Quit").
 
 Parts that need a live AutoCAD (switching drawings, editing layers in the Layer Properties palette, closing with pending work, quitting) are verified by Chris from a written checklist; nothing GUI is launched without asking first.
 

@@ -137,11 +137,15 @@ public static class ActiveDrawingTracker
         {
             if (sender is not Document document) return;
             var drawingId = GetDrawingId(document);
+            var kind = CloseKind.Drawing;
+            try { kind = CloseGuard.ClassifyClose(document.CommandInProgress); }
+            catch (System.Exception) { /* unreadable: treat as a plain drawing close */ }
             var (pending, lastCheckIn) = PendingRegistry.Current;
-            if (!CloseGuard.ShouldVeto(pending, lastCheckIn, DateTime.UtcNow, drawingId)) return;
+            if (!CloseGuard.ShouldVeto(pending, lastCheckIn, DateTime.UtcNow, kind == CloseKind.Quit ? null : drawingId)) return;
 
             e.Veto();
-            TryPublish("CloseBlocked", () => new { kind = "drawing", drawing_id = drawingId });
+            var kindName = kind == CloseKind.Quit ? "quit" : "drawing";
+            TryPublish("CloseBlocked", () => new { kind = kindName, drawing_id = drawingId });
         }
         catch (System.Exception ex)
         {
