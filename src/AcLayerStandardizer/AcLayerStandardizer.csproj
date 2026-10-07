@@ -11,6 +11,7 @@
   -->
   <PropertyGroup>
     <TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
+    <!-- WPF stays only for RibbonSetup.cs (Controls/Media.Imaging), EntryPoint.cs (DispatcherTimer) and LsrCommandHandler.cs (ICommand) -->
     <UseWPF>true</UseWPF>
     <!-- Pin to C# 12 so net48 gets modern syntax and all eras compile the same source -->
     <LangVersion>12</LangVersion>
@@ -45,10 +46,6 @@
 
   <ItemGroup Condition="'$(TargetFramework)' == 'net10.0-windows'">
     <PackageReference Include="AutoCAD.NET" Version="26.0.0" ExcludeAssets="runtime" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Nodify" Version="7.3.0" />
   </ItemGroup>
 
   <ItemGroup>
