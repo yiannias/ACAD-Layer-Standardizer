@@ -50,13 +50,25 @@ public static class ActiveDrawingTracker
 
     private static void OnDocumentActivated(object? sender, DocumentCollectionEventArgs e)
     {
-        if (e.Document is not null)
-            EventFeed.Shared.Publish("DrawingActivated", new
+        var document = e.Document;
+        if (document is not null)
+            TryPublish("DrawingActivated", () => new
             {
-                drawing_id = GetDrawingId(e.Document),
-                display_name = Path.GetFileName(e.Document.Name)
+                drawing_id = GetDrawingId(document),
+                display_name = Path.GetFileName(document.Name)
             });
-        Refresh(e.Document);
+        Refresh(document);
+    }
+
+    // Feed publishing must never throw into an AutoCAD event handler or stop the
+    // work that follows it.
+    private static void TryPublish(string type, Func<object> payload)
+    {
+        try { EventFeed.Shared.Publish(type, payload()); }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not publish {type}: {ex.Message}");
+        }
     }
 
     private static void OnDocumentCreated(object? sender, DocumentCollectionEventArgs e) => Watch(e.Document);
@@ -64,10 +76,10 @@ public static class ActiveDrawingTracker
     private static void OnDocumentToBeDestroyed(object? sender, DocumentCollectionEventArgs e)
     {
         Unwatch(e.Document);
-        var closedId = GetDrawingId(e.Document);
-        EventFeed.Shared.Publish("DrawingClosed", new { drawing_id = closedId });
+        var closedDocument = e.Document;
+        TryPublish("DrawingClosed", () => new { drawing_id = GetDrawingId(closedDocument) });
         var current = ActiveDrawingRegistry.Current;
-        if (current is not null && current.DrawingId == closedId)
+        if (current is not null && current.DrawingId == GetDrawingId(closedDocument))
             ActiveDrawingRegistry.Clear();
     }
 
@@ -125,7 +137,7 @@ public static class ActiveDrawingTracker
             // Publish returns the same state (same revision) when nothing changed,
             // so idle refreshes stay silent on the feed.
             if (before is null || before.Revision != state.Revision)
-                EventFeed.Shared.Publish("LayersChanged", new
+                TryPublish("LayersChanged", () => new
                 {
                     drawing_id = state.DrawingId,
                     fingerprint = state.LayerFingerprint
