@@ -18,13 +18,25 @@ Rules for the whole checklist:
 - Layers you add, rename or delete in one section are gone again after you answer No to a save prompt. In later sections, where this checklist says "any layer", just pick any layer that is in the drawing.
 - Do the sections in order. Each section says what state it starts in.
 
+## LAST STEP, ALWAYS: restore your saved settings
+
+Some steps (Choose Standard in J, Apply & Remember in K) change your saved Standardizer files. **Whenever you stop, whether you finish everything, quit after any section, or hit a STOP, do this restore before you finish:**
+
+1. Close AutoCAD.
+2. In File Explorer type `%APPDATA%` in the address bar. Delete the whole `AcLayerStandardizer` folder (it holds test data now).
+3. Copy `AcLayerStandardizer_aside` from your Desktop into `%APPDATA%` and rename it to `AcLayerStandardizer`.
+4. If `AcLayerStandardizer_aside` is missing, unzip your Setup backup into `%APPDATA%` instead.
+5. If you wrote "none" in Setup step 2, just delete the test-written folder; there is nothing to put back.
+
+There is a "Restore done" row at the end of the results table.
+
 ## Setup (do once)
 
 This checklist only ever uses throwaway test copies: `LayerTest_A\Beds_in_plan.dwg` and `LayerTest_B\Beds_in_plan.dwg` on your Desktop (called **drawing A** and **drawing B** below). You may edit and save them freely. Your original drawings (for example in `D:\CAD WAREHOUSE`) are never opened by this checklist.
 
 - [ ] 1. Back up `%APPDATA%\AcLayerStandardizer` (your usual zip).
-- [ ] 2. Safety copy, because later steps (Choose Standard in J, Apply & Remember in K) can change your saved Standardizer files. In File Explorer type `%APPDATA%` in the address bar. If the folder `AcLayerStandardizer` exists, copy it to your Desktop and rename the copy `AcLayerStandardizer_aside`. If it does not exist yet, write "none" here: ______ and skip the restore in section K.
-- [ ] 3. Open `%APPDATA%\AcLayerStandardizer\config.json` in Notepad (if it exists) and look for a line containing `MemoryFilePath`. If it has a value pointing **outside** `%APPDATA%\AcLayerStandardizer`, write "memory elsewhere" here: ______ and skip step 5 of section K (tell Claude instead). Do not change the file.
+- [ ] 2. Safety copy, because later steps (Choose Standard in J, Apply & Remember in K) can change your saved Standardizer files. In File Explorer type `%APPDATA%` in the address bar. If the folder `AcLayerStandardizer` exists, copy it to your Desktop and rename the copy `AcLayerStandardizer_aside`. If it does not exist yet, write "none" here: ______ (the restore at the top then just deletes the test-written folder). You must do the "LAST STEP, ALWAYS: restore" at the top when you finish or stop early.
+- [ ] 3. Open `%APPDATA%\AcLayerStandardizer\config.json` in Notepad (if it exists) and look for a line containing `MemoryFilePath`. If it has a value pointing **outside** `%APPDATA%\AcLayerStandardizer`, write "memory elsewhere" here: ______ and skip steps 5 and 6 of section K (tell Claude instead). Do not change the file.
 - [ ] 4. Close AutoCAD.
 - [ ] 5. Run the installer `D:\Projects\ACAD-Layer-Standardizer\dist\AcLayerStandardizer_BETA-1.2.4.exe`.
 - [ ] 6. Start AutoCAD 2027.
@@ -82,7 +94,7 @@ Leave the mapping window open for the next section. Drawing A may still have an 
 
 Start state: A active, mapping window open.
 
-1. Look at drawing A's connections now. Remove any you do not want, then make sure A has exactly 2 connections (make more by hand if needed). Write down the number: it should be 2.
+1. Look at drawing A's connections now. To start clean, close the mapping window with X, choose **Discard** if the dialog appears, and reopen it with LSTDR. Then make exactly 2 connections in A by hand. Write down the number: it should be 2.
 2. Switch to drawing B.
 
 - [ ] The footer shows a note that drawing A has 2 unapplied connections (the drawing name and number match).
@@ -146,7 +158,7 @@ Set up: on the Desktop make two new folders named `SameName_1` and `SameName_2`.
 - [ ] If the window had already refreshed to `SameName_2` (the active drawing), there is nothing to apply there, so Apply is greyed out or does nothing: also acceptable; write "window refreshed first".
 - [ ] FAIL if Apply changed the `SameName_1` drawing while `SameName_2` was active, or if you saw a technical error message.
 
-6. Close the two `Beds_in_plan.dwg` drawings with CLOSE. The `SameName_1` drawing still has an unapplied connection, so the Apply / Discard / Cancel dialog appears: choose **Discard**. Answer **No** to any save prompt. Then make sure drawing A and drawing B are open (open them again if needed) and the mapping window is closed.
+6. Close the mapping window with X (choose **Discard** if asked). Then close the two `Beds_in_plan.dwg` drawings with CLOSE. If any still shows the Apply / Discard / Cancel dialog, choose **Discard**. The `SameName_1` drawing still has an unapplied connection, so the Apply / Discard / Cancel dialog appears: choose **Discard**. Answer **No** to any save prompt. Then make sure drawing A and drawing B are open (open them again if needed) and the mapping window is closed.
 
 ## F. Close a drawing that has unapplied connections
 
@@ -171,7 +183,7 @@ Choose **Cancel**.
 4. **Minimized window.** Reopen drawing A, type LSTDR (the window closed after Apply), make 2 connections, then **minimize** the mapping window. Type CLOSE.
 
 - [ ] Within about a second the mapping window comes to the front by itself and shows the dialog.
-- [ ] Choose Cancel. Then minimize the window again and switch between drawings A and B after first getting rid of the pending connections (click each connection to remove it by hand, or close the mapping window with X, choose Discard, and reopen it with LSTDR): the window does NOT come to the front by itself at any other time.
+- [ ] Choose Cancel. Then minimize the window again and switch between drawings A and B after first getting rid of the pending connections (close the mapping window with X, choose Discard, and reopen it with LSTDR): the window does NOT come to the front by itself at any other time.
 
 5. Make sure the mapping window is closed (X, Discard if asked) and A and B are both open.
 
@@ -256,26 +268,26 @@ Start state: AutoCAD closed.
 
 1. Start AutoCAD and open A and B. Type LSTDR with A active. Connect any layer in drawing A to a Target layer. Note that Target layer's name.
 2. Switch to drawing B.
-3. In the mapping window click **Choose Standard** and pick a different standard that does **not** contain the Target layer you used in step 1. If you have no such standard, make one: copy your standard file to a new name on the Desktop, delete that Target layer from the copy, and pick the copy. If you have no second standard and cannot make one, skip J and tell Claude.
+3. In the mapping window click **Choose Standard** and pick a different standard that does **not** contain the Target layer you used in step 1. If you have no such standard, make one: copy your standard file to a new name on the Desktop, open the copy in AutoCAD, delete that layer (use LAYDEL, or PURGE if the layer is in use), save it, close it, and then choose that copy with Choose Standard. If you have no second standard and cannot make one, skip J and tell Claude.
 4. Switch back to A.
 
 - [ ] The connection to the missing Target layer is not kept (no connection pointing at something that no longer exists).
 - [ ] No error appears. Any connections to Target layers that still exist are kept.
 
-5. Close the mapping window with X and choose **Discard** if asked.
+5. Close the mapping window with X and choose **Discard** if asked. (Choose Standard may have changed your saved settings. If you are stopping here and skipping K, do the "LAST STEP, ALWAYS: restore" at the top now.)
 
 ## K. Phase 2 still works (and keeping your saved settings safe)
 
 This section changes your saved Standardizer files. The safety copy was made in Setup step 2 (the folder `AcLayerStandardizer_aside` on your Desktop). **Do not skip step 1 or step 8.** If you wrote "memory elsewhere" in Setup step 3, skip steps 5 and 6 (tell Claude instead).
 
-1. Check that `AcLayerStandardizer_aside` still exists on your Desktop (unless you wrote "none" in Setup step 2). If it is missing, STOP and do not continue. Close AutoCAD.
+1. Close AutoCAD. Check that `AcLayerStandardizer_aside` still exists on your Desktop (unless you wrote "none" in Setup step 2). If it is missing, STOP and do not continue: do the "LAST STEP, ALWAYS: restore" at the top, using your Setup zip backup.
 2. Check that the aside copy contains `config.json` and `standards_memory.json` (if the originals existed).
 3. In the original `%APPDATA%\AcLayerStandardizer` folder, delete `config.json` and `standards_memory.json` (so there is no saved setup).
 4. Start AutoCAD, open drawing A, type LSTDR.
 
-- [ ] The mapping window opens with no saved setup.
+- [ ] The mapping window opens. With no saved setup, the Target side is probably empty until you choose a standard (write down what you see).
 
-5. Connect the layer `SHARED-TEST` to any Target layer and choose **Apply & Remember**.
+5. Click **Choose Standard** and pick your usual standard (this writes the standard's path into a new config.json, which the restore wipes anyway). Then connect the layer `SHARED-TEST` to any Target layer and choose **Apply & Remember**.
 
 - [ ] It applies and remembers (no error).
 
@@ -284,7 +296,7 @@ This section changes your saved Standardizer files. The safety copy was made in 
 - [ ] `SHARED-TEST` is suggested automatically with the same Target (the remembered match).
 
 7. Close the mapping window and quit AutoCAD (No to save prompts).
-8. **Restore your saved settings.** In `%APPDATA%`, delete the whole `AcLayerStandardizer` folder (it now holds only test data). Copy `AcLayerStandardizer_aside` from your Desktop into `%APPDATA%` and rename it back to `AcLayerStandardizer`. (If you wrote "none" in Setup step 2, just delete the test-written folder. If anything looks wrong, unzip your Setup backup instead.) Section J's Choose Standard may also have changed your settings; this restore undoes that too.
+8. **Restore your saved settings.** Do the "LAST STEP, ALWAYS: restore" at the top of this checklist now (it also undoes anything Choose Standard in J changed).
 
 - [ ] `config.json` and `standards_memory.json` are back in `%APPDATA%\AcLayerStandardizer` (or "none" case: folder removed).
 
@@ -305,6 +317,7 @@ This section changes your saved Standardizer files. The safety copy was made in 
 | I. Never trapped | | |
 | J. New standard with pending connections | | |
 | K. Phase 2 still works | | |
+| Restore done (LAST STEP at the top) | Done / Not done | |
 
 If something fails, also mention these two log files (they are in `%TEMP%`):
 
