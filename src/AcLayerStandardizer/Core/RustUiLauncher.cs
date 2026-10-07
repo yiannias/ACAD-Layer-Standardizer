@@ -95,7 +95,13 @@ internal static class RustUiLauncher
         public static extern bool SetForegroundWindow(IntPtr hWnd);
     }
 
-    public static bool TryLaunchFromActiveAutoCad(
+    // Set once a launch has started the window in this AutoCAD process, so only the
+    // first one passes the first-run notice.
+    private static bool _noticeShown;
+
+    // Never throws for a launch failure: the outcome (and detail) says what happened
+    // and the caller prints LaunchGuard.DescribeFailure for it.
+    public static LaunchOutcome TryLaunchFromActiveAutoCad(
         Document document,
         string drawingName,
         double heuristicThreshold,
@@ -107,16 +113,26 @@ internal static class RustUiLauncher
         string memoryFilePath,
         IEnumerable<(string Name, string SortGroup, IEnumerable<string> Layers)> targetFilters,
         string templatePath,
-        IEnumerable<string> alwaysHiddenTargets)
+        IEnumerable<string> alwaysHiddenTargets,
+        out string? detail)
     {
+        detail = null;
         var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc is null) return false;
+        if (doc is null)
+        {
+            detail = "no drawing is active";
+            return LaunchOutcome.StartFailed;
+        }
 
-        var executable = FindUiExecutable();
-        if (executable is null) return false;
+        var executable = FindUiExecutable(out var searched);
+        if (executable is null)
+        {
+            detail = searched;
+            return LaunchOutcome.ExecutableNotFound;
+        }
 
         // One window only; its snapshot is not replaced under it.
-        if (TryFocusExistingWindow(doc)) return true;
+        if (TryFocusExistingWindow(doc)) return LaunchOutcome.AlreadyOpen;
 
         // Initialize may have attempted to start the pipe before AutoCAD was
         // ready. Recheck it in the command context before launching the client.
@@ -126,33 +142,47 @@ internal static class RustUiLauncher
             alwaysHiddenTargets);
 
         var owner = Application.MainWindow.Handle;
-        if (owner == IntPtr.Zero) return false;
+        if (owner == IntPtr.Zero)
+        {
+            detail = "AutoCAD's main window was not found";
+            return LaunchOutcome.StartFailed;
+        }
 
+        var passNotice = NoticePolicy.ShouldPassNotice(_noticeShown);
         var startInfo = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(executable)!,
-            Arguments = $"--owner-hwnd={owner.ToInt64()}"
+            Arguments = $"--owner-hwnd={owner.ToInt64()}" + (passNotice ? " " + NoticePolicy.Argument : string.Empty)
         };
 
         try
         {
             _window = Process.Start(startInfo);
-            return true;
+            if (passNotice) _noticeShown = true;
+            return LaunchOutcome.Launched;
         }
         catch (Exception ex)
         {
-            doc.Editor.WriteMessage($"\nCould not launch the Rust mappings UI: {ex.Message}");
+            detail = ex.Message;
+            return LaunchOutcome.StartFailed;
         }
-        return false;
     }
 
-    private static string? FindUiExecutable()
+    // Also describes, in one readable string, where it looked (for the failure message).
+    private static string? FindUiExecutable() => FindUiExecutable(out _);
+
+    private static string? FindUiExecutable(out string searched)
     {
         // AutoCAD's AppContext.BaseDirectory points at acad.exe, not the
         // folder from which NETLOAD loaded this plugin.
         var assemblyDirectory = Path.GetDirectoryName(typeof(RustUiLauncher).Assembly.Location);
-        if (string.IsNullOrEmpty(assemblyDirectory)) return null;
+        if (string.IsNullOrEmpty(assemblyDirectory))
+        {
+            searched = "the plug-in's folder, which could not be determined";
+            return null;
+        }
+        searched = $"{assemblyDirectory} and the folders above it, plus rust\\target\\release and rust\\target\\debug under each";
 
         var directory = new DirectoryInfo(assemblyDirectory);
         while (directory is not null)

@@ -47,13 +47,14 @@ public static class MappingsCommand
             if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
             var rustSource = GetActiveLayerNames(doc.Database)
                 .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
-            if (RustUiLauncher.TryLaunchFromActiveAutoCad(
-                    doc, Path.GetFileName(doc.Name), config.HeuristicThreshold, rustSource, Array.Empty<string>(),
-                    GetEmptyLayers(doc.Database),
-                    new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase),
-                    new Dictionary<string, string>(), memPath,
-                    Array.Empty<(string Name, string SortGroup, IEnumerable<string> Layers)>(),
-                    templatePath, Array.Empty<string>())) return;
+            var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
+                doc, Path.GetFileName(doc.Name), config.HeuristicThreshold, rustSource, Array.Empty<string>(),
+                GetEmptyLayers(doc.Database),
+                new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase),
+                new Dictionary<string, string>(), memPath,
+                Array.Empty<(string Name, string SortGroup, IEnumerable<string> Layers)>(),
+                templatePath, Array.Empty<string>(), out var detail);
+            if (LaunchSucceeded(ed, outcome, detail)) return;
         }
 
         IReadOnlyDictionary<string, LayerProperties> standardLayers =
@@ -110,10 +111,14 @@ public static class MappingsCommand
         // only serves this snapshot and never accesses the drawing database.
         // A Rust launch that already failed above is not retried (it would only fail,
         // and print its error, a second time); go straight to the WPF fallback.
-        if (!rustAttempted && RustUiLauncher.TryLaunchFromActiveAutoCad(
+        if (!rustAttempted)
+        {
+            var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
                 doc, Path.GetFileName(doc.Name), configThreshold, sortedSource, sortedStandard,
                 emptyLayers, standardLayers, memory.Mappings, store.FilePath, targetFilters,
-                templatePath, categorized.AlwaysHidden)) return;
+                templatePath, categorized.AlwaysHidden, out var detail);
+            if (LaunchSucceeded(ed, outcome, detail)) return;
+        }
 
         // Run heuristic matching for all source layers not already in memory
         var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);
@@ -231,6 +236,16 @@ public static class MappingsCommand
             ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");
             ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
         }
+    }
+
+    // True when the Rust window is now up (launched or brought forward). Otherwise
+    // prints why it could not start; the caller then falls back to the old editor.
+    private static bool LaunchSucceeded(Editor ed, LaunchOutcome outcome, string? detail)
+    {
+        var message = LaunchGuard.DescribeFailure(outcome, detail);
+        if (message is null) return true;
+        ed.WriteMessage("\n" + message);
+        return false;
     }
 
     internal static HashSet<string> GetEmptyLayers(Database db)
