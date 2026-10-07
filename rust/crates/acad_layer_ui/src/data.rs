@@ -159,8 +159,6 @@ pub fn load_startup_from(dir: Option<&Path>) -> StartupData {
 }
 
 /// The result of pointing the app at a different memory file.
-// Task 5 (the settings panel) is the first caller of this and `switch_memory_file`.
-#[allow(dead_code)]
 pub struct MemoryChange {
     pub config: PluginConfig,
     pub store: MemoryStore,
@@ -170,7 +168,6 @@ pub struct MemoryChange {
 /// Switches to another memory file. The target is read first (a file that does not
 /// exist yet is fine: empty memory); if it cannot be read the config is left
 /// untouched and the old memory stays in use.
-#[allow(dead_code)]
 pub fn switch_memory_file(
     config_path: &Path,
     config_dir: &Path,

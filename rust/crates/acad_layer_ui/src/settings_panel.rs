@@ -1,8 +1,5 @@
 //! Pure logic behind the Settings panel. No egui in this file.
 
-// Task 5 wires these items into the UI and removes this allow.
-#![allow(dead_code)]
-
 use acad_layer_core::ImportReport;
 use std::path::Path;
 
@@ -50,6 +47,29 @@ pub fn standards_file_label(path: &str, exists: bool) -> StandardsFileLabel {
             missing: true,
         }
     }
+}
+
+/// The label while the off-thread existence check may still be running (`None`):
+/// "Checking..." rather than a missing-file warning.
+pub fn standards_file_display(path: &str, exists: Option<bool>) -> StandardsFileLabel {
+    match exists {
+        Some(exists) => standards_file_label(path, exists),
+        None if path.trim().is_empty() => standards_file_label(path, false),
+        None => StandardsFileLabel {
+            text: "Checking...".to_string(),
+            missing: false,
+        },
+    }
+}
+
+pub const NO_MEMORY_LOCATION: &str = "No memory file location is available.";
+
+pub fn memory_changed_status(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.display().to_string());
+    format!("Memory file changed. Now using {name}.")
 }
 
 pub fn import_status(report: &ImportReport) -> String {
@@ -101,6 +121,30 @@ mod tests {
         let l = standards_file_label(r"C:\Standards\office.json", false);
         assert_eq!(l.text, "Unavailable: office.json");
         assert!(l.missing);
+    }
+
+    #[test]
+    fn standards_file_display_says_checking_until_the_answer_arrives() {
+        let l = standards_file_display(r"C:\Standards\office.json", None);
+        assert_eq!(l.text, "Checking...");
+        assert!(!l.missing);
+        let l = standards_file_display("", None);
+        assert_eq!(l.text, "No Standards File chosen");
+        assert!(!l.missing);
+        let l = standards_file_display(r"C:\Standards\office.json", Some(false));
+        assert_eq!(l.text, "Unavailable: office.json");
+        assert!(l.missing);
+        let l = standards_file_display(r"C:\Standards\office.json", Some(true));
+        assert_eq!(l.text, "office.json");
+        assert!(!l.missing);
+    }
+
+    #[test]
+    fn memory_changed_status_names_the_new_file() {
+        assert_eq!(
+            memory_changed_status(Path::new("C:/shared/team_memory.json")),
+            "Memory file changed. Now using team_memory.json."
+        );
     }
 
     #[test]

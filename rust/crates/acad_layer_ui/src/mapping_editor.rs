@@ -48,6 +48,7 @@ pub struct MappingEditorEvent {
     pub remember: Option<bool>,
     pub purge: bool,
     pub choose_standard: bool,
+    pub open_settings: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -364,7 +365,7 @@ impl MappingEditor {
                 &visible_targets,
                 &target_pairs,
             );
-            self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
+            let open_settings = self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
             let choose_standard =
                 self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
             if self.purge_confirmation_open {
@@ -400,6 +401,7 @@ impl MappingEditor {
                 remember,
                 purge,
                 choose_standard,
+                open_settings,
             };
         }
 
@@ -669,7 +671,7 @@ impl MappingEditor {
             }
         }
 
-        self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
+        let open_settings = self.draw_left_panel(ctx, source_layers.len(), empty_layers.len());
         let choose_standard =
             self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
         if self.purge_confirmation_open {
@@ -706,6 +708,7 @@ impl MappingEditor {
             remember,
             purge,
             choose_standard,
+            open_settings,
         }
     }
 
@@ -1958,7 +1961,14 @@ impl MappingEditor {
             .collect()
     }
 
-    fn draw_left_panel(&mut self, ctx: &egui::Context, source_count: usize, empty_count: usize) {
+    /// Draws the left panel; returns true when its Settings button was clicked.
+    fn draw_left_panel(
+        &mut self,
+        ctx: &egui::Context,
+        source_count: usize,
+        empty_count: usize,
+    ) -> bool {
+        let mut open_settings = false;
         egui::Area::new(Id::new("mapping_legend"))
             .fixed_pos(egui::pos2(24.0, 20.0))
             .order(egui::Order::Foreground)
@@ -2063,8 +2073,16 @@ impl MappingEditor {
                                 .size(9.0)
                                 .color(Color32::from_rgb(100, 100, 100)),
                         );
+                        ui.add_space(6.0);
+                        if ui
+                            .add_sized([150.0, 24.0], egui::Button::new("Settings"))
+                            .clicked()
+                        {
+                            open_settings = true;
+                        }
                     });
             });
+        open_settings
     }
 
     fn draw_right_panel(
