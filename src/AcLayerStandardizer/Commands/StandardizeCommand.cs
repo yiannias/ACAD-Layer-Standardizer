@@ -192,6 +192,9 @@ public static class StandardizeCommand
         IReadOnlyDictionary<string, LayerProperties> standardLayers,
         PropertyMatchSettings? propSettings = null)
     {
+        if (LayerHelper.FindUnapplicableMapping(mappings) is { } problem)
+            throw new InvalidOperationException(problem);
+
         var snapshot = new RollbackSnapshot();
         var renamed = 0;
         var synced = 0;
