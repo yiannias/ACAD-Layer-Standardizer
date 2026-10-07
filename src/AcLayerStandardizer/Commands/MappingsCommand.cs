@@ -43,6 +43,8 @@ public static class MappingsCommand
         var rustAttempted = RustUiLauncher.IsAvailable();
         if (rustAttempted)
         {
+            // The window is already open: bring it forward before reading any layers.
+            if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
             var rustSource = GetActiveLayerNames(doc.Database)
                 .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
             if (RustUiLauncher.TryLaunchFromActiveAutoCad(

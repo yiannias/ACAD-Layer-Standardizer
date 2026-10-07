@@ -12,6 +12,89 @@ internal static class RustUiLauncher
     // WPF fallback needs (reading the template, categorizing, loading memory).
     public static bool IsAvailable() => FindUiExecutable() is not null;
 
+    // The mapping window this AutoCAD session launched, if any. Only touched from
+    // AutoCAD commands (one thread).
+    private static Process? _window;
+
+    // When the window from an earlier LSTDR is still running, brings it forward
+    // (restoring it if minimized) and says so on the command line instead of
+    // launching a second one. Returns true when it did. Never throws.
+    public static bool TryFocusExistingWindow(Document document)
+    {
+        if (WindowInstance.Decide(IsAlive(_window)) != LaunchDecision.FocusExisting) return false;
+        try
+        {
+            var handle = FindWindowOf(_window!);
+            if (handle != IntPtr.Zero)
+            {
+                if (NativeMethods.IsIconic(handle)) NativeMethods.ShowWindow(handle, NativeMethods.SW_RESTORE);
+                NativeMethods.SetForegroundWindow(handle);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not bring its window forward: {ex.Message}");
+        }
+        try { document.Editor.WriteMessage($"\n{WindowInstance.AlreadyOpenMessage}"); }
+        catch (Exception) { /* the command line is unavailable: nothing else to do */ }
+        return true;
+    }
+
+    private static bool IsAlive(Process? process)
+    {
+        if (process is null) return false;
+        try { return !process.HasExited; }
+        catch (Exception) { return false; }
+    }
+
+    // Process.MainWindowHandle skips owned windows, and the mapping window is owned
+    // by AutoCAD's main window, so look for the process's visible top-level window.
+    private static IntPtr FindWindowOf(Process process)
+    {
+        var processId = (uint)process.Id;
+        var found = IntPtr.Zero;
+        NativeMethods.EnumWindows((hWnd, _) =>
+        {
+            NativeMethods.GetWindowThreadProcessId(hWnd, out var owner);
+            if (owner != processId || !NativeMethods.IsWindowVisible(hWnd)) return true;
+            found = hWnd;
+            return false;
+        }, IntPtr.Zero);
+        if (found != IntPtr.Zero) return found;
+        process.Refresh();
+        return process.MainWindowHandle;
+    }
+
+    private static class NativeMethods
+    {
+        public const int SW_RESTORE = 9;
+
+        public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool IsWindowVisible(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool IsIconic(IntPtr hWnd);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hWnd);
+    }
+
     public static bool TryLaunchFromActiveAutoCad(
         Document document,
         string drawingName,
@@ -32,6 +115,9 @@ internal static class RustUiLauncher
         var executable = FindUiExecutable();
         if (executable is null) return false;
 
+        // One window only; its snapshot is not replaced under it.
+        if (TryFocusExistingWindow(doc)) return true;
+
         // Initialize may have attempted to start the pipe before AutoCAD was
         // ready. Recheck it in the command context before launching the client.
         IpcBridgeServer.Start();
@@ -51,7 +137,7 @@ internal static class RustUiLauncher
 
         try
         {
-            Process.Start(startInfo);
+            _window = Process.Start(startInfo);
             return true;
         }
         catch (Exception ex)
