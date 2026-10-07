@@ -15,8 +15,8 @@ pub fn parse_launch_args(args: impl Iterator<Item = String>) -> LaunchArgs {
         if arg == "--first-run-notice" {
             parsed.first_run_notice = true;
         } else if let Some(value) = arg.strip_prefix("--owner-hwnd=") {
-            if let Ok(hwnd) = value.parse::<isize>() {
-                parsed.owner_hwnd = Some(hwnd);
+            if parsed.owner_hwnd.is_none() {
+                parsed.owner_hwnd = value.parse::<isize>().ok();
             }
         }
     }
@@ -46,6 +46,12 @@ mod tests {
         let args = parse(&["--bogus", "--owner-hwnd=7", "positional", "--x=1"]);
         assert_eq!(args.owner_hwnd, Some(7));
         assert!(!args.first_run_notice);
+    }
+
+    #[test]
+    fn the_first_valid_owner_wins() {
+        let args = parse(&["--owner-hwnd=abc", "--owner-hwnd=5", "--owner-hwnd=9"]);
+        assert_eq!(args.owner_hwnd, Some(5));
     }
 
     #[test]

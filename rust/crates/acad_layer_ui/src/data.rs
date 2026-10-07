@@ -176,18 +176,43 @@ pub fn switch_memory_file(
     config_dir: &Path,
     new_path: &str,
 ) -> Result<MemoryChange, String> {
-    if let Err(error) = MemoryStore::new(new_path).load_checked() {
+    // Check the file the app will really use: relative paths are relative to the
+    // config folder and a blank path means the default file there.
+    let mut candidate = PluginConfig::load_from(config_path).map_err(|error| {
+        format!("Could not read the settings file: {error}. The old memory stays in use.")
+    })?;
+    let previous = candidate.memory_file_path.clone();
+    candidate.memory_file_path = new_path.to_string();
+    let target = candidate.effective_memory_path(config_dir);
+    if let Err(error) = MemoryStore::new(&target).load_checked() {
         return Err(format!(
-            "Could not use {new_path}: {error}. The old memory stays in use."
+            "Could not use the memory file {}: {error}. The old memory stays in use.",
+            target.display()
         ));
     }
     let config = PluginConfig::set_memory_path(config_path, new_path).map_err(|error| {
         format!("Could not save the new memory location: {error}. The old memory stays in use.")
     })?;
     let store = MemoryStore::new(config.effective_memory_path(config_dir));
-    let memory = store
-        .load_checked()
-        .map_err(|error| format!("Could not read {}: {error}", store.file_path().display()))?;
+    let memory = match store.load_checked() {
+        Ok(memory) => memory,
+        Err(error) => {
+            // The file changed after the check: put the old location back.
+            let reason = format!(
+                "Could not read the memory file {}: {error}",
+                target.display()
+            );
+            return Err(
+                match PluginConfig::set_memory_path(config_path, &previous) {
+                    Ok(_) => format!("{reason}. The old memory stays in use."),
+                    Err(rollback) => format!(
+                        "{reason}. The old location could not be restored either ({rollback}); \
+                     check the memory file location in settings."
+                    ),
+                },
+            );
+        }
+    };
     Ok(MemoryChange {
         config,
         store,
@@ -472,6 +497,55 @@ mod tests {
         assert!(error.contains("old memory"), "{error}");
         assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
         assert_eq!(fs::read_to_string(&target).unwrap(), "{ nope");
+    }
+
+    #[test]
+    fn a_corrupt_file_reached_through_a_relative_path_changes_nothing() {
+        let dir = switch_dir("relative");
+        let config_path = dir.join("config.json");
+        let original = r#"{"TemplateDwgPath":"keep.dwg"}"#;
+        fs::write(&config_path, original).unwrap();
+        fs::write(dir.join("rel_memory.json"), "{ nope").unwrap();
+
+        let error = match switch_memory_file(&config_path, &dir, "rel_memory.json") {
+            Ok(_) => panic!("a corrupt target must be refused"),
+            Err(error) => error,
+        };
+        assert!(error.contains("rel_memory.json"), "{error}");
+        assert!(error.contains("old memory stays in use"), "{error}");
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
+    }
+
+    #[test]
+    fn a_blank_path_checks_the_default_memory_file() {
+        let dir = switch_dir("blank");
+        let config_path = dir.join("config.json");
+        let original = r#"{"MemoryFilePath":"elsewhere.json"}"#;
+        fs::write(&config_path, original).unwrap();
+        fs::write(dir.join("standards_memory.json"), "{ nope").unwrap();
+
+        let error = match switch_memory_file(&config_path, &dir, "  ") {
+            Ok(_) => panic!("a corrupt default memory file must be refused"),
+            Err(error) => error,
+        };
+        assert!(error.contains("standards_memory.json"), "{error}");
+        assert!(error.contains("old memory stays in use"), "{error}");
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), original);
+    }
+
+    #[test]
+    fn switching_to_the_current_path_works() {
+        let dir = switch_dir("same");
+        let config_path = dir.join("config.json");
+        let target = dir.join("same_memory.json");
+        let mut seed = TranslationMemory::default();
+        seed.mappings.insert("A".into(), "B".into());
+        MemoryStore::new(&target).save(&seed).unwrap();
+        let path = target.to_str().unwrap();
+        switch_memory_file(&config_path, &dir, path).unwrap();
+        let again = switch_memory_file(&config_path, &dir, path).unwrap();
+        assert_eq!(again.memory.lookup("A"), Some("B"));
+        assert_eq!(again.config.memory_file_path, path);
     }
 
     #[test]
