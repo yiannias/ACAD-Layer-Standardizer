@@ -26,6 +26,9 @@ public static class MappingsCommand
         // here. A failure is printed at the command line; nothing is thrown.
         try
         {
+            // The window is already open: bring it forward before anything else.
+            if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
+
             var config = PluginConfig.Load();
 
             var templatePath = !string.IsNullOrEmpty(config.TemplateDwgPath) && File.Exists(config.TemplateDwgPath)
@@ -34,8 +37,6 @@ public static class MappingsCommand
             if (templatePath.Length == 0)
                 ed.WriteMessage("\nReference file unavailable. Opening without targets; click the Target header to choose one.");
 
-            // The window is already open: bring it forward before reading any layers.
-            if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
             var source = LayerReader.GetActiveLayerNames(doc.Database)
                 .OrderBy(n => n, NaturalSortComparer.Instance).ToList();
             var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
@@ -47,7 +48,7 @@ public static class MappingsCommand
         catch (System.Exception ex)
         {
             // The pipe server start, the drawing snapshot or the layer read failed.
-            try { ed.WriteMessage($"\nThe Layer Standardizer window could not start ({ex.Message})."); }
+            try { ed.WriteMessage($"\nThe Layer Standardizer window could not start ({ex.GetType().Name}: {ex.Message})."); }
             catch (System.Exception) { /* the command line is unavailable: nothing else to do */ }
         }
     }
