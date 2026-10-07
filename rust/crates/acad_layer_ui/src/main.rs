@@ -4,7 +4,11 @@ use acad_layer_core::{
     HeuristicMatcher, LayerDictionaryDefinition, MatchResult, MatchSource, MemoryStore,
     PluginConfig,
 };
-use acad_layer_ipc::{DrawingSnapshot, IpcResponse, TargetFilter};
+use acad_layer_ipc::{
+    DrawingLayersInfo, DrawingSnapshot, FeedHandle, FeedMessage, IpcResponse, PendingEntry,
+    TargetFilter,
+};
+use live_sync::LayerRead;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use serde::{Deserialize, Serialize};
 use spatial_ui_kit::theme::ThemePalette;
@@ -13,9 +17,12 @@ use std::{
     fs,
     path::PathBuf,
     sync::mpsc::{Receiver, Sender},
+    sync::{Arc, Mutex},
+    time::Instant,
 };
 
 mod data;
+mod live_sync;
 mod mapping_editor;
 mod sessions;
 
@@ -58,6 +65,24 @@ fn load_preferences() -> UserPreferences {
         .unwrap_or_default()
 }
 
+/// Everything worker threads post to the UI thread's result channel.
+enum AppMessage {
+    /// A request the user started: the first snapshot, a standard, Apply or Purge.
+    Ipc(Result<IpcResponse, String>),
+    /// A live-sync layer read (switch, refresh or resync).
+    Layers(Result<IpcResponse, String>),
+    /// A message from the event feed thread.
+    Feed(FeedMessage),
+}
+
+/// Asks which drawing is active, then reads its layers (the feed's resync path).
+fn read_active_drawing_layers() -> Result<IpcResponse, String> {
+    match acad_layer_ipc::get_active_drawing(None)? {
+        IpcResponse::ActiveDrawing(info) => acad_layer_ipc::get_layers_for_drawing(info.drawing_id),
+        other => Ok(other),
+    }
+}
+
 /// Template drawings the user can choose as the standard.
 const STANDARD_FILE_EXTENSIONS: [&str; 3] = ["dwg", "dxf", "dws"];
 
@@ -87,8 +112,20 @@ struct LayerStandardizerApp {
     owner_hwnd: Option<isize>,
     owner_attached: bool,
     apply_pending: bool,
-    ipc_sender: Sender<Result<IpcResponse, String>>,
-    ipc_results: Receiver<Result<IpcResponse, String>>,
+    ipc_sender: Sender<AppMessage>,
+    ipc_results: Receiver<AppMessage>,
+    /// The event feed; started once the first drawing snapshot arrives.
+    feed: Option<FeedHandle>,
+    /// Edit states of open drawings that are not displayed.
+    sessions: sessions::DrawingSessions,
+    /// Unapplied counts the feed reports to the connector on every poll.
+    pending_report: Arc<Mutex<Vec<PendingEntry>>>,
+    connection_lost: bool,
+    /// Layer reads still wanted (`reads.refresh_wanted()`); they wait while an
+    /// Apply, Purge or Load Standard is in flight.
+    reads: live_sync::ReadSchedule,
+    /// The displayed drawing closed (or none is active): "No drawing is open".
+    no_drawing: bool,
     drawing_name: String,
     drawing_id: String,
     template_name: String,
@@ -111,8 +148,8 @@ struct LayerStandardizerApp {
 impl LayerStandardizerApp {
     fn new(
         owner_hwnd: Option<isize>,
-        ipc_sender: Sender<Result<IpcResponse, String>>,
-        ipc_results: Receiver<Result<IpcResponse, String>>,
+        ipc_sender: Sender<AppMessage>,
+        ipc_results: Receiver<AppMessage>,
         user_preferences: UserPreferences,
     ) -> Self {
         let startup = data::load_startup();
@@ -144,6 +181,12 @@ impl LayerStandardizerApp {
             error_message: (!startup.notes.is_empty()).then(|| startup.notes.join("\n\n")),
             ipc_sender,
             ipc_results,
+            feed: None,
+            sessions: sessions::DrawingSessions::default(),
+            pending_report: Arc::new(Mutex::new(Vec::new())),
+            connection_lost: false,
+            reads: live_sync::ReadSchedule::default(),
+            no_drawing: false,
             drawing_name: String::new(),
             drawing_id: String::new(),
             template_name: String::new(),
@@ -238,7 +281,18 @@ impl eframe::App for LayerStandardizerApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         ui.ctx().set_visuals(self.dark_theme.base.visuals());
         self.attach_to_owner_if_requested(frame, ui.ctx());
-        while let Ok(result) = self.ipc_results.try_recv() {
+        while let Ok(message) = self.ipc_results.try_recv() {
+            let result = match message {
+                AppMessage::Ipc(result) => result,
+                AppMessage::Layers(result) => {
+                    self.on_layer_read(result);
+                    continue;
+                }
+                AppMessage::Feed(message) => {
+                    self.on_feed_message(message);
+                    continue;
+                }
+            };
             match result {
                 Ok(IpcResponse::DrawingSnapshot(snapshot)) => {
                     self.set_snapshot(snapshot);
@@ -248,6 +302,7 @@ impl eframe::App for LayerStandardizerApp {
                         self.source_layers.len()
                     );
                     self.request_standard_if_needed(ui.ctx());
+                    self.start_feed(ui.ctx());
                 }
                 Ok(IpcResponse::StandardLayers(info)) => {
                     self.apply_pending = false;
@@ -358,11 +413,18 @@ impl eframe::App for LayerStandardizerApp {
             }
         }
 
+        self.drive_live_sync(ui.ctx());
+
         let previous_threshold = self.mapping_editor.confidence;
-        let editor_event = self.mapping_editor.show(
+        let footer_note = self.sessions.footer_note(self.current_drawing());
+        let mut editor_event = self.mapping_editor.show(
             ui,
             &ui.ctx().clone(),
-            &self.drawing_name,
+            if self.no_drawing {
+                "No drawing is open"
+            } else {
+                &self.drawing_name
+            },
             &self.template_name,
             &self.source_layers,
             &self.standard_layers,
@@ -371,8 +433,22 @@ impl eframe::App for LayerStandardizerApp {
             &self.target_filters,
             &self.always_hidden_targets,
             &self.status_message,
-            self.apply_pending,
+            footer_note.as_deref(),
+            self.apply_pending || self.no_drawing,
         );
+        if editor_event.remember.is_some() || editor_event.purge {
+            // Apply and Purge target the displayed drawing; the connector refuses one
+            // that is no longer active, so say so plainly instead of sending them.
+            if let Some(message) = live_sync::blocked_action_message(
+                self.no_drawing,
+                self.reads.switch_pending(&self.drawing_id),
+            ) {
+                editor_event.remember = None;
+                editor_event.purge = false;
+                self.status_message = message.to_string();
+                self.error_message = Some(message.to_string());
+            }
+        }
         if let Some(new_threshold) = editor_event.confidence {
             self.mapping_editor.confidence = new_threshold;
         }
@@ -409,7 +485,7 @@ impl eframe::App for LayerStandardizerApp {
                 let result = acad_layer_ipc::apply_plan(
                     request.0, request.1, request.2, request.3, request.4,
                 );
-                let _ = sender.send(result);
+                let _ = sender.send(AppMessage::Ipc(result));
                 repaint.request_repaint();
             });
         }
@@ -426,7 +502,7 @@ impl eframe::App for LayerStandardizerApp {
             self.status_message = "Removing empty layers in AutoCAD…".to_string();
             std::thread::spawn(move || {
                 let result = acad_layer_ipc::purge_empty_layers(request.0, request.1, request.2);
-                let _ = sender.send(result);
+                let _ = sender.send(AppMessage::Ipc(result));
                 repaint.request_repaint();
             });
         }
@@ -540,7 +616,7 @@ impl LayerStandardizerApp {
         self.status_message = "Loading standard drawing in AutoCAD…".to_string();
         std::thread::spawn(move || {
             let result = fetch_standard(path);
-            let _ = sender.send(result);
+            let _ = sender.send(AppMessage::Ipc(result));
             repaint.request_repaint();
         });
     }
@@ -557,6 +633,209 @@ impl LayerStandardizerApp {
                 self.error_message =
                     Some(format!("Could not remember the chosen standard: {error}"));
             }
+        }
+    }
+}
+
+/// Live sync: following the active AutoCAD drawing (decisions live in `live_sync`).
+impl LayerStandardizerApp {
+    fn current_drawing(&self) -> Option<&str> {
+        (!self.drawing_id.is_empty()).then_some(self.drawing_id.as_str())
+    }
+
+    fn connected_status(&self) -> String {
+        if self.no_drawing {
+            return "No drawing is open".to_string();
+        }
+        let mut status = format!(
+            "Connected to {} • {} drawing layers",
+            self.drawing_name,
+            self.source_layers.len()
+        );
+        if !self.standard_layers.is_empty() {
+            status.push_str(&format!(
+                " • {} standard layers",
+                self.standard_layers.len()
+            ));
+        }
+        status
+    }
+
+    fn start_feed(&mut self, ctx: &egui::Context) {
+        if self.feed.is_some() {
+            return;
+        }
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        self.feed = Some(acad_layer_ipc::spawn_feed(
+            self.pending_report.clone(),
+            move |message| {
+                // A poll in flight when the window closed may still deliver; the
+                // receiver is gone by then, so the send error is ignored.
+                let _ = sender.send(AppMessage::Feed(message));
+                repaint.request_repaint();
+            },
+        ));
+    }
+
+    /// Runs every frame: pause state, deferred layer reads, and the pending report.
+    fn drive_live_sync(&mut self, ctx: &egui::Context) {
+        if let Some(feed) = &self.feed {
+            feed.set_paused(live_sync::feed_should_pause(
+                ctx.input(|input| input.viewport().minimized),
+            ));
+            let now = Instant::now();
+            let busy = self.apply_pending || self.connection_lost;
+            if let Some(read) = self.reads.next(busy, now) {
+                self.start_layer_read(ctx, read);
+            }
+            if let Some(delay) = self.reads.retry_in(now) {
+                ctx.request_repaint_after(delay);
+            }
+        }
+        let report = self.sessions.pending_report(
+            self.current_drawing()
+                .map(|id| (id, self.mapping_editor.unapplied_count())),
+        );
+        *self
+            .pending_report
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = report;
+    }
+
+    fn start_layer_read(&self, ctx: &egui::Context, read: LayerRead) {
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            let result = match read {
+                LayerRead::Drawing(id) => acad_layer_ipc::get_layers_for_drawing(id),
+                LayerRead::Active => read_active_drawing_layers(),
+            };
+            let _ = sender.send(AppMessage::Layers(result));
+            repaint.request_repaint();
+        });
+    }
+
+    fn on_feed_message(&mut self, message: FeedMessage) {
+        match message {
+            FeedMessage::Events(events) => {
+                let current = self.reads.showing_next(&self.drawing_id).to_string();
+                let plan = live_sync::plan_feed_events(&current, &events);
+                for id in &plan.forget {
+                    self.sessions.forget(id);
+                    self.reads.cancel_drawing(id);
+                    if *id == self.drawing_id {
+                        // The drawing closed, so its connections go with it.
+                        drop(self.mapping_editor.take_edit_state());
+                        self.show_no_drawing();
+                    }
+                }
+                if let Some(id) = plan.switch_to {
+                    self.reads.want(LayerRead::Drawing(id));
+                }
+                if plan.refresh_current {
+                    self.reads.want_refresh(&current);
+                }
+            }
+            FeedMessage::Resync => self.reads.want(LayerRead::Active),
+            FeedMessage::Down(_) => {
+                self.connection_lost = true;
+                self.status_message = "AutoCAD connection lost".to_string();
+            }
+            FeedMessage::Up => {
+                self.connection_lost = false;
+                self.status_message = self.connected_status();
+                self.reads.want(LayerRead::Active);
+            }
+        }
+    }
+
+    fn on_layer_read(&mut self, result: Result<IpcResponse, String>) {
+        let ok = matches!(
+            result,
+            Ok(IpcResponse::DrawingLayers(_)) | Ok(IpcResponse::NoActiveDrawing)
+        );
+        let current = self.reads.finished(ok, Instant::now());
+        match result {
+            Ok(IpcResponse::DrawingLayers(info)) if current => self.show_drawing_layers(info),
+            Ok(IpcResponse::NoActiveDrawing) if current => {
+                // No drawing is active, but the displayed one may still be open: keep
+                // its connections; a DrawingClosed event discards them if it closed.
+                if let Some(id) = self.current_drawing().map(str::to_string) {
+                    let state = self.mapping_editor.take_edit_state();
+                    self.sessions.stash(&id, &self.drawing_name, state);
+                }
+                self.show_no_drawing();
+            }
+            Ok(IpcResponse::DrawingLayers(_)) | Ok(IpcResponse::NoActiveDrawing) => {}
+            // Never blank the Source side on a failed read (it may be transient):
+            // report it and retry shortly.
+            Ok(IpcResponse::Error(message)) | Err(message) => {
+                if !self.connection_lost {
+                    self.status_message = message;
+                }
+            }
+            Ok(_) => {
+                if !self.connection_lost {
+                    self.status_message =
+                        "AutoCAD returned an unexpected IPC response.".to_string();
+                }
+            }
+        }
+    }
+
+    /// Clears the Source side. The caller has already stashed or dropped the edits.
+    fn show_no_drawing(&mut self) {
+        self.mapping_editor.clear_selection();
+        self.drawing_id.clear();
+        self.drawing_name.clear();
+        self.source_layers.clear();
+        self.empty_layers.clear();
+        self.no_drawing = true;
+        self.recalculate();
+        self.status_message = "No drawing is open".to_string();
+    }
+
+    fn show_drawing_layers(&mut self, info: DrawingLayersInfo) {
+        let switching = live_sync::is_switch(&self.drawing_id, self.no_drawing, &info.drawing_id);
+        let changed = !switching
+            && live_sync::layers_differ(
+                &self.source_layers,
+                &self.empty_layers,
+                &info.source_layers,
+                &info.empty_layers,
+            );
+        if switching {
+            let previous = self.mapping_editor.take_edit_state();
+            if let Some(id) = self.current_drawing().map(str::to_string) {
+                self.sessions.stash(&id, &self.drawing_name, previous);
+            }
+            self.mapping_editor.clear_selection();
+            let mut state = self.sessions.take(&info.drawing_id);
+            sessions::drop_missing_sources(&mut state.overrides, &info.source_layers);
+            self.mapping_editor.restore_edit_state(state);
+        } else {
+            sessions::drop_missing_sources(&mut self.mapping_editor.overrides, &info.source_layers);
+        }
+        let was_blank = self.no_drawing;
+        self.drawing_id = info.drawing_id;
+        self.drawing_name = info.drawing_name;
+        self.empty_layers = info.empty_layers.into_iter().collect();
+        self.source_layers = info.source_layers;
+        self.no_drawing = false;
+        self.recalculate();
+        if switching || was_blank {
+            self.status_message = self.connected_status();
+        } else if changed {
+            self.status_message = "Layers changed in AutoCAD — list refreshed".to_string();
+        }
+    }
+}
+
+impl Drop for LayerStandardizerApp {
+    fn drop(&mut self) {
+        if let Some(feed) = &self.feed {
+            feed.stop();
         }
     }
 }
@@ -656,7 +935,8 @@ fn main() -> eframe::Result<()> {
                 let snapshot_sender = ipc_tx.clone();
                 let repaint = cc.egui_ctx.clone();
                 std::thread::spawn(move || {
-                    let _ = snapshot_sender.send(acad_layer_ipc::request_drawing_snapshot());
+                    let _ = snapshot_sender
+                        .send(AppMessage::Ipc(acad_layer_ipc::request_drawing_snapshot()));
                     repaint.request_repaint();
                 });
             }

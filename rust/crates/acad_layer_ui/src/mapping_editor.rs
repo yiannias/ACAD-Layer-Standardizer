@@ -170,6 +170,7 @@ impl MappingEditor {
         target_filters: &[TargetFilter],
         always_hidden_targets: &HashSet<String>,
         status: &str,
+        footer_note: Option<&str>,
         apply_pending: bool,
     ) -> MappingEditorEvent {
         let previous_confidence = self.confidence;
@@ -207,6 +208,13 @@ impl MappingEditor {
                                         .size(12.0)
                                         .color(Color32::from_rgb(170, 170, 170)),
                                 );
+                                if let Some(note) = footer_note {
+                                    ui.label(
+                                        RichText::new(format!("· {note}"))
+                                            .size(12.0)
+                                            .color(Color32::from_rgb(170, 170, 170)),
+                                    );
+                                }
                                 ui.label(
                                     RichText::new(format!(
                                         "v{} · Build {}",
@@ -2231,8 +2239,15 @@ impl MappingEditor {
         self.redo_stack.clear();
     }
 
-    // Task 6 wires the three edit-state methods into the UI.
-    #[allow(dead_code)]
+    /// Clears selection, highlight, an in-progress drag and the purge prompt, so a
+    /// drawing switch does not carry them over to the next drawing.
+    pub fn clear_selection(&mut self) {
+        self.selected_sources.clear();
+        self.selected_target = None;
+        self.dragging_source = None;
+        self.purge_confirmation_open = false;
+    }
+
     pub fn take_edit_state(&mut self) -> crate::sessions::EditState {
         crate::sessions::EditState {
             overrides: std::mem::take(&mut self.overrides),
@@ -2241,14 +2256,12 @@ impl MappingEditor {
         }
     }
 
-    #[allow(dead_code)]
     pub fn restore_edit_state(&mut self, state: crate::sessions::EditState) {
         self.overrides = state.overrides;
         self.undo_stack = state.undo;
         self.redo_stack = state.redo;
     }
 
-    #[allow(dead_code)]
     pub fn unapplied_count(&self) -> usize {
         self.overrides.len()
     }
@@ -2572,6 +2585,22 @@ mod tests {
 
     fn canvas() -> Rect {
         Rect::from_min_size(Pos2::ZERO, Vec2::new(10_000.0, 10_000.0))
+    }
+
+    #[test]
+    fn clear_selection_forgets_the_previous_drawings_selection() {
+        let mut editor = unit_editor();
+        editor.selected_sources.insert("A".into());
+        editor.selected_target = Some("T".into());
+        editor.dragging_source = Some("A".into());
+        editor.purge_confirmation_open = true;
+        editor.overrides.insert("A".into(), Some("T".into()));
+        editor.clear_selection();
+        assert!(editor.selected_sources.is_empty());
+        assert_eq!(editor.selected_target, None);
+        assert_eq!(editor.dragging_source, None);
+        assert!(!editor.purge_confirmation_open);
+        assert_eq!(editor.unapplied_count(), 1, "connections are not selection");
     }
 
     #[test]

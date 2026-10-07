@@ -1,6 +1,3 @@
-// Task 6 wires these into the UI; until then the binary does not use them.
-#![allow(dead_code)]
-
 use acad_layer_ipc::PendingEntry;
 use std::collections::HashMap;
 
@@ -218,6 +215,33 @@ mod tests {
             sessions.others_pending(None),
             vec![("Abe.dwg".to_string(), 2), ("Zed.dwg".to_string(), 1)]
         );
+    }
+
+    #[test]
+    fn switching_away_and_back_restores_connections_and_drops_deleted_layers() {
+        let mut sessions = DrawingSessions::default();
+        let mut a = state(&[("WALL", Some("A-WALL")), ("OLD", Some("A-DOOR"))]);
+        a.undo.push(HashMap::new());
+        // Switch A -> B: A is stashed, B starts fresh.
+        sessions.stash("A", "Beds.dwg", a);
+        let b = sessions.take("B");
+        assert_eq!(b.pending_count(), 0);
+        assert_eq!(
+            sessions.footer_note(Some("B")).as_deref(),
+            Some("Beds.dwg has 2 unapplied connections")
+        );
+        // Switch back B -> A; "OLD" was deleted in A meanwhile.
+        sessions.stash("B", "Baths.dwg", b);
+        let mut back = sessions.take("A");
+        let dropped = drop_missing_sources(&mut back.overrides, &["wall".to_string()]);
+        assert_eq!(dropped, 1);
+        assert_eq!(
+            back.overrides.get("WALL"),
+            Some(&Some("A-WALL".to_string()))
+        );
+        assert_eq!(back.undo.len(), 1);
+        assert_eq!(sessions.footer_note(Some("A")), None);
+        assert!(sessions.pending_report(None).is_empty());
     }
 
     #[test]
