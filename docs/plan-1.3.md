@@ -119,7 +119,7 @@ What is known to be open after Phase 4. Nothing here blocks a release; none of i
 
 ### Verify (cheap, do first)
 
-- **A test that has never run.** `LayerConnectionViewModelTests.Confidence_defaults_to_1_0_for_non_heuristic_sources` is not discovered by xunit, because its theory takes an enum-typed `InlineData` parameter, which this repo's xunit setup silently drops. Change the parameter to a plain type (as `ClassifyCloseTests` now does) and check the test total rises.
+- **A test that never ran: fixed.** `LayerConnectionViewModelTests.Confidence_defaults_to_1_0_for_non_heuristic_sources` was not discovered by xunit, because its theory took an enum-typed `InlineData` parameter, which this repo's xunit setup silently drops. It now takes the enum's name as a string; the C# total rose from 152 to 155 on each target framework.
 - **Check test totals when adding tests.** The same trap hid a whole Phase 3 test class until the total was checked. Whoever adds a theory should confirm the count goes up.
 
 ### Phase 3 small issues (all fail safe)

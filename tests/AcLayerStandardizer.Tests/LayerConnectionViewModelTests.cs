@@ -10,11 +10,14 @@ public class LayerConnectionViewModelTests
         new(name, isSource, new Point(0, 0));
 
     [Theory]
-    [InlineData(ConnectionMatchSource.ExactName)]
-    [InlineData(ConnectionMatchSource.Memory)]
-    [InlineData(ConnectionMatchSource.Manual)]
-    public void Confidence_defaults_to_1_0_for_non_heuristic_sources(ConnectionMatchSource matchSource)
+    // The enum is passed by name: xunit silently drops a theory whose InlineData
+    // parameter is an enum from another assembly (see docs/plan-1.3.md, Post-1.3 list).
+    [InlineData("ExactName")]
+    [InlineData("Memory")]
+    [InlineData("Manual")]
+    public void Confidence_defaults_to_1_0_for_non_heuristic_sources(string matchSourceName)
     {
+        var matchSource = (ConnectionMatchSource)Enum.Parse(typeof(ConnectionMatchSource), matchSourceName);
         var conn = new LayerConnectionViewModel(MakeNode("A", true), MakeNode("B", false), matchSource);
         Assert.Equal(1.0, conn.Confidence);
     }
