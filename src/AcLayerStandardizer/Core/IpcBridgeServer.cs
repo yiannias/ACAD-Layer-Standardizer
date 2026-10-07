@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Autodesk.AutoCAD.ApplicationServices;
 using AcLayerStandardizer.Commands;
-using AcLayerStandardizer.Data;
 
 namespace AcLayerStandardizer.Core;
 
@@ -23,22 +22,16 @@ public static class IpcBridgeServer
     private static readonly object LogLock = new();
     private static DrawingSnapshot? _drawingSnapshot;
 
-    private sealed record TargetFilterSnapshot(string Name, string SortGroup, string[] Layers);
     private sealed record DrawingSnapshot(
         Document Document,
         string DrawingId,
         string DrawingName,
-        double HeuristicThreshold,
         string TemplateName,
         string TemplatePath,
         string[] SourceLayers,
         string[] StandardLayers,
         string[] EmptyLayers,
-        IReadOnlyDictionary<string, LayerProperties> StandardLayerProperties,
-        Dictionary<string, string> MemoryMappings,
-        string MemoryFilePath,
-        TargetFilterSnapshot[] TargetFilters,
-        string[] AlwaysHiddenTargets);
+        IReadOnlyDictionary<string, LayerProperties> StandardLayerProperties);
 
     public static bool IsRunning => _serverTask is not null && !_serverTask.IsCompleted;
 
@@ -52,35 +45,24 @@ public static class IpcBridgeServer
 
     // Called from an AutoCAD command while its document context is valid. The
     // pipe worker serves this immutable snapshot and never touches AutoCAD APIs.
+    // The standard's layers start empty: the window fetches them with
+    // GetStandardLayers, which fills them in.
     public static void SetDrawingSnapshot(
         Document document,
-        string drawingName,
-        double heuristicThreshold,
         IEnumerable<string> sourceLayers,
-        IEnumerable<string> standardLayers,
         IEnumerable<string> emptyLayers,
-        IReadOnlyDictionary<string, LayerProperties> standardLayerProperties,
-        IReadOnlyDictionary<string, string> memoryMappings,
-        string memoryFilePath,
-        IEnumerable<(string Name, string SortGroup, IEnumerable<string> Layers)> targetFilters,
-        string templatePath,
-        IEnumerable<string> alwaysHiddenTargets)
+        string templatePath)
     {
         var snapshot = new DrawingSnapshot(
             document,
             ActiveDrawingTracker.GetDrawingId(document),
-            drawingName,
-            heuristicThreshold,
+            Path.GetFileName(document.Name),
             string.IsNullOrEmpty(templatePath) ? "" : Path.GetFileName(templatePath),
             templatePath,
             sourceLayers.ToArray(),
-            standardLayers.ToArray(),
+            Array.Empty<string>(),
             emptyLayers.ToArray(),
-            standardLayerProperties,
-            memoryMappings.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase),
-            memoryFilePath,
-            targetFilters.Select(filter => new TargetFilterSnapshot(filter.Name, filter.SortGroup, filter.Layers.ToArray())).ToArray(),
-            alwaysHiddenTargets.ToArray());
+            new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase));
         lock (SnapshotLock) _drawingSnapshot = snapshot;
         Log($"Snapshot stored: sources={snapshot.SourceLayers.Length}; standards={snapshot.StandardLayers.Length}.");
     }
@@ -299,10 +281,6 @@ public static class IpcBridgeServer
                     if (CheckProtocolVersion(root) is { } versionErrorPurgeEmptyLayers) return versionErrorPurgeEmptyLayers;
                     return await PurgeEmptyLayersAsync(root).ConfigureAwait(false);
 
-                case "LoadStandard":
-                    if (CheckProtocolVersion(root) is { } versionErrorLoadStandard) return versionErrorLoadStandard;
-                    return await LoadStandardAsync(root).ConfigureAwait(false);
-
                 default:
                     return JsonSerializer.Serialize(new { type = "Error", payload = $"Unknown request type: {msgType}" });
             }
@@ -322,8 +300,8 @@ public static class IpcBridgeServer
     }
 
     // Reads the standard (template) layer names for the Rust window and caches the
-    // layers' properties in the snapshot for Apply. Unlike LoadStandard it neither
-    // writes config nor touches memory/categories: the Rust app owns those.
+    // layers' properties in the snapshot for Apply. It neither writes config nor
+    // touches memory/categories: the Rust app owns those.
     private static async Task<string> GetStandardLayersAsync(string path)
     {
         var current = GetDrawingSnapshot();
@@ -502,60 +480,6 @@ public static class IpcBridgeServer
             return Task.CompletedTask;
         }, null);
 
-    private static async Task<string> LoadStandardAsync(JsonElement root)
-    {
-        var payload = root.GetProperty("payload");
-        var version = payload.GetProperty("protocol_version").GetInt32();
-        if (!IpcProtocol.IsSupportedVersion(version)) return Error($"Unsupported standard-load protocol version {version}.");
-        var path = payload.GetProperty("path").GetString() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return Error("The selected standard file could not be found.");
-        var current = GetDrawingSnapshot();
-        if (current is null) return Error(NoDrawingReadMessage);
-
-        var completion = new TaskCompletionSource<DrawingSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
-        try
-        {
-            await Application.DocumentManager.ExecuteInCommandContextAsync(_ =>
-            {
-                try
-                {
-                    if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, current.Document))
-                        throw new InvalidOperationException(NoLongerActiveMessage(current.DrawingName));
-
-                    var properties = SideDatabase.LoadStandardLayers(path);
-                    var names = properties.Keys.OrderBy(n => n == "0" ? 0 : 1)
-                        .ThenBy(n => n, NaturalSortComparer.Instance).ToArray();
-                    var categorized = LayerCategorizer.Classify(names, LayerDictionaryDefinition.Load());
-                    var filters = categorized.VisibleCategories.Select(category => new TargetFilterSnapshot(
-                        category,
-                        categorized.SortGroupByTag.GetValueOrDefault(category, "Specific"),
-                        categorized.LayerTags.Where(pair => pair.Value.Contains(category)).Select(pair => pair.Key).ToArray())).ToArray();
-                    var config = PluginConfig.Load();
-                    config.TemplateDwgPath = path;
-                    config.Save();
-                    var updated = current with
-                    {
-                        TemplateName = Path.GetFileName(path),
-                        TemplatePath = path,
-                        StandardLayers = names,
-                        StandardLayerProperties = properties,
-                        MemoryMappings = new MemoryStore(current.MemoryFilePath).Load().Mappings,
-                        TargetFilters = filters,
-                        AlwaysHiddenTargets = categorized.AlwaysHidden.ToArray()
-                    };
-                    lock (SnapshotLock) _drawingSnapshot = updated;
-                    current.Document.Editor.WriteMessage($"\nStandard loaded: {Path.GetFileName(path)} ({names.Length} layers).");
-                    completion.TrySetResult(updated);
-                }
-                catch (Exception ex) { completion.TrySetException(ex); }
-                return Task.CompletedTask;
-            }, null);
-            var updated = await completion.Task.ConfigureAwait(false);
-            return SerializeSnapshot("TemplateLoaded", updated);
-        }
-        catch (Exception ex) { return Error($"Could not load the standard file: {ex.GetBaseException().Message}"); }
-    }
-
     private static string SerializeSnapshot(string type, DrawingSnapshot snapshot) => JsonSerializer.Serialize(new
     {
         type,
@@ -563,20 +487,17 @@ public static class IpcBridgeServer
         {
             drawing_id = snapshot.DrawingId,
             drawing_name = snapshot.DrawingName,
-            heuristic_threshold = snapshot.HeuristicThreshold,
             template_name = snapshot.TemplateName,
             template_path = snapshot.TemplatePath,
             source_layers = snapshot.SourceLayers,
             standard_layers = snapshot.StandardLayers,
             empty_layers = snapshot.EmptyLayers,
-            memory_mappings = snapshot.MemoryMappings,
-            always_hidden_targets = snapshot.AlwaysHiddenTargets,
-            target_filters = snapshot.TargetFilters.Select(filter => new
-            {
-                name = filter.Name,
-                sort_group = filter.SortGroup,
-                layers = filter.Layers
-            }).ToArray()
+            // Legacy fields the Rust window still requires (or tolerates) in the
+            // snapshot; it computes memory, categories and matching itself.
+            heuristic_threshold = 0.6,
+            memory_mappings = new Dictionary<string, string>(),
+            always_hidden_targets = Array.Empty<string>(),
+            target_filters = Array.Empty<object>()
         }
     });
 
@@ -614,7 +535,9 @@ public static class IpcBridgeServer
         if (mappings.Count == 0)
             return Error("There are no mappings to apply.");
 
-        var remember = payload.GetProperty("remember").GetBoolean();
+        // Still required so older clients' requests stay valid, but ignored: the
+        // Rust app owns translation memory, so the connector never writes it.
+        _ = payload.GetProperty("remember").GetBoolean();
         var settings = payload.GetProperty("properties");
         var propertySettings = new PropertyMatchSettings(
             settings.GetProperty("match_color").GetBoolean(),
@@ -624,8 +547,6 @@ public static class IpcBridgeServer
 
         var completion = new TaskCompletionSource<LayerApplier.ApplyMappingsResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
-        string? memoryWarning = null;
-        var remembered = false;
         try
         {
             await Application.DocumentManager.ExecuteInCommandContextAsync(_ =>
@@ -644,23 +565,8 @@ public static class IpcBridgeServer
                             snapshot.Document.Database, mappings,
                             snapshot.StandardLayerProperties, propertySettings);
 
-                        if (remember)
-                        {
-                            try
-                            {
-                                SaveRememberedMappings(snapshot, mappings);
-                                remembered = true;
-                            }
-                            catch (Exception ex)
-                            {
-                                memoryWarning = ex.GetBaseException().Message;
-                            }
-                        }
-
                         snapshot.Document.Editor.WriteMessage(
                             $"\nRust mappings applied: {result.Renamed} renamed/merged, {result.Synced} layer properties synced.");
-                        if (memoryWarning is not null)
-                            snapshot.Document.Editor.WriteMessage($"\nTranslation memory was not saved: {memoryWarning}");
                         completion.TrySetResult(result);
                     }
                 }
@@ -680,8 +586,8 @@ public static class IpcBridgeServer
                 {
                     protocol_version = version,
                     count = applied.Renamed,
-                    remembered,
-                    warning = memoryWarning
+                    remembered = false,
+                    warning = (string?)null
                 }
             });
         }
@@ -711,20 +617,6 @@ public static class IpcBridgeServer
                     $"{DateTime.UtcNow:O} {message}{Environment.NewLine}");
         }
         catch { }
-    }
-
-    private static void SaveRememberedMappings(DrawingSnapshot snapshot, IReadOnlyDictionary<string, string> mappings)
-    {
-        var store = new MemoryStore(snapshot.MemoryFilePath);
-        var memory = store.Load();
-        foreach (var source in snapshot.SourceLayers)
-        {
-            if (mappings.TryGetValue(source, out var target))
-                memory.Mappings[source] = target;
-            else
-                memory.Mappings.Remove(source);
-        }
-        store.Save(memory);
     }
 
     private static async Task<string> PurgeEmptyLayersAsync(JsonElement root)

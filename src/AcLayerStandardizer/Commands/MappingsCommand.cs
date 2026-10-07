@@ -37,25 +37,16 @@ public static class MappingsCommand
 
         var memPath = config.GetEffectiveMemoryPath();
 
-        // Rust window first: it reads the template, categorizes, and loads memory
-        // itself, so only the active drawing's layers are captured here. The full
-        // load below is for the WPF fallback.
-        var rustAttempted = RustUiLauncher.IsAvailable();
-        if (rustAttempted)
-        {
-            // The window is already open: bring it forward before reading any layers.
-            if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
-            var rustSource = LayerReader.GetActiveLayerNames(doc.Database)
-                .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
-            var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
-                doc, Path.GetFileName(doc.Name), config.HeuristicThreshold, rustSource, Array.Empty<string>(),
-                LayerReader.GetEmptyLayers(doc.Database),
-                new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase),
-                new Dictionary<string, string>(), memPath,
-                Array.Empty<(string Name, string SortGroup, IEnumerable<string> Layers)>(),
-                templatePath, Array.Empty<string>(), out var detail);
-            if (LaunchSucceeded(ed, outcome, detail)) return;
-        }
+        // The Rust window reads the template, categorizes, and loads memory itself,
+        // so only the active drawing's layers are captured here. It is tried once;
+        // the full load below is only for the WPF fallback when it cannot start.
+        // The window is already open: bring it forward before reading any layers.
+        if (RustUiLauncher.TryFocusExistingWindow(doc)) return;
+        var rustSource = LayerReader.GetActiveLayerNames(doc.Database)
+            .OrderBy(n => n, Core.NaturalSortComparer.Instance).ToList();
+        var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
+            doc, rustSource, LayerReader.GetEmptyLayers(doc.Database), templatePath, out var detail);
+        if (LaunchSucceeded(ed, outcome, detail)) return;
 
         IReadOnlyDictionary<string, LayerProperties> standardLayers =
             new Dictionary<string, LayerProperties>(StringComparer.OrdinalIgnoreCase);
@@ -97,28 +88,6 @@ public static class MappingsCommand
             .ToList();
 
         var emptyLayers = LayerReader.GetEmptyLayers(doc.Database);
-
-        var categorized = LayerCategorizer.Classify(sortedStandard, LayerDictionaryDefinition.Load());
-        var targetFilters = categorized.VisibleCategories.Select(category => (
-            Name: category,
-            SortGroup: categorized.SortGroupByTag.GetValueOrDefault(category, "Specific"),
-            Layers: (IEnumerable<string>)categorized.LayerTags
-                .Where(pair => pair.Value.Contains(category))
-                .Select(pair => pair.Key)
-                .ToArray()));
-
-        // Capture drawing data in this AutoCAD command context. The IPC worker
-        // only serves this snapshot and never accesses the drawing database.
-        // A Rust launch that already failed above is not retried (it would only fail,
-        // and print its error, a second time); go straight to the WPF fallback.
-        if (!rustAttempted)
-        {
-            var outcome = RustUiLauncher.TryLaunchFromActiveAutoCad(
-                doc, Path.GetFileName(doc.Name), configThreshold, sortedSource, sortedStandard,
-                emptyLayers, standardLayers, memory.Mappings, store.FilePath, targetFilters,
-                templatePath, categorized.AlwaysHidden, out var detail);
-            if (LaunchSucceeded(ed, outcome, detail)) return;
-        }
 
         // Run heuristic matching for all source layers not already in memory
         var heuristicMatcher = new HeuristicMatcher(sortedStandard, configThreshold);

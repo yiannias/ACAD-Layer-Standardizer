@@ -2,16 +2,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
-using AcLayerStandardizer.Data;
 
 namespace AcLayerStandardizer.Core;
 
 internal static class RustUiLauncher
 {
-    // True when the Rust window is installed; callers can then skip work only the
-    // WPF fallback needs (reading the template, categorizing, loading memory).
-    public static bool IsAvailable() => FindUiExecutable() is not null;
-
     // The mapping window this AutoCAD session launched, if any. Only touched from
     // AutoCAD commands (one thread).
     private static Process? _window;
@@ -105,17 +100,9 @@ internal static class RustUiLauncher
     // SetDrawingSnapshot run outside that guard and can still throw, as before.
     public static LaunchOutcome TryLaunchFromActiveAutoCad(
         Document document,
-        string drawingName,
-        double heuristicThreshold,
-        IReadOnlyList<string> sourceLayers,
-        IReadOnlyList<string> standardLayers,
+        IEnumerable<string> sourceLayers,
         IEnumerable<string> emptyLayers,
-        IReadOnlyDictionary<string, LayerProperties> standardLayerProperties,
-        IReadOnlyDictionary<string, string> memoryMappings,
-        string memoryFilePath,
-        IEnumerable<(string Name, string SortGroup, IEnumerable<string> Layers)> targetFilters,
         string templatePath,
-        IEnumerable<string> alwaysHiddenTargets,
         out string? detail)
     {
         detail = null;
@@ -139,9 +126,7 @@ internal static class RustUiLauncher
         // Initialize may have attempted to start the pipe before AutoCAD was
         // ready. Recheck it in the command context before launching the client.
         IpcBridgeServer.Start();
-        IpcBridgeServer.SetDrawingSnapshot(document, drawingName, heuristicThreshold, sourceLayers, standardLayers,
-            emptyLayers, standardLayerProperties, memoryMappings, memoryFilePath, targetFilters, templatePath,
-            alwaysHiddenTargets);
+        IpcBridgeServer.SetDrawingSnapshot(document, sourceLayers, emptyLayers, templatePath);
 
         var owner = Application.MainWindow.Handle;
         if (owner == IntPtr.Zero)
@@ -172,8 +157,6 @@ internal static class RustUiLauncher
     }
 
     // Also describes, in one readable string, where it looked (for the failure message).
-    private static string? FindUiExecutable() => FindUiExecutable(out _);
-
     private static string? FindUiExecutable(out string searched)
     {
         // AutoCAD's AppContext.BaseDirectory points at acad.exe, not the

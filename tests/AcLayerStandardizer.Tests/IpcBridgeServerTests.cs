@@ -353,6 +353,16 @@ public class IpcBridgeServerTests
     }
 
     [Fact]
+    public async Task LoadStandard_is_an_unknown_request()
+    {
+        // The Rust window reads the standard through GetStandardLayers and owns
+        // memory and categories; the connector no longer serves LoadStandard.
+        var response = await SendAsync(new { type = "LoadStandard", payload = new { protocol_version = 4, path = "x" } });
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        Assert.Equal("Unknown request type: LoadStandard", response.GetProperty("payload").GetString());
+    }
+
+    [Fact]
     public async Task An_idle_connection_does_not_block_other_requests()
     {
         IpcBridgeServer.Start();
