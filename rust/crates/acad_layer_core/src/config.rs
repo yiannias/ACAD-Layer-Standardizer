@@ -106,6 +106,16 @@ impl PluginConfig {
             .map_err(|e| ConfigError::Io(e.to_string()))?;
         Ok(config)
     }
+
+    /// Records the chosen memory file. Same contract as `set_template_path`.
+    pub fn set_memory_path(path: &Path, memory: &str) -> Result<PluginConfig, ConfigError> {
+        let mut config = PluginConfig::load_from(path)?;
+        config.memory_file_path = memory.to_string();
+        config
+            .save_to(path)
+            .map_err(|e| ConfigError::Io(e.to_string()))?;
+        Ok(config)
+    }
 }
 
 #[cfg(test)]
@@ -224,5 +234,41 @@ mod tests {
         fs::write(&path, "{ not json").unwrap();
         assert!(PluginConfig::set_template_path(&path, "S.dws").is_err());
         assert_eq!(fs::read_to_string(&path).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn setting_the_memory_path_keeps_other_settings() {
+        let dir = temp_dir("config_memory_update");
+        let path = dir.join("config.json");
+        fs::write(
+            &path,
+            r#"{"MemoryFilePath":"","HeuristicThreshold":0.9,"InstallRibbon":false,"Extra":1}"#,
+        )
+        .unwrap();
+        let saved = PluginConfig::set_memory_path(&path, "D:/shared/mem.json").unwrap();
+        assert_eq!(saved.memory_file_path, "D:/shared/mem.json");
+        let reloaded = PluginConfig::load_from(&path).unwrap();
+        assert_eq!(reloaded.memory_file_path, "D:/shared/mem.json");
+        assert_eq!(reloaded.heuristic_threshold, 0.9);
+        assert!(!reloaded.install_ribbon);
+        assert!(fs::read_to_string(&path).unwrap().contains("\"Extra\": 1"));
+    }
+
+    #[test]
+    fn setting_the_memory_path_never_overwrites_a_corrupt_config() {
+        let dir = temp_dir("config_memory_corrupt");
+        let path = dir.join("config.json");
+        fs::write(&path, "{ not json").unwrap();
+        assert!(PluginConfig::set_memory_path(&path, "m.json").is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "{ not json");
+    }
+
+    #[test]
+    fn setting_the_memory_path_creates_the_config_when_missing() {
+        let dir = temp_dir("config_memory_missing");
+        let path = dir.join("config.json");
+        let saved = PluginConfig::set_memory_path(&path, "m.json").unwrap();
+        assert_eq!(saved.memory_file_path, "m.json");
+        assert_eq!(PluginConfig::load_from(&path).unwrap().memory_file_path, "m.json");
     }
 }
