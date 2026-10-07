@@ -64,7 +64,10 @@ pub fn dialog_text(
     text
 }
 
-/// `dialog_text`, plus a note when Apply is not offered.
+/// The full dialog message. `others` are all other drawings with unapplied
+/// connections; the close itself puts only `others_at_risk` in danger, but Apply on
+/// a blocked close or quit also closes this window, losing every other drawing's
+/// connections, so that is said too. A note follows when Apply is not offered.
 pub fn dialog_message(
     reason: &CloseReason,
     drawing_name: &str,
@@ -72,7 +75,20 @@ pub fn dialog_message(
     others: &[(String, usize)],
     apply_offered: bool,
 ) -> String {
-    let mut text = dialog_text(reason, drawing_name, count, others);
+    let at_risk = others_at_risk(reason, others.to_vec());
+    let mut text = dialog_text(reason, drawing_name, count, &at_risk);
+    if apply_offered && *reason != CloseReason::WindowClose {
+        if at_risk.is_empty() && !others.is_empty() {
+            text.push_str(
+                "\n\nApply also closes this window, so these drawings would lose their unapplied connections:",
+            );
+            for (name, count) in others {
+                text.push_str(&format!("\n• {name} ({})", connections(*count)));
+            }
+        } else {
+            text.push_str("\n\nApply also closes this window.");
+        }
+    }
     if !apply_offered && count > 0 {
         text.push_str(
             "\n\nApply is not available because this window is not showing that drawing.",
@@ -263,7 +279,47 @@ mod tests {
         assert!(with.starts_with(&dialog_text(&reason, "Baths.dwg", 2, &[])));
         assert!(with.contains("Apply is not available"), "{with}");
         let without = dialog_message(&reason, "Baths.dwg", 2, &[], true);
-        assert_eq!(without, dialog_text(&reason, "Baths.dwg", 2, &[]));
+        assert!(!without.contains("Apply is not available"), "{without}");
+    }
+
+    #[test]
+    fn apply_on_a_drawing_close_says_it_closes_this_window_and_lists_the_others() {
+        let reason = CloseReason::DrawingClose("d1".into());
+        let list = others(&[("Abe.dwg", 1), ("Zed.dwg", 3)]);
+        let text = dialog_message(&reason, "Beds.dwg", 2, &list, true);
+        assert!(
+            text.starts_with(&dialog_text(&reason, "Beds.dwg", 2, &[])),
+            "{text}"
+        );
+        assert!(text.contains("Apply also closes this window"), "{text}");
+        assert!(text.contains("Abe.dwg (1 unapplied connection)"), "{text}");
+        assert!(text.contains("Zed.dwg (3 unapplied connections)"), "{text}");
+        // Discard only: the window stays open, so the others are not at risk.
+        let text = dialog_message(&reason, "Beds.dwg", 2, &list, false);
+        assert!(!text.contains("closes this window"), "{text}");
+        assert!(!text.contains("Abe.dwg"), "{text}");
+        // Apply with no other drawings pending still says the window closes.
+        let text = dialog_message(&reason, "Beds.dwg", 2, &[], true);
+        assert!(text.contains("Apply also closes this window."), "{text}");
+        assert!(!text.contains("would lose"), "{text}");
+    }
+
+    #[test]
+    fn apply_on_a_quit_says_it_closes_this_window_and_lists_the_others_once() {
+        let list = others(&[("Abe.dwg", 1)]);
+        let text = dialog_message(&CloseReason::Quit, "Beds.dwg", 2, &list, true);
+        assert!(text.contains("Apply also closes this window."), "{text}");
+        assert_eq!(text.matches("Abe.dwg").count(), 1, "{text}");
+    }
+
+    #[test]
+    fn apply_on_a_window_close_does_not_repeat_that_the_window_closes() {
+        let list = others(&[("Abe.dwg", 1)]);
+        let text = dialog_message(&CloseReason::WindowClose, "Beds.dwg", 2, &list, true);
+        assert_eq!(
+            text,
+            dialog_text(&CloseReason::WindowClose, "Beds.dwg", 2, &list)
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@ use crate::{poll_events, FeedEvent, IpcResponse, PendingEntry};
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        mpsc, Arc, Mutex,
     },
     thread,
     time::Duration,
@@ -66,6 +66,8 @@ pub fn step(state: &mut FeedState, outcome: Result<IpcResponse, String>) -> Vec<
 pub struct FeedHandle {
     stop: Arc<AtomicBool>,
     paused: Arc<AtomicBool>,
+    /// Closed (sender dropped) when the feed thread has finished, last poll included.
+    done: Option<mpsc::Receiver<()>>,
 }
 
 impl FeedHandle {
@@ -76,6 +78,84 @@ impl FeedHandle {
     pub fn set_paused(&self, paused: bool) {
         self.paused.store(paused, Ordering::SeqCst);
     }
+
+    /// Stops the feed and waits at most `cap` for its last (empty) report to go
+    /// out. Returns whether the thread finished in time.
+    pub fn stop_and_wait(&mut self, cap: Duration) -> bool {
+        self.stop();
+        match self.done.take() {
+            Some(done) => matches!(
+                done.recv_timeout(cap),
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected)
+            ),
+            None => true,
+        }
+    }
+}
+
+/// The poll loop (about one poll per second) until `stop` is set. Then the window
+/// is going away and nothing it holds can be applied any more, so the shared
+/// report is cleared and, unless AutoCAD is already unreachable, one last poll
+/// tells the connector that nothing is pending: a drawing close right after the
+/// window is gone is then not refused on the strength of a stale report.
+fn run_feed<P, F>(
+    pending: &Mutex<Vec<PendingEntry>>,
+    stop: &AtomicBool,
+    paused: &AtomicBool,
+    mut poll: P,
+    deliver: F,
+) where
+    P: FnMut(Option<u64>, Vec<PendingEntry>) -> Result<IpcResponse, String>,
+    F: Fn(FeedMessage),
+{
+    let mut state = FeedState::default();
+    while !stop.load(Ordering::SeqCst) {
+        if !paused.load(Ordering::SeqCst) {
+            let snapshot = pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .clone();
+            let outcome = poll(state.since, snapshot);
+            for message in step(&mut state, outcome) {
+                deliver(message);
+            }
+        }
+        // Sleep ~1 second in short slices so stop() takes effect promptly.
+        for _ in 0..20 {
+            if stop.load(Ordering::SeqCst) {
+                break;
+            }
+            thread::sleep(Duration::from_millis(50));
+        }
+    }
+    pending
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clear();
+    if state.connected {
+        let _ = poll(state.since, Vec::new());
+    }
+}
+
+/// `spawn_feed` with the poll function injected (tests).
+fn spawn_feed_with<P, F>(pending: Arc<Mutex<Vec<PendingEntry>>>, poll: P, deliver: F) -> FeedHandle
+where
+    P: FnMut(Option<u64>, Vec<PendingEntry>) -> Result<IpcResponse, String> + Send + 'static,
+    F: Fn(FeedMessage) + Send + 'static,
+{
+    let stop = Arc::new(AtomicBool::new(false));
+    let paused = Arc::new(AtomicBool::new(false));
+    let (done_tx, done) = mpsc::channel();
+    let handle = FeedHandle {
+        stop: stop.clone(),
+        paused: paused.clone(),
+        done: Some(done),
+    };
+    thread::spawn(move || {
+        run_feed(&pending, &stop, &paused, poll, deliver);
+        let _ = done_tx.send(());
+    });
+    handle
 }
 
 /// Starts the background poll loop (about one poll per second).
@@ -83,35 +163,7 @@ pub fn spawn_feed<F: Fn(FeedMessage) + Send + 'static>(
     pending: Arc<Mutex<Vec<PendingEntry>>>,
     deliver: F,
 ) -> FeedHandle {
-    let stop = Arc::new(AtomicBool::new(false));
-    let paused = Arc::new(AtomicBool::new(false));
-    let handle = FeedHandle {
-        stop: stop.clone(),
-        paused: paused.clone(),
-    };
-    thread::spawn(move || {
-        let mut state = FeedState::default();
-        while !stop.load(Ordering::SeqCst) {
-            if !paused.load(Ordering::SeqCst) {
-                let snapshot = pending
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner())
-                    .clone();
-                let outcome = poll_events(state.since, snapshot);
-                for message in step(&mut state, outcome) {
-                    deliver(message);
-                }
-            }
-            // Sleep ~1 second in short slices so stop() takes effect promptly.
-            for _ in 0..20 {
-                if stop.load(Ordering::SeqCst) {
-                    break;
-                }
-                thread::sleep(Duration::from_millis(50));
-            }
-        }
-    });
-    handle
+    spawn_feed_with(pending, poll_events, deliver)
 }
 
 #[cfg(test)]
@@ -130,6 +182,97 @@ mod tests {
                 })
                 .collect(),
         })
+    }
+
+    fn entry(id: &str, count: usize) -> PendingEntry {
+        PendingEntry {
+            drawing_id: id.into(),
+            count,
+        }
+    }
+
+    #[test]
+    fn stopping_clears_the_report_and_sends_one_last_empty_poll() {
+        let pending = Mutex::new(vec![entry("A", 2)]);
+        let stop = Arc::new(AtomicBool::new(false));
+        let paused = AtomicBool::new(false);
+        let mut calls: Vec<(Option<u64>, Vec<(String, usize)>)> = Vec::new();
+        let stopper = stop.clone();
+        run_feed(
+            &pending,
+            &stop,
+            &paused,
+            |since, report| {
+                calls.push((
+                    since,
+                    report
+                        .into_iter()
+                        .map(|e| (e.drawing_id, e.count))
+                        .collect(),
+                ));
+                stopper.store(true, Ordering::SeqCst);
+                events(4, false, 0)
+            },
+            |_| {},
+        );
+        assert_eq!(
+            calls,
+            vec![(None, vec![("A".to_string(), 2)]), (Some(4), Vec::new()),]
+        );
+        assert!(pending.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_disconnected_feed_stops_without_a_last_poll() {
+        let pending = Mutex::new(vec![entry("A", 2)]);
+        let stop = Arc::new(AtomicBool::new(false));
+        let paused = AtomicBool::new(false);
+        let mut calls = 0;
+        let stopper = stop.clone();
+        run_feed(
+            &pending,
+            &stop,
+            &paused,
+            |_, _| {
+                calls += 1;
+                stopper.store(true, Ordering::SeqCst);
+                Err("gone".into())
+            },
+            |_| {},
+        );
+        assert_eq!(calls, 1, "AutoCAD is gone: no last poll");
+        assert!(pending.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn stop_and_wait_gives_up_after_the_cap_when_the_last_poll_hangs() {
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let polls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = polls.clone();
+        let mut handle = spawn_feed_with(
+            pending,
+            move |_, _| {
+                if counter.fetch_add(1, Ordering::SeqCst) > 0 {
+                    thread::sleep(Duration::from_secs(5));
+                }
+                events(1, false, 0)
+            },
+            |_| {},
+        );
+        while polls.load(Ordering::SeqCst) == 0 {
+            thread::sleep(Duration::from_millis(5));
+        }
+        let started = std::time::Instant::now();
+        assert!(!handle.stop_and_wait(Duration::from_millis(100)));
+        assert!(started.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn stop_and_wait_reports_a_finished_last_poll() {
+        let pending = Arc::new(Mutex::new(vec![entry("A", 1)]));
+        let mut handle = spawn_feed_with(pending.clone(), |_, _| events(1, false, 0), |_| {});
+        assert!(handle.stop_and_wait(Duration::from_secs(5)));
+        assert!(pending.lock().unwrap().is_empty());
     }
 
     #[test]

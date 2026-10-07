@@ -86,6 +86,9 @@ fn read_active_drawing_layers() -> Result<IpcResponse, String> {
     }
 }
 
+/// The longest the window's exit waits for the feed's last report.
+const FEED_EXIT_WAIT: std::time::Duration = std::time::Duration::from_millis(500);
+
 /// Template drawings the user can choose as the standard.
 const STANDARD_FILE_EXTENSIONS: [&str; 3] = ["dwg", "dxf", "dws"];
 
@@ -1035,10 +1038,8 @@ impl LayerStandardizerApp {
             return;
         }
         let (name, count) = self.close_target(&reason);
-        let others = close_dialog::others_at_risk(
-            &reason,
-            self.sessions.others_pending(self.current_drawing()),
-        );
+        // All other pending drawings; `dialog_message` decides which are at risk.
+        let others = self.sessions.others_pending(self.current_drawing());
         let shown = if self.no_drawing || self.reads.switch_pending(&self.drawing_id) {
             ""
         } else {
@@ -1114,8 +1115,16 @@ impl LayerStandardizerApp {
 
 impl Drop for LayerStandardizerApp {
     fn drop(&mut self) {
-        if let Some(feed) = &self.feed {
-            feed.stop();
+        if let Some(feed) = &mut self.feed {
+            if self.connection_lost {
+                // AutoCAD is unreachable: no last report to send, so do not wait.
+                feed.stop();
+            } else {
+                // Let the feed's last, empty report reach the connector, so a drawing
+                // close right after the window is gone is not refused; never hold up
+                // the exit for long.
+                feed.stop_and_wait(FEED_EXIT_WAIT);
+            }
         }
     }
 }
