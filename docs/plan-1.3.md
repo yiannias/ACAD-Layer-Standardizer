@@ -103,3 +103,7 @@ Define the slim IPC surface between the Rust app and the AutoCAD connector.
 1. Should unsaved mappings persist across an AutoCAD restart, or only warn on close?
 2. On a drawing switch with unapplied mappings in the drawing being left: keep silently per-drawing (current proposal), or also show a small indicator on the window?
 3. Poll interval: 1 second is the starting point; is a slower rate acceptable when the window is not focused?
+
+## Wanted, not yet scheduled
+
+- Import and export of the translation memory (and a choose-memory-file picker) from the mapping window with a file browser. Today these are typed commands (`STD_ExportMemory`, `STD_ImportMemory`, `STD_SetMemoryFile`) that prompt for a path at the AutoCAD command line.
