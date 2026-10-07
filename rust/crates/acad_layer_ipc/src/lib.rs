@@ -1,6 +1,9 @@
 use acad_layer_core::{LayerCategorizationResult, MatchResult};
 use serde::{Deserialize, Serialize};
 
+mod feed;
+pub use feed::*;
+
 pub const DEFAULT_PIPE_NAME: &str = "acad_layer_standardizer";
 pub const IPC_PROTOCOL_VERSION: u32 = 4;
 
@@ -93,6 +96,27 @@ pub enum IpcRequest {
         protocol_version: u32,
         path: String,
     },
+    PollEvents {
+        protocol_version: u32,
+        since: Option<u64>,
+        pending: Vec<PendingEntry>,
+    },
+}
+
+/// One entry in the connector's change feed.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeedEvent {
+    pub seq: u64,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub payload: serde_json::Value,
+}
+
+/// Count of unsaved mapping rows the window holds for a drawing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingEntry {
+    pub drawing_id: String,
+    pub count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -134,6 +158,11 @@ pub enum IpcResponse {
         layers: Vec<String>,
     },
     TemplateLoaded(DrawingSnapshot),
+    Events {
+        head: u64,
+        reset: bool,
+        events: Vec<FeedEvent>,
+    },
     Error(String),
 }
 
@@ -195,8 +224,27 @@ pub fn load_standard(path: String) -> Result<IpcResponse, String> {
     })
 }
 
+/// Polls the connector's change feed. Uses 3 connection attempts so a
+/// once-a-second poll fails fast when AutoCAD is gone.
+#[cfg(windows)]
+pub fn poll_events(since: Option<u64>, pending: Vec<PendingEntry>) -> Result<IpcResponse, String> {
+    request_with_attempts(
+        IpcRequest::PollEvents {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            since,
+            pending,
+        },
+        3,
+    )
+}
+
 #[cfg(windows)]
 fn request(request: IpcRequest) -> Result<IpcResponse, String> {
+    request_with_attempts(request, 50)
+}
+
+#[cfg(windows)]
+fn request_with_attempts(request: IpcRequest, attempts: u32) -> Result<IpcResponse, String> {
     use std::{
         fs::OpenOptions,
         io::{BufRead, BufReader, Write},
@@ -224,7 +272,7 @@ fn request(request: IpcRequest) -> Result<IpcResponse, String> {
     let mut last_error = String::from("AutoCAD IPC pipe is not available");
     trace("Snapshot request started.");
 
-    for attempt in 0..50 {
+    for attempt in 0..attempts {
         if attempt == 0 {
             trace("Opening named pipe.");
         }
@@ -261,7 +309,7 @@ fn request(request: IpcRequest) -> Result<IpcResponse, String> {
             }
             Err(error) => {
                 last_error = error.to_string();
-                if attempt == 0 || attempt == 49 {
+                if attempt == 0 || attempt + 1 == attempts {
                     trace(&format!(
                         "Pipe open attempt {} failed: {last_error}",
                         attempt + 1
@@ -312,6 +360,14 @@ pub fn purge_empty_layers(
 
 #[cfg(not(windows))]
 pub fn load_standard(_path: String) -> Result<IpcResponse, String> {
+    Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
+}
+
+#[cfg(not(windows))]
+pub fn poll_events(
+    _since: Option<u64>,
+    _pending: Vec<PendingEntry>,
+) -> Result<IpcResponse, String> {
     Err("AutoCAD named-pipe IPC is available only on Windows".to_string())
 }
 
@@ -378,6 +434,41 @@ mod tests {
         };
         assert!(!request("").contains("drawing_id"));
         assert!(request("doc-2").contains(r#""drawing_id":"doc-2""#));
+    }
+
+    #[test]
+    fn poll_events_request_shape() {
+        let json = serde_json::to_value(&IpcRequest::PollEvents {
+            protocol_version: IPC_PROTOCOL_VERSION,
+            since: Some(3),
+            pending: vec![PendingEntry {
+                drawing_id: "d1".into(),
+                count: 2,
+            }],
+        })
+        .unwrap();
+        assert_eq!(json["type"], "PollEvents");
+        assert_eq!(json["payload"]["since"], 3);
+        assert_eq!(json["payload"]["pending"][0]["drawing_id"], "d1");
+        assert_eq!(json["payload"]["pending"][0]["count"], 2);
+    }
+
+    #[test]
+    fn events_response_deserializes() {
+        let json = r#"{"type":"Events","payload":{"head":4,"reset":false,"events":[{"seq":4,"type":"DrawingActivated","payload":{"drawing_id":"d1"}}]}}"#;
+        let IpcResponse::Events {
+            head,
+            reset,
+            events,
+        } = serde_json::from_str(json).unwrap()
+        else {
+            panic!("expected Events");
+        };
+        assert_eq!(head, 4);
+        assert!(!reset);
+        assert_eq!(events[0].seq, 4);
+        assert_eq!(events[0].kind, "DrawingActivated");
+        assert_eq!(events[0].payload["drawing_id"], "d1");
     }
 
     #[test]
