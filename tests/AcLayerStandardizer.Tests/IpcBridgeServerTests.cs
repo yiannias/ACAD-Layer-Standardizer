@@ -340,6 +340,45 @@ public class IpcBridgeServerTests
     }
 
     [Fact]
+    public async Task Refusals_with_no_drawing_read_say_to_switch_drawings_never_to_run_LSTDR()
+    {
+        // No LSTDR has run in this process, so there is no drawing snapshot. (The
+        // other requests that share this message load AutoCAD before checking, so
+        // only GetDrawingSnapshot can reach it in a test process.)
+        var response = await SendAsync(new { type = "GetDrawingSnapshot" });
+        Assert.Equal("Error", response.GetProperty("type").GetString());
+        var message = response.GetProperty("payload").GetString()!;
+        Assert.DoesNotContain("LSTDR", message);
+        Assert.Contains("Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.", message);
+    }
+
+    [Fact]
+    public async Task An_idle_connection_does_not_block_other_requests()
+    {
+        IpcBridgeServer.Start();
+        // Connection 1 connects and then sends nothing (like a slow request in flight).
+        using var idle = new NamedPipeClientStream(".", IpcBridgeServer.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+        await idle.ConnectAsync(3000);
+
+        var second = Task.Run(async () =>
+        {
+            using var client = new NamedPipeClientStream(".", IpcBridgeServer.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+            await client.ConnectAsync(2000);
+            using var reader = new StreamReader(client, Encoding.UTF8, false, 1024, leaveOpen: true);
+            using var writer = new StreamWriter(client, new UTF8Encoding(false), 1024, leaveOpen: true) { AutoFlush = true };
+            await writer.WriteLineAsync(JsonSerializer.Serialize(new { type = "Ping" }));
+            return await reader.ReadLineAsync();
+        });
+
+        var finished = await Task.WhenAny(second, Task.Delay(5000));
+        Assert.True(finished == second, "the second connection was not served while the first was idle");
+        var response = await second; // throws if it could not connect
+        Assert.NotNull(response);
+        using var doc = JsonDocument.Parse(response!);
+        Assert.Equal("Pong", doc.RootElement.GetProperty("type").GetString());
+    }
+
+    [Fact]
     public async Task ReplayClose_rejects_malformed_payloads_without_dropping_the_connection()
     {
         PendingRegistry.Report(new[] { new PendingDrawing("keep", 2) }, DateTime.UtcNow);

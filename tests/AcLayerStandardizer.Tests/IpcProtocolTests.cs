@@ -76,6 +76,34 @@ public class IpcProtocolTests
     }
 
     [Fact]
+    public void A_wrong_target_says_to_switch_to_the_window_drawing_not_to_restart_the_window()
+    {
+        var message = IpcProtocol.CheckDrawingTarget("doc-1", "A.dwg", "doc-2", "B.dwg")!;
+        Assert.Contains("Switch to B.dwg in AutoCAD and try again.", message);
+        Assert.DoesNotContain("LSTDR", message);
+        Assert.DoesNotContain("Close it", message);
+    }
+
+    [Fact]
+    public void A_wrong_target_without_a_name_points_at_the_drawing_the_window_shows()
+    {
+        var message = IpcProtocol.CheckDrawingTarget("doc-1", "A.dwg", "doc-2", "")!;
+        Assert.Contains("Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.", message);
+    }
+
+    [Fact]
+    public void Switch_and_try_again_names_the_drawing_or_falls_back_to_the_window()
+    {
+        Assert.Equal("Switch to Beds.dwg in AutoCAD and try again.", IpcProtocol.SwitchAndTryAgain("Beds.dwg"));
+        Assert.Equal(
+            "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.",
+            IpcProtocol.SwitchAndTryAgain(null));
+        Assert.Equal(
+            "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.",
+            IpcProtocol.SwitchAndTryAgain("  "));
+    }
+
+    [Fact]
     public void Active_drawing_response_shapes()
     {
         var state = new ActiveDrawingState("doc-1", "A.dwg", "ab12", 3);

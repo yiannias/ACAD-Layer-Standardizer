@@ -42,6 +42,14 @@ public static class IpcBridgeServer
 
     public static bool IsRunning => _serverTask is not null && !_serverTask.IsCompleted;
 
+    // Refusal wording for the open window: switch drawings in AutoCAD, never
+    // "run LSTDR again" (that only brings the same window forward).
+    private static readonly string NoDrawingReadMessage =
+        "No drawing has been read yet. " + IpcProtocol.SwitchAndTryAgain(null);
+
+    private static string NoLongerActiveMessage(string drawingName) =>
+        "The drawing is no longer active in AutoCAD. " + IpcProtocol.SwitchAndTryAgain(drawingName);
+
     // Called from an AutoCAD command while its document context is valid. The
     // pipe worker serves this immutable snapshot and never touches AutoCAD APIs.
     public static void SetDrawingSnapshot(
@@ -99,17 +107,22 @@ public static class IpcBridgeServer
         _serverTask = null;
     }
 
+    // Accepts connections and hands each one to its own task, then immediately
+    // listens again: a slow request (reading a large drawing's layers) must not
+    // make the window's once-a-second poll fail with "pipe busy". Only the pipe
+    // handling is concurrent; AutoCAD work still runs in the command context.
     private static async Task ServerLoop(CancellationToken ct)
     {
         // The Rust window polls once a second on a fresh connection each time;
         // none of that traffic is logged, or the log would drown everything else.
-        var previousWasPoll = false;
+        var logListening = true;
         while (!ct.IsCancellationRequested)
         {
+            NamedPipeServerStream? pipe = null;
             try
             {
 #pragma warning disable CA1416 // Validate platform compatibility (Windows only plugin)
-                using var pipe = new NamedPipeServerStream(
+                pipe = new NamedPipeServerStream(
                     PipeName,
                     PipeDirection.InOut,
                     NamedPipeServerStream.MaxAllowedServerInstances,
@@ -117,48 +130,75 @@ public static class IpcBridgeServer
                     PipeOptions.Asynchronous,
                     4096,
                     4096);
-
-                if (!previousWasPoll) Log("Pipe listening.");
-                await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
-                previousWasPoll = false;
-                var clientLogged = false;
-
-                using var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, leaveOpen: true);
-                // Do not emit a UTF-8 BOM on the pipe. The Rust client expects
-                // each response line to begin directly with JSON, and the
-                // preamble can also block before the server starts reading.
-                using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 4096, leaveOpen: true) { AutoFlush = true };
-
-                while (pipe.IsConnected && !ct.IsCancellationRequested)
-                {
-                    string? line = await reader.ReadLineAsync().ConfigureAwait(false);
-                    if (string.IsNullOrEmpty(line)) break;
-
-                    var requestType = GetMessageType(line);
-                    var isPoll = requestType == "PollEvents";
-                    previousWasPoll = isPoll;
-                    if (!isPoll)
-                    {
-                        if (!clientLogged) { Log("Client connected."); clientLogged = true; }
-                        Log($"Request received: {requestType}.");
-                    }
-                    string responseJson = await HandleMessageAsync(line).ConfigureAwait(false);
-                    await writer.WriteLineAsync(responseJson).ConfigureAwait(false);
-                    if (!isPoll) Log($"Response sent: {GetMessageType(responseJson)}.");
-                }
 #pragma warning restore CA1416
+
+                if (logListening) { Log("Pipe listening."); logListening = false; }
+                await pipe.WaitForConnectionAsync(ct).ConfigureAwait(false);
+                var connected = pipe;
+                pipe = null; // owned by the connection task from here on
+                _ = Task.Run(() => ServeConnectionAsync(connected, ct));
             }
             catch (OperationCanceledException)
             {
+                pipe?.Dispose();
                 break;
             }
             catch (Exception ex)
             {
+                pipe?.Dispose();
                 Log($"Server error: {ex.GetType().Name}: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Layer Standardizer IPC pipe error: {ex}");
+                logListening = true;
                 // Delay slightly before retrying loop on pipe error
                 try { await Task.Delay(500, ct).ConfigureAwait(false); } catch { break; }
             }
+        }
+    }
+
+    // Serves one client until it disconnects. Never throws: one connection's
+    // failure must not affect the others or the accept loop.
+    private static async Task ServeConnectionAsync(NamedPipeServerStream pipe, CancellationToken ct)
+    {
+        // Stop() cancels the token; disposing the pipe ends a pending read.
+        using var stopRegistration = ct.Register(() => { try { pipe.Dispose(); } catch { } });
+        try
+        {
+            var clientLogged = false;
+            using var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, leaveOpen: true);
+            // Do not emit a UTF-8 BOM on the pipe. The Rust client expects
+            // each response line to begin directly with JSON, and the
+            // preamble can also block before the server starts reading.
+            using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 4096, leaveOpen: true) { AutoFlush = true };
+
+            while (pipe.IsConnected && !ct.IsCancellationRequested)
+            {
+                string? line = await reader.ReadLineAsync().ConfigureAwait(false);
+                if (string.IsNullOrEmpty(line)) break;
+
+                var requestType = GetMessageType(line);
+                var isPoll = requestType == "PollEvents";
+                if (!isPoll)
+                {
+                    if (!clientLogged) { Log("Client connected."); clientLogged = true; }
+                    Log($"Request received: {requestType}.");
+                }
+                string responseJson = await HandleMessageAsync(line).ConfigureAwait(false);
+                await writer.WriteLineAsync(responseJson).ConfigureAwait(false);
+                if (!isPoll) Log($"Response sent: {GetMessageType(responseJson)}.");
+            }
+        }
+        catch (Exception ex) when (ct.IsCancellationRequested && ex is ObjectDisposedException or OperationCanceledException or IOException)
+        {
+            // Stopped while this client was connected.
+        }
+        catch (Exception ex)
+        {
+            Log($"Connection error: {ex.GetType().Name}: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Layer Standardizer IPC connection error: {ex}");
+        }
+        finally
+        {
+            try { pipe.Dispose(); } catch { }
         }
     }
 
@@ -241,7 +281,7 @@ public static class IpcBridgeServer
                 case "GetDrawingSnapshot":
                     var snapshot = GetDrawingSnapshot();
                     if (snapshot is null)
-                        return JsonSerializer.Serialize(new { type = "Error", payload = "No drawing snapshot is available. Run LSTDR from an active drawing." });
+                        return JsonSerializer.Serialize(new { type = "Error", payload = NoDrawingReadMessage });
                     return SerializeSnapshot("DrawingSnapshot", snapshot);
 
                 case "GetStandardLayers":
@@ -287,7 +327,7 @@ public static class IpcBridgeServer
     private static async Task<string> GetStandardLayersAsync(string path)
     {
         var current = GetDrawingSnapshot();
-        if (current is null) return Error("No active drawing snapshot is available. Run LSTDR again.");
+        if (current is null) return Error(NoDrawingReadMessage);
 
         var completion = new TaskCompletionSource<DrawingSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         try
@@ -297,7 +337,7 @@ public static class IpcBridgeServer
                 try
                 {
                     if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, current.Document))
-                        throw new InvalidOperationException("The source drawing is no longer active. Run LSTDR again in that drawing.");
+                        throw new InvalidOperationException(NoLongerActiveMessage(current.DrawingName));
 
                     var properties = SideDatabase.LoadStandardLayers(path);
                     var names = properties.Keys.OrderBy(n => n == "0" ? 0 : 1)
@@ -314,7 +354,7 @@ public static class IpcBridgeServer
                     lock (SnapshotLock)
                     {
                         if (!ReferenceEquals(_drawingSnapshot, current))
-                            throw new InvalidOperationException("The drawing window was replaced while the standard was loading. Run LSTDR again.");
+                            throw new InvalidOperationException("The drawing changed while the standard was loading. " + IpcProtocol.SwitchAndTryAgain(null));
                         _drawingSnapshot = updated;
                     }
                     current.Document.Editor.WriteMessage($"\nStandard loaded: {Path.GetFileName(path)} ({names.Length} layers).");
@@ -379,7 +419,7 @@ public static class IpcBridgeServer
                 var document = ActiveDrawingTracker.TryFindDocument(drawingId);
                 if (document is null) throw new DrawingClosedException();
                 if (current is null)
-                    throw new InvalidOperationException("No active drawing snapshot is available. Run LSTDR again.");
+                    throw new InvalidOperationException(NoDrawingReadMessage);
 
                 var source = MappingsCommand.GetActiveLayerNames(document.Database)
                     .OrderBy(n => n, NaturalSortComparer.Instance).ToArray();
@@ -470,7 +510,7 @@ public static class IpcBridgeServer
         var path = payload.GetProperty("path").GetString() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return Error("The selected standard file could not be found.");
         var current = GetDrawingSnapshot();
-        if (current is null) return Error("No active drawing snapshot is available. Run LSTDR again.");
+        if (current is null) return Error(NoDrawingReadMessage);
 
         var completion = new TaskCompletionSource<DrawingSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
         try
@@ -480,7 +520,7 @@ public static class IpcBridgeServer
                 try
                 {
                     if (!ReferenceEquals(Application.DocumentManager.MdiActiveDocument, current.Document))
-                        throw new InvalidOperationException("The source drawing is no longer active. Run LSTDR again in that drawing.");
+                        throw new InvalidOperationException(NoLongerActiveMessage(current.DrawingName));
 
                     var properties = SideDatabase.LoadStandardLayers(path);
                     var names = properties.Keys.OrderBy(n => n == "0" ? 0 : 1)
@@ -549,7 +589,7 @@ public static class IpcBridgeServer
 
         var snapshot = GetDrawingSnapshot();
         if (snapshot is null)
-            return Error("No drawing snapshot is available. Run LSTDR from an active drawing.");
+            return Error(NoDrawingReadMessage);
 
         var drawingName = payload.GetProperty("drawing_name").GetString() ?? string.Empty;
         var requestDrawingId = payload.TryGetProperty("drawing_id", out var idElement) ? idElement.GetString() : null;
@@ -596,7 +636,7 @@ public static class IpcBridgeServer
                     if (!ReferenceEquals(activeDocument, snapshot.Document))
                     {
                         completion.TrySetException(new InvalidOperationException(
-                            "The source drawing is no longer active. Run LSTDR again in that drawing."));
+                            NoLongerActiveMessage(snapshot.DrawingName)));
                     }
                     else
                     {
@@ -661,7 +701,8 @@ public static class IpcBridgeServer
         catch { return "<invalid-json>"; }
     }
 
-    private static void Log(string message)
+    // Also used by ActiveDrawingTracker, so close-guard failures land in the same log.
+    internal static void Log(string message)
     {
         try
         {
@@ -695,7 +736,7 @@ public static class IpcBridgeServer
 
         var snapshot = GetDrawingSnapshot();
         if (snapshot is null)
-            return Error("No drawing snapshot is available. Run LSTDR from an active drawing.");
+            return Error(NoDrawingReadMessage);
 
         var drawingName = payload.GetProperty("drawing_name").GetString() ?? string.Empty;
         var requestDrawingId = payload.TryGetProperty("drawing_id", out var idElement) ? idElement.GetString() : null;
@@ -725,7 +766,7 @@ public static class IpcBridgeServer
                     if (!ReferenceEquals(activeDocument, snapshot.Document))
                     {
                         completion.TrySetException(new InvalidOperationException(
-                            "The source drawing is no longer active. Run LSTDR again in that drawing."));
+                            NoLongerActiveMessage(snapshot.DrawingName)));
                     }
                     else
                     {

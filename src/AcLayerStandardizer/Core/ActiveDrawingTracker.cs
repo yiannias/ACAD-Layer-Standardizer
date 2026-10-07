@@ -69,13 +69,18 @@ public static class ActiveDrawingTracker
     }
 
     // Feed publishing must never throw into an AutoCAD event handler or stop the
-    // work that follows it.
-    private static void TryPublish(string type, Func<object> payload)
+    // work that follows it. Returns whether the event was published.
+    private static bool TryPublish(string type, Func<object> payload)
     {
-        try { EventFeed.Shared.Publish(type, payload()); }
+        try
+        {
+            EventFeed.Shared.Publish(type, payload());
+            return true;
+        }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not publish {type}: {ex.Message}");
+            IpcBridgeServer.Log($"Could not publish {type}: {ex.GetType().Name}: {ex.Message}");
+            return false;
         }
     }
 
@@ -143,13 +148,17 @@ public static class ActiveDrawingTracker
             var (pending, lastCheckIn) = PendingRegistry.Current;
             if (!CloseGuard.ShouldVeto(pending, lastCheckIn, DateTime.UtcNow, kind == CloseKind.Quit ? null : drawingId)) return;
 
-            e.Veto();
+            // The window must hear about the blocked close, or nothing would ever
+            // ask the user: veto only once CloseBlocked is on the feed.
             var kindName = kind == CloseKind.Quit ? "quit" : "drawing";
-            TryPublish("CloseBlocked", () => new { kind = kindName, drawing_id = drawingId });
+            if (!CloseGuard.BlockClose(
+                    () => TryPublish("CloseBlocked", () => new { kind = kindName, drawing_id = drawingId }),
+                    e.Veto))
+                IpcBridgeServer.Log("Close check: the window could not be told; allowing the close.");
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer close check failed; allowing the close: {ex.Message}");
+            IpcBridgeServer.Log($"Close check failed; allowing the close: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

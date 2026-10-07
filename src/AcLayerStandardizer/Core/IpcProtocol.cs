@@ -20,8 +20,19 @@ public static class IpcProtocol
         var matches = string.IsNullOrEmpty(requestDrawingId)
             ? string.Equals(requestDrawingName, snapshotDrawingName, StringComparison.OrdinalIgnoreCase)
             : string.Equals(requestDrawingId, snapshotDrawingId, StringComparison.Ordinal);
-        return matches ? null : "The mapping window belongs to a different drawing. Close it and run LSTDR again.";
+        return matches
+            ? null
+            : "AutoCAD is working on a different drawing than the Layer Standardizer window. "
+                + SwitchAndTryAgain(requestDrawingName);
     }
+
+    // The way out of a refusal while the mapping window is open: switch AutoCAD to
+    // the drawing the window acts on. Never suggests running LSTDR again (that
+    // would only bring the same window forward).
+    public static string SwitchAndTryAgain(string? drawingName) =>
+        string.IsNullOrWhiteSpace(drawingName)
+            ? "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again."
+            : $"Switch to {drawingName} in AutoCAD and try again.";
 
     // Reads the window's "pending" report from a request payload. Never throws:
     // a missing, null or non-array report is empty, and entries without a

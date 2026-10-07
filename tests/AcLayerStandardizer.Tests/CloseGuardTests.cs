@@ -61,11 +61,51 @@ public class CloseGuardTests
     }
 
     [Fact]
-    public void a_check_in_from_the_future_still_counts_as_fresh()
+    public void a_check_in_slightly_in_the_future_still_counts_as_fresh()
     {
-        // A clock step backwards must not turn a fresh report into "no check-in"
-        // forever; it simply counts as fresh.
+        // A small clock step backwards keeps a just-made report fresh.
         Assert.True(CloseGuard.ShouldVeto(Pending(("d1", 1)), Now + TimeSpan.FromSeconds(2), Now, "d1"));
+        Assert.True(CloseGuard.ShouldVeto(Pending(("d1", 1)), Now + CloseGuard.CheckInFreshness, Now, "d1"));
+    }
+
+    [Fact]
+    public void a_check_in_far_in_the_future_is_stale()
+    {
+        // A big clock step backwards must not keep an old report fresh for as long
+        // as the step: past the freshness window it no longer counts.
+        var farAhead = Now + CloseGuard.CheckInFreshness + TimeSpan.FromMilliseconds(1);
+        Assert.False(CloseGuard.ShouldVeto(Pending(("d1", 1)), farAhead, Now, "d1"));
+        Assert.False(CloseGuard.ShouldVeto(Pending(("d1", 1)), Now + TimeSpan.FromHours(1), Now, null));
+    }
+
+    [Fact]
+    public void blocking_a_close_publishes_first_and_vetoes_only_after_a_successful_publish()
+    {
+        var order = new List<string>();
+        Assert.True(CloseGuard.BlockClose(() => { order.Add("publish"); return true; }, () => order.Add("veto")));
+        Assert.Equal(new[] { "publish", "veto" }, order);
+    }
+
+    [Fact]
+    public void blocking_a_close_allows_it_when_the_publish_fails()
+    {
+        var vetoed = false;
+        Assert.False(CloseGuard.BlockClose(() => false, () => vetoed = true));
+        Assert.False(vetoed);
+    }
+
+    [Fact]
+    public void blocking_a_close_allows_it_and_does_not_throw_when_the_publish_throws()
+    {
+        var vetoed = false;
+        Assert.False(CloseGuard.BlockClose(() => throw new InvalidOperationException("feed broken"), () => vetoed = true));
+        Assert.False(vetoed);
+    }
+
+    [Fact]
+    public void blocking_a_close_does_not_throw_when_the_veto_throws()
+    {
+        Assert.False(CloseGuard.BlockClose(() => true, () => throw new InvalidOperationException("no veto")));
     }
 
     [Fact]

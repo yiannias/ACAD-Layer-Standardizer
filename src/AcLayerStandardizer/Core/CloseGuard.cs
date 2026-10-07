@@ -58,10 +58,30 @@ public static class CloseGuard
     public static bool ShouldVeto(IReadOnlyList<PendingDrawing> pending, DateTime? lastCheckInUtc, DateTime nowUtc, string? drawingId)
     {
         if (pending is null || lastCheckInUtc is not { } checkedIn) return false;
-        // A check-in "from the future" (clock stepped back) counts as fresh.
         if (nowUtc - checkedIn >= CheckInFreshness) return false;
+        // A check-in "from the future" (the clock stepped back) still counts as fresh
+        // when it is only slightly ahead; further ahead it is stale, or a big step
+        // would keep an old report fresh for as long as the step.
+        if (checkedIn - nowUtc > CheckInFreshness) return false;
         return pending.Any(entry => entry is not null
             && entry.Count > 0
             && (drawingId is null || string.Equals(entry.DrawingId, drawingId, StringComparison.Ordinal)));
+    }
+
+    // Tells the window about the blocked close first and cancels the close only
+    // once that worked: a close nobody will ask about must not stay cancelled.
+    // Never throws; returns whether the close was cancelled.
+    public static bool BlockClose(Func<bool> tryPublish, Action veto)
+    {
+        try
+        {
+            if (!tryPublish()) return false;
+            veto();
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 }
