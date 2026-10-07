@@ -34,6 +34,13 @@ const FILTER_FIELD_WIDTH: f32 = 260.0;
 const FILTER_FIELD_HEIGHT: f32 = 28.0;
 const MIN_ZOOM: f32 = 0.03;
 const MIN_LABEL_PX: f32 = 1.0;
+/// Text size of a node label in drawing units. The drawing-name subtitles and the
+/// node-mode filter boxes use the same size, so they always match the nodes.
+const NODE_LABEL_SIZE: f32 = 12.0;
+
+fn node_label_px(zoom: f32) -> f32 {
+    NODE_LABEL_SIZE * zoom
+}
 
 #[derive(Debug, Default)]
 pub struct MappingEditorEvent {
@@ -197,7 +204,7 @@ impl MappingEditor {
                                     RichText::new(if self.column_mode {
                                         "Drag a source layer onto a target layer to pair them. Click a target to highlight its source layers."
                                     } else {
-                                        "Drag from a source → standard layer to map. Click a connection to remove it. Scroll to zoom. Middle-drag to pan."
+                                        "Drag from a source layer to a standard layer to map it. Click a connection to remove it. Scroll to zoom. Middle-drag to pan."
                                     })
                                     .size(12.0)
                                     .color(Color32::from_rgb(170, 170, 170)),
@@ -937,7 +944,7 @@ impl MappingEditor {
                 Pos2::new(header_rect.left() + 14.0, header_rect.top() + 58.0),
                 Vec2::new((header_rect.width() - 28.0).min(300.0), 24.0),
             );
-            filter_field(ui, field, query, hint);
+            filter_field(ui, field, query, hint, 13.0);
         }
 
         self.update_column_scroll(ctx, source_rows_rect, visible_sources.len(), true);
@@ -1583,12 +1590,12 @@ impl MappingEditor {
                 }
                 target_name_clicked = response.clicked();
             }
-            if 11.0 * self.zoom >= MIN_LABEL_PX {
+            if node_label_px(self.zoom) >= MIN_LABEL_PX {
                 painter.text(
                     subtitle_rect.min,
                     Align2::LEFT_TOP,
                     subtitle,
-                    FontId::proportional(11.0 * self.zoom),
+                    FontId::proportional(node_label_px(self.zoom)),
                     subtitle_color,
                 );
             }
@@ -1602,7 +1609,7 @@ impl MappingEditor {
                 } else {
                     (&mut self.source_query, "Filter source layers")
                 };
-                filter_field(ui, field, query, hint);
+                filter_field(ui, field, query, hint, node_label_px(self.zoom));
             }
         }
         target_name_clicked
@@ -1826,7 +1833,7 @@ impl MappingEditor {
             (5.0 * self.zoom).max(2.0),
             color,
         );
-        let font_size = 12.0 * self.zoom;
+        let font_size = node_label_px(self.zoom);
         if font_size >= MIN_LABEL_PX {
             painter.with_clip_rect(rect.shrink(2.0)).text(
                 rect.center(),
@@ -2366,7 +2373,7 @@ fn filter_field_rect(top_left: Pos2, zoom: f32) -> Rect {
 }
 
 /// A text filter box with a clearly visible light-grey frame.
-fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str) {
+fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str, font_px: f32) {
     let mut child = ui.new_child(egui::UiBuilder::new().max_rect(rect));
     let visuals = child.visuals_mut();
     let frame = Color32::from_gray(150);
@@ -2376,7 +2383,7 @@ fn filter_field(ui: &mut egui::Ui, rect: Rect, query: &mut String, hint: &str) {
         rect.size(),
         egui::TextEdit::singleline(query)
             .hint_text(hint)
-            .font(FontId::proportional(13.0)),
+            .font(FontId::proportional(font_px)),
     );
 }
 
@@ -2830,6 +2837,16 @@ mod tests {
         );
         let darker = darken(Color32::from_rgb(100, 200, 50), 0.7);
         assert_eq!((darker.r(), darker.g(), darker.b()), (70, 140, 35));
+    }
+
+    #[test]
+    fn node_label_text_size_is_one_shared_value_that_scales_with_zoom() {
+        // The drawing-name subtitles and the Source/Target filter boxes use this
+        // same size, so they always match the node labels.
+        assert_eq!(NODE_LABEL_SIZE, 12.0);
+        for zoom in [0.25, 0.5, 1.0, 1.6] {
+            assert_eq!(node_label_px(zoom), NODE_LABEL_SIZE * zoom);
+        }
     }
 
     #[test]
