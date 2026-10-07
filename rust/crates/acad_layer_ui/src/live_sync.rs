@@ -1,6 +1,6 @@
 //! Pure decisions for following the active AutoCAD drawing (no egui, no IPC calls).
 
-use acad_layer_ipc::FeedEvent;
+use acad_layer_ipc::{FeedEvent, FeedMessage};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
 
@@ -214,10 +214,21 @@ pub fn layers_differ(
 }
 
 /// The feed polls whenever the window is open, focused or not; it pauses only while
-/// the window is minimized. (Occluded windows keep polling, so the close-protection
-/// check-ins continue while AutoCAD is in front.)
-pub fn feed_should_pause(minimized: Option<bool>) -> bool {
-    minimized.unwrap_or(false)
+/// the window is minimized AND no drawing (displayed or stashed) has unapplied
+/// connections. Each poll is the check-in that lets AutoCAD refuse a close, so it
+/// must never stop while something could be lost. (Occluded windows keep polling.)
+pub fn feed_should_pause(minimized: Option<bool>, anything_pending: bool) -> bool {
+    minimized.unwrap_or(false) && !anything_pending
+}
+
+/// The layer read a feed status message asks for. Only a reset (first poll, or a
+/// restarted connector) re-reads the active drawing; reconnecting after a busy spell
+/// does not, because the events missed meanwhile arrive through `since`.
+pub fn feed_status_read(message: &FeedMessage) -> Option<LayerRead> {
+    match message {
+        FeedMessage::Resync => Some(LayerRead::Active),
+        FeedMessage::Up | FeedMessage::Down(_) | FeedMessage::Events(_) => None,
+    }
 }
 
 /// The message shown instead of sending an Apply or Purge, if it must not be sent.
@@ -540,10 +551,31 @@ mod tests {
     }
 
     #[test]
-    fn the_feed_pauses_only_when_minimized() {
-        assert!(feed_should_pause(Some(true)));
-        assert!(!feed_should_pause(Some(false)));
-        assert!(!feed_should_pause(None));
+    fn the_feed_pauses_only_when_minimized_with_nothing_pending() {
+        assert!(feed_should_pause(Some(true), false));
+        assert!(!feed_should_pause(Some(false), false));
+        assert!(!feed_should_pause(None, false));
+    }
+
+    #[test]
+    fn the_feed_never_pauses_while_connections_are_pending() {
+        // Pausing would stop the check-ins, so AutoCAD would let a close through.
+        assert!(!feed_should_pause(Some(true), true));
+        assert!(!feed_should_pause(Some(false), true));
+        assert!(!feed_should_pause(None, true));
+    }
+
+    #[test]
+    fn only_a_resync_rereads_the_active_drawing() {
+        assert_eq!(
+            feed_status_read(&FeedMessage::Resync),
+            Some(LayerRead::Active)
+        );
+        // A reconnect after a busy spell re-reads nothing: missed events arrive
+        // through `since`, and a restarted connector answers with a reset.
+        assert_eq!(feed_status_read(&FeedMessage::Up), None);
+        assert_eq!(feed_status_read(&FeedMessage::Down("gone".into())), None);
+        assert_eq!(feed_status_read(&FeedMessage::Events(Vec::new())), None);
     }
 
     #[test]

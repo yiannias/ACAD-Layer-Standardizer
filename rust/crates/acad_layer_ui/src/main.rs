@@ -357,6 +357,16 @@ impl eframe::App for LayerStandardizerApp {
                     warning,
                 }) => {
                     self.apply_pending = false;
+                    let reason = self.apply_for_close.take();
+                    // A plain Apply keeps the window open while other drawings still
+                    // hold unapplied connections; closing would lose them unasked.
+                    let close_after = close_dialog::close_after_applied(
+                        reason.as_ref(),
+                        !self
+                            .sessions
+                            .others_pending(self.current_drawing())
+                            .is_empty(),
+                    );
                     let mut keep_open = false;
                     if protocol_version != acad_layer_ipc::IPC_PROTOCOL_VERSION {
                         self.status_message = format!(
@@ -382,9 +392,21 @@ impl eframe::App for LayerStandardizerApp {
                             (Some(warning), _) => data::MemoryOutcome::Failed(warning),
                             (None, outcome) => outcome,
                         };
-                        keep_open = !data::close_after_apply(&outcome);
+                        let memory_failed = !data::close_after_apply(&outcome);
                         self.status_message = data::applied_status_message(count, outcome);
-                        if keep_open {
+                        if !close_after {
+                            // The displayed drawing's connections are in the drawing
+                            // now, so they no longer count as unapplied; its layers
+                            // refresh through the feed.
+                            drop(self.mapping_editor.take_edit_state());
+                            self.mapping_editor.clear_selection();
+                            if memory_failed {
+                                self.error_message = Some(self.status_message.clone());
+                            }
+                            self.status_message =
+                                close_dialog::stay_open_status(&self.status_message);
+                        } else if memory_failed {
+                            keep_open = true;
                             // The Apply itself succeeded, so the window is stale: keep it
                             // up only so the user sees the warning, with Apply and Purge
                             // disabled, then close it when they press OK.
@@ -394,7 +416,7 @@ impl eframe::App for LayerStandardizerApp {
                         }
                     }
                     let mut replaying = false;
-                    if let Some(reason) = self.apply_for_close.take() {
+                    if let Some(reason) = reason {
                         if reason != close_dialog::CloseReason::WindowClose {
                             // The connections are in the drawing now: clear them (and, for
                             // a quit, the other drawings', as the dialog said) so the
@@ -404,7 +426,7 @@ impl eframe::App for LayerStandardizerApp {
                             replaying = true;
                         }
                     }
-                    if !keep_open {
+                    if close_after && !keep_open {
                         if replaying {
                             // Closing now would end the process before the replay is sent.
                             self.close_after_replay = true;
@@ -459,7 +481,10 @@ impl eframe::App for LayerStandardizerApp {
 
         if ui.ctx().input(|input| input.viewport().close_requested())
             && !self.close_approved
-            && close_dialog::should_intercept_close(self.mapping_editor.unapplied_count())
+            && close_dialog::should_intercept_close(
+                self.mapping_editor.unapplied_count(),
+                &self.sessions.others_pending(self.current_drawing()),
+            )
         {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::CancelClose);
@@ -707,9 +732,21 @@ impl LayerStandardizerApp {
 
     /// Runs every frame: pause state, deferred layer reads, and the pending report.
     fn drive_live_sync(&mut self, ctx: &egui::Context) {
+        let report = if self.close_approved {
+            // The window is closing: nothing it holds can be applied any more.
+            Vec::new()
+        } else {
+            self.sessions.pending_report(
+                self.current_drawing()
+                    .map(|id| (id, self.mapping_editor.unapplied_count())),
+            )
+        };
         if let Some(feed) = &self.feed {
+            // Never paused while connections are pending: the check-ins are what
+            // keeps AutoCAD from closing a drawing that has them.
             feed.set_paused(live_sync::feed_should_pause(
                 ctx.input(|input| input.viewport().minimized),
+                !report.is_empty(),
             ));
             let now = Instant::now();
             let busy = self.apply_pending || self.connection_lost;
@@ -720,15 +757,6 @@ impl LayerStandardizerApp {
                 ctx.request_repaint_after(delay);
             }
         }
-        let report = if self.close_approved {
-            // The window is closing: nothing it holds can be applied any more.
-            Vec::new()
-        } else {
-            self.sessions.pending_report(
-                self.current_drawing()
-                    .map(|id| (id, self.mapping_editor.unapplied_count())),
-            )
-        };
         *self
             .pending_report
             .lock()
@@ -749,6 +777,7 @@ impl LayerStandardizerApp {
     }
 
     fn on_feed_message(&mut self, ctx: &egui::Context, message: FeedMessage) {
+        let read = live_sync::feed_status_read(&message);
         match message {
             FeedMessage::Events(events) => {
                 let current = self.reads.showing_next(&self.drawing_id).to_string();
@@ -775,7 +804,7 @@ impl LayerStandardizerApp {
                     self.reads.want_refresh(&current);
                 }
             }
-            FeedMessage::Resync => self.reads.want(LayerRead::Active),
+            FeedMessage::Resync => {}
             FeedMessage::Down(_) => {
                 self.connection_lost = true;
                 self.status_message = "AutoCAD connection lost".to_string();
@@ -783,8 +812,10 @@ impl LayerStandardizerApp {
             FeedMessage::Up => {
                 self.connection_lost = false;
                 self.status_message = self.connected_status();
-                self.reads.want(LayerRead::Active);
             }
+        }
+        if let Some(read) = read {
+            self.reads.want(read);
         }
     }
 
@@ -928,11 +959,11 @@ impl LayerStandardizerApp {
         }
     }
 
-    /// Every connection the close would lose (for a quit, all drawings').
+    /// Every connection the close would lose (for a quit or the window, all drawings').
     fn close_count(&self, reason: &close_dialog::CloseReason) -> usize {
         let (_, count) = self.close_target(reason);
         match reason {
-            close_dialog::CloseReason::Quit => {
+            close_dialog::CloseReason::Quit | close_dialog::CloseReason::WindowClose => {
                 count
                     + self
                         .sessions

@@ -52,11 +52,16 @@ pub fn dialog_text(
             connections(count),
             if count == 1 { "it" } else { "them" }
         )
-    } else {
+    } else if others.is_empty() {
         format!("Unapplied connections will be lost when {action}.")
+    } else {
+        // Only other drawings have connections: name them, not the shown drawing.
+        format!("These drawings have unapplied connections that will be lost when {action}:")
     };
     if !others.is_empty() {
-        text.push_str("\n\nThese drawings would also lose their unapplied connections:");
+        if count > 0 {
+            text.push_str("\n\nThese drawings would also lose their unapplied connections:");
+        }
         for (name, count) in others {
             text.push_str(&format!("\n• {name} ({})", connections(*count)));
         }
@@ -97,9 +102,22 @@ pub fn dialog_message(
     text
 }
 
-/// Whether the window's own close is held for the dialog.
-pub fn should_intercept_close(unapplied: usize) -> bool {
-    unapplied > 0
+/// Whether the window's own close is held for the dialog: the displayed drawing or
+/// any other drawing has unapplied connections (closing the window loses them all).
+pub fn should_intercept_close(unapplied: usize, others: &[(String, usize)]) -> bool {
+    unapplied > 0 || others.iter().any(|(_, count)| *count > 0)
+}
+
+/// Whether the window closes once AutoCAD confirmed an Apply. An Apply chosen in a
+/// close dialog closes it (the dialog named every drawing that would lose
+/// connections); a plain Apply closes it only if no other drawing still has some.
+pub fn close_after_applied(apply_for_close: Option<&CloseReason>, others_pending: bool) -> bool {
+    apply_for_close.is_some() || !others_pending
+}
+
+/// The status line after a plain Apply that left the window open.
+pub fn stay_open_status(applied: &str) -> String {
+    format!("{applied} Other drawings still have unapplied connections, so this window stays open.")
 }
 
 /// Other drawings whose connections the close would lose: none for a drawing close
@@ -256,9 +274,59 @@ mod tests {
 
     #[test]
     fn a_window_close_with_nothing_pending_is_not_intercepted() {
-        assert!(!should_intercept_close(0));
-        assert!(should_intercept_close(1));
-        assert!(should_intercept_close(12));
+        assert!(!should_intercept_close(0, &[]));
+        assert!(should_intercept_close(1, &[]));
+        assert!(should_intercept_close(12, &[]));
+        assert!(!should_intercept_close(0, &others(&[("Abe.dwg", 0)])));
+    }
+
+    #[test]
+    fn a_window_close_is_intercepted_when_only_other_drawings_are_pending() {
+        assert!(should_intercept_close(0, &others(&[("Abe.dwg", 2)])));
+    }
+
+    #[test]
+    fn a_window_close_with_only_other_drawings_pending_names_them_without_apply() {
+        let list = others(&[("Abe.dwg", 2), ("Zed.dwg", 1)]);
+        // Nothing to apply in the displayed drawing, so Apply is not offered.
+        assert!(!can_apply(&CloseReason::WindowClose, "d1", 0));
+        let text = dialog_message(&CloseReason::WindowClose, "Beds.dwg", 0, &list, false);
+        assert!(!text.contains("Beds.dwg"), "{text}");
+        assert!(!text.contains("also"), "{text}");
+        assert!(
+            text.contains("will be lost when this window closes"),
+            "{text}"
+        );
+        assert!(text.contains("Abe.dwg (2 unapplied connections)"), "{text}");
+        assert!(text.contains("Zed.dwg (1 unapplied connection)"), "{text}");
+        assert!(!text.contains("Apply"), "{text}");
+    }
+
+    #[test]
+    fn a_plain_apply_keeps_the_window_open_while_other_drawings_are_pending() {
+        assert!(!close_after_applied(None, true));
+        assert!(close_after_applied(None, false));
+    }
+
+    #[test]
+    fn an_apply_chosen_in_a_close_dialog_still_closes_the_window() {
+        // The dialog already listed the other drawings that would lose connections.
+        for reason in [
+            CloseReason::WindowClose,
+            CloseReason::DrawingClose("d1".into()),
+            CloseReason::Quit,
+        ] {
+            assert!(close_after_applied(Some(&reason), true), "{reason:?}");
+            assert!(close_after_applied(Some(&reason), false), "{reason:?}");
+        }
+    }
+
+    #[test]
+    fn the_stay_open_status_explains_why_the_window_stayed() {
+        assert_eq!(
+            stay_open_status("Applied 3 mappings."),
+            "Applied 3 mappings. Other drawings still have unapplied connections, so this window stays open."
+        );
     }
 
     #[test]

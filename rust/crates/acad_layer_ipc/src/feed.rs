@@ -17,10 +17,16 @@ pub enum FeedMessage {
     Up,
 }
 
+/// Consecutive failed polls before the connection counts as lost. A single slow
+/// request in the connector can make a poll or two fail without anything being wrong.
+pub const FAILURES_BEFORE_DOWN: u32 = 3;
+
 #[derive(Debug, Clone)]
 pub struct FeedState {
     pub since: Option<u64>,
     pub connected: bool,
+    /// Failed polls in a row since the last successful one.
+    pub failures: u32,
 }
 
 impl Default for FeedState {
@@ -28,6 +34,7 @@ impl Default for FeedState {
         Self {
             since: None,
             connected: true,
+            failures: 0,
         }
     }
 }
@@ -41,6 +48,7 @@ pub fn step(state: &mut FeedState, outcome: Result<IpcResponse, String>) -> Vec<
             reset,
             events,
         }) => {
+            state.failures = 0;
             if !state.connected {
                 state.connected = true;
                 out.push(FeedMessage::Up);
@@ -53,7 +61,8 @@ pub fn step(state: &mut FeedState, outcome: Result<IpcResponse, String>) -> Vec<
             }
         }
         Ok(IpcResponse::Error(error)) | Err(error) => {
-            if state.connected {
+            state.failures = state.failures.saturating_add(1);
+            if state.connected && state.failures >= FAILURES_BEFORE_DOWN {
                 state.connected = false;
                 out.push(FeedMessage::Down(error));
             }
@@ -110,19 +119,32 @@ fn run_feed<P, F>(
 {
     let mut state = FeedState::default();
     while !stop.load(Ordering::SeqCst) {
-        if !paused.load(Ordering::SeqCst) {
-            let snapshot = pending
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .clone();
+        let snapshot = pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone();
+        // A pause never stops the check-in while anything is pending: without it
+        // the connector would let a protected drawing close.
+        let skipped = paused.load(Ordering::SeqCst) && snapshot.is_empty();
+        if !skipped {
             let outcome = poll(state.since, snapshot);
             for message in step(&mut state, outcome) {
                 deliver(message);
             }
         }
-        // Sleep ~1 second in short slices so stop() takes effect promptly.
+        // Sleep ~1 second in short slices so stop() takes effect promptly, and a
+        // skipped poll happens as soon as the pause ends or connections appear.
         for _ in 0..20 {
             if stop.load(Ordering::SeqCst) {
+                break;
+            }
+            if skipped
+                && (!paused.load(Ordering::SeqCst)
+                    || !pending
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner())
+                        .is_empty())
+            {
                 break;
             }
             thread::sleep(Duration::from_millis(50));
@@ -235,12 +257,15 @@ mod tests {
             &paused,
             |_, _| {
                 calls += 1;
-                stopper.store(true, Ordering::SeqCst);
+                // Disconnected only after FAILURES_BEFORE_DOWN failures in a row.
+                if calls == FAILURES_BEFORE_DOWN {
+                    stopper.store(true, Ordering::SeqCst);
+                }
                 Err("gone".into())
             },
             |_| {},
         );
-        assert_eq!(calls, 1, "AutoCAD is gone: no last poll");
+        assert_eq!(calls, FAILURES_BEFORE_DOWN, "AutoCAD is gone: no last poll");
         assert!(pending.lock().unwrap().is_empty());
     }
 
@@ -303,8 +328,11 @@ mod tests {
     }
 
     #[test]
-    fn a_failure_reports_down_once_and_recovery_reports_up_then_events() {
+    fn three_failures_in_a_row_report_down_once_and_recovery_reports_up_then_events() {
         let mut state = FeedState::default();
+        assert!(step(&mut state, Err("busy".into())).is_empty());
+        assert!(step(&mut state, Ok(IpcResponse::Error("busy".into()))).is_empty());
+        assert!(state.connected, "two failures are not a lost connection");
         let out = step(&mut state, Err("gone".into()));
         assert!(matches!(out.as_slice(), [FeedMessage::Down(e)] if e == "gone"));
         assert!(!state.connected);
@@ -316,5 +344,77 @@ mod tests {
             out.as_slice(),
             [FeedMessage::Up, FeedMessage::Events(e)] if e.len() == 1
         ));
+    }
+
+    #[test]
+    fn two_failures_then_a_success_report_nothing() {
+        let mut state = FeedState::default();
+        assert!(step(&mut state, Err("busy".into())).is_empty());
+        assert!(step(&mut state, Err("busy".into())).is_empty());
+        assert!(step(&mut state, events(3, false, 0)).is_empty());
+        assert!(state.connected);
+        // The count starts again after a success.
+        assert!(step(&mut state, Err("busy".into())).is_empty());
+        assert!(step(&mut state, Err("busy".into())).is_empty());
+        assert!(state.connected);
+    }
+
+    #[test]
+    fn a_paused_feed_still_polls_while_anything_is_pending() {
+        let pending = Mutex::new(vec![entry("A", 2)]);
+        let stop = Arc::new(AtomicBool::new(false));
+        let paused = AtomicBool::new(true);
+        let mut polls = 0;
+        let stopper = stop.clone();
+        // A paused feed that never polls must not hang the test.
+        let watchdog = stop.clone();
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(2500));
+            watchdog.store(true, Ordering::SeqCst);
+        });
+        run_feed(
+            &pending,
+            &stop,
+            &paused,
+            |_, report| {
+                if !report.is_empty() {
+                    polls += 1;
+                    stopper.store(true, Ordering::SeqCst);
+                }
+                events(1, false, 0)
+            },
+            |_| {},
+        );
+        assert_eq!(polls, 1, "the check-in went out although paused");
+    }
+
+    #[test]
+    fn unpausing_polls_promptly_instead_of_after_the_full_interval() {
+        let pending = Arc::new(Mutex::new(Vec::new()));
+        let polls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = polls.clone();
+        let mut handle = spawn_feed_with(
+            pending,
+            move |_, _| {
+                counter.fetch_add(1, Ordering::SeqCst);
+                events(1, false, 0)
+            },
+            |_| {},
+        );
+        handle.set_paused(true);
+        // The first poll may already have happened before the pause took effect.
+        thread::sleep(Duration::from_millis(1500));
+        let before = polls.load(Ordering::SeqCst);
+        handle.set_paused(false);
+        let started = std::time::Instant::now();
+        while polls.load(Ordering::SeqCst) == before && started.elapsed() < Duration::from_secs(3) {
+            thread::sleep(Duration::from_millis(5));
+        }
+        let waited = started.elapsed();
+        handle.stop_and_wait(Duration::from_secs(2));
+        assert!(
+            waited < Duration::from_millis(300),
+            "polled {waited:?} after unpausing"
+        );
     }
 }
