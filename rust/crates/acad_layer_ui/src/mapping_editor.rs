@@ -29,7 +29,7 @@ const SOURCE_STEP: f32 = 320.0;
 const MAX_NODE_COLUMN_HEIGHT: usize = 25;
 /// Lines that pass under other columns of nodes are drawn this much of their color.
 const PASS_UNDER_DARKEN: f32 = 0.7;
-/// The node-mode filter boxes are a fixed screen size, whatever the zoom.
+/// The node-mode filter boxes are a fixed size in drawing units, so they scale with zoom.
 const FILTER_FIELD_WIDTH: f32 = 260.0;
 const FILTER_FIELD_HEIGHT: f32 = 28.0;
 const MIN_ZOOM: f32 = 0.03;
@@ -383,7 +383,8 @@ impl MappingEditor {
         self.handle_canvas_navigation(ctx, &canvas_response, canvas_rect);
         self.draw_grid(&painter, canvas_rect);
 
-        let wants_fit_key = ctx.input(|i| i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::Home))
+        let wants_fit_key = ctx
+            .input(|i| i.key_pressed(egui::Key::F) || i.key_pressed(egui::Key::Home))
             && !ctx.egui_wants_keyboard_input();
         if wants_fit_key {
             self.fit_requested = true;
@@ -798,8 +799,7 @@ impl MappingEditor {
             .min(usable.height() / bounds.height())
             .clamp(MIN_ZOOM, 1.0);
         self.zoom = zoom;
-        self.pan = usable.min - canvas.min
-            + (usable.size() - bounds.size() * zoom) / 2.0
+        self.pan = usable.min - canvas.min + (usable.size() - bounds.size() * zoom) / 2.0
             - bounds.min.to_vec2() * zoom;
     }
 
@@ -1554,7 +1554,10 @@ impl MappingEditor {
                     subtitle_color,
                 );
             }
-            let field = filter_field_rect(self.world_rect(canvas, x + 18.0, 104.0, 0.0, 0.0).min);
+            let field = filter_field_rect(
+                self.world_rect(canvas, x + 18.0, 104.0, 0.0, 0.0).min,
+                self.zoom,
+            );
             if canvas.contains_rect(field) {
                 let (query, hint) = if is_target {
                     (&mut self.target_query, "Filter target layers")
@@ -2174,10 +2177,7 @@ impl MappingEditor {
                         let origin = corner - Vec2::splat(10.0);
                         for step in [3.0_f32, 6.0, 9.0] {
                             ui.painter().line_segment(
-                                [
-                                    origin + Vec2::new(0.0, step),
-                                    origin + Vec2::new(step, 0.0),
-                                ],
+                                [origin + Vec2::new(0.0, step), origin + Vec2::new(step, 0.0)],
                                 Stroke::new(1.2, grip_color),
                             );
                         }
@@ -2245,9 +2245,13 @@ fn line_passes_under(
     source_right < max_source_right - 1.0 || target_left > min_target_left + 1.0
 }
 
-/// A filter box anchored at a panel's header corner; its size never changes with zoom.
-fn filter_field_rect(top_left: Pos2) -> Rect {
-    Rect::from_min_size(top_left, Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT))
+/// A filter box anchored at a panel's header corner; a fixed size in drawing units,
+/// so it scales with zoom exactly like the nodes.
+fn filter_field_rect(top_left: Pos2, zoom: f32) -> Rect {
+    Rect::from_min_size(
+        top_left,
+        Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT) * zoom,
+    )
 }
 
 /// A text filter box with a clearly visible light-grey frame.
@@ -2450,7 +2454,10 @@ mod tests {
         for count in 1..=2000 {
             let (columns, rows) = column_layout(count);
             assert!(rows <= MAX_NODE_COLUMN_HEIGHT, "{count}: {rows} rows");
-            assert!(columns * rows >= count, "{count}: layout cannot hold every node");
+            assert!(
+                columns * rows >= count,
+                "{count}: layout cannot hold every node"
+            );
         }
     }
 
@@ -2462,7 +2469,11 @@ mod tests {
         assert_eq!(column_count(&rects), 6);
         assert!(tallest_column(&rects) <= MAX_NODE_COLUMN_HEIGHT);
         let rightmost = rects.values().map(|r| r.right()).fold(f32::MIN, f32::max);
-        assert_eq!(rightmost, SOURCE_X + NODE_WIDTH, "the column beside the target does not move");
+        assert_eq!(
+            rightmost,
+            SOURCE_X + NODE_WIDTH,
+            "the column beside the target does not move"
+        );
     }
 
     #[test]
@@ -2490,18 +2501,27 @@ mod tests {
     #[test]
     fn a_line_between_the_adjacent_columns_keeps_its_color_and_others_are_darker() {
         assert!(!line_passes_under(530.0, 530.0, 620.0, 620.0));
-        assert!(line_passes_under(210.0, 530.0, 620.0, 620.0), "source behind another column");
-        assert!(line_passes_under(530.0, 530.0, 940.0, 620.0), "target behind another column");
+        assert!(
+            line_passes_under(210.0, 530.0, 620.0, 620.0),
+            "source behind another column"
+        );
+        assert!(
+            line_passes_under(530.0, 530.0, 940.0, 620.0),
+            "target behind another column"
+        );
         let darker = darken(Color32::from_rgb(100, 200, 50), 0.7);
         assert_eq!((darker.r(), darker.g(), darker.b()), (70, 140, 35));
     }
 
     #[test]
-    fn a_filter_box_sits_in_its_panel_header_at_a_fixed_size() {
+    fn a_filter_box_scales_with_zoom_like_the_nodes() {
         let corner = Pos2::new(123.0, 456.0);
-        let field = filter_field_rect(corner);
-        assert_eq!(field.min, corner);
-        assert_eq!(field.size(), Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT));
+        for zoom in [0.25, 1.0, 2.0] {
+            let field = filter_field_rect(corner, zoom);
+            assert_eq!(field.min, corner);
+            let expected = Vec2::new(FILTER_FIELD_WIDTH, FILTER_FIELD_HEIGHT) * zoom;
+            assert!((field.size() - expected).length() < 0.01);
+        }
     }
 
     #[test]

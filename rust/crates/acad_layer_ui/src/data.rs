@@ -12,7 +12,10 @@ pub struct TargetView {
     pub always_hidden: Vec<String>,
 }
 
-pub fn build_target_view(standard: &[String], dictionary: &LayerDictionaryDefinition) -> TargetView {
+pub fn build_target_view(
+    standard: &[String],
+    dictionary: &LayerDictionaryDefinition,
+) -> TargetView {
     let result = LayerCategorizer::classify(standard.iter(), dictionary);
     let filters = result
         .visible_categories
@@ -124,7 +127,9 @@ pub fn load_startup_from(dir: Option<&Path>) -> StartupData {
     let (config, config_writable) = match config_path.as_deref().map(PluginConfig::load_from) {
         Some(Ok(config)) => (config, true),
         Some(Err(error)) => {
-            notes.push(format!("{error}. Using defaults and leaving the file untouched."));
+            notes.push(format!(
+                "{error}. Using defaults and leaving the file untouched."
+            ));
             (PluginConfig::default(), false)
         }
         None => (PluginConfig::default(), false),
@@ -174,12 +179,14 @@ mod tests {
     }
 
     fn shipped_dictionary() -> LayerDictionaryDefinition {
-        let text = fs::read_to_string(repo_root().join("installer/assets/layer_dictionary.json")).unwrap();
+        let text =
+            fs::read_to_string(repo_root().join("installer/assets/layer_dictionary.json")).unwrap();
         serde_json::from_str(&text).unwrap()
     }
 
     fn golden() -> serde_json::Value {
-        let text = fs::read_to_string(repo_root().join("tests/parity/categorization.golden.json")).unwrap();
+        let text = fs::read_to_string(repo_root().join("tests/parity/categorization.golden.json"))
+            .unwrap();
         serde_json::from_str(&text).unwrap()
     }
 
@@ -195,7 +202,10 @@ mod tests {
             .iter()
             .map(|v| v.as_str().unwrap())
             .collect();
-        assert_eq!(names, expected_names, "filters must keep the C# category order");
+        assert_eq!(
+            names, expected_names,
+            "filters must keep the C# category order"
+        );
 
         for filter in &view.filters {
             let members: BTreeSet<&str> = filter.layers.iter().map(String::as_str).collect();
@@ -203,13 +213,20 @@ mod tests {
                 .as_object()
                 .unwrap()
                 .iter()
-                .filter(|(_, tags)| tags.as_array().unwrap().iter().any(|t| t == filter.name.as_str()))
+                .filter(|(_, tags)| {
+                    tags.as_array()
+                        .unwrap()
+                        .iter()
+                        .any(|t| t == filter.name.as_str())
+                })
                 .map(|(layer, _)| layer.as_str())
                 .collect();
             assert_eq!(members, expected, "layers in filter {}", filter.name);
             assert_eq!(
                 filter.sort_group,
-                golden["sortGroupByTag"][filter.name.as_str()].as_str().unwrap_or("Specific")
+                golden["sortGroupByTag"][filter.name.as_str()]
+                    .as_str()
+                    .unwrap_or("Specific")
             );
         }
 
@@ -253,7 +270,8 @@ mod tests {
 
     #[test]
     fn startup_with_nothing_on_disk_uses_defaults_and_no_notes() {
-        let dir = std::env::temp_dir().join(format!("acad_ui_startup_empty_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("acad_ui_startup_empty_{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         let startup = load_startup_from(Some(&dir));
@@ -272,9 +290,15 @@ mod tests {
         fs::write(dir.join("standards_memory.json"), "{ nope").unwrap();
         let startup = load_startup_from(Some(&dir));
         assert_eq!(startup.notes.len(), 2, "{:?}", startup.notes);
-        assert!(!startup.config_writable, "a corrupt config must not be overwritten with defaults");
+        assert!(
+            !startup.config_writable,
+            "a corrupt config must not be overwritten with defaults"
+        );
         assert!(startup.memory.mappings.is_empty());
-        assert_eq!(fs::read_to_string(dir.join("standards_memory.json")).unwrap(), "{ nope");
+        assert_eq!(
+            fs::read_to_string(dir.join("standards_memory.json")).unwrap(),
+            "{ nope"
+        );
     }
 
     #[test]
@@ -282,7 +306,11 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("acad_ui_startup_mem_{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
-        fs::copy(repo_root().join("tests/parity/memory_1_2_x.json"), dir.join("standards_memory.json")).unwrap();
+        fs::copy(
+            repo_root().join("tests/parity/memory_1_2_x.json"),
+            dir.join("standards_memory.json"),
+        )
+        .unwrap();
         let startup = load_startup_from(Some(&dir));
         assert_eq!(startup.memory.lookup("a-ELEV-medm"), Some("A-DT-3"));
     }
@@ -305,13 +333,23 @@ mod tests {
 
         let sources = vec!["A-NEW".to_string(), "A-OLD".to_string()];
         let mapped: std::collections::HashMap<String, String> =
-            [("A-NEW".to_string(), "A-DOOR".to_string())].into_iter().collect();
+            [("A-NEW".to_string(), "A-DOOR".to_string())]
+                .into_iter()
+                .collect();
         remember_mappings(&store, &sources, &mapped).unwrap();
 
         let memory = store.load_checked().unwrap();
         assert_eq!(memory.lookup("A-NEW"), Some("A-DOOR"));
-        assert_eq!(memory.lookup("A-OLD"), None, "a source that is no longer mapped is forgotten");
-        assert_eq!(memory.lookup("UNRELATED"), Some("KEEP"), "other sources are untouched");
+        assert_eq!(
+            memory.lookup("A-OLD"),
+            None,
+            "a source that is no longer mapped is forgotten"
+        );
+        assert_eq!(
+            memory.lookup("UNRELATED"),
+            Some("KEEP"),
+            "other sources are untouched"
+        );
     }
 
     #[test]
@@ -329,7 +367,9 @@ mod tests {
         let mut seed = TranslationMemory::default();
         seed.mappings.insert("A-Wall".into(), "OLD".into());
         store.save(&seed).unwrap();
-        let mapped = [("a-wall".to_string(), "NEW".to_string())].into_iter().collect();
+        let mapped = [("a-wall".to_string(), "NEW".to_string())]
+            .into_iter()
+            .collect();
         remember_mappings(&store, &["a-wall".to_string()], &mapped).unwrap();
         let memory = store.load_checked().unwrap();
         assert_eq!(memory.mappings.len(), 1);
@@ -342,13 +382,21 @@ mod tests {
         assert!(text.starts_with("Applied 3 mappings"), "{text}");
         assert!(text.contains("could not save translation memory"), "{text}");
         assert!(text.contains("disk full"), "{text}");
-        assert_eq!(applied_status_message(3, MemoryOutcome::Saved), "Applied 3 mappings and saved them to memory.");
-        assert_eq!(applied_status_message(1, MemoryOutcome::NotRequested), "Applied 1 mappings.");
+        assert_eq!(
+            applied_status_message(3, MemoryOutcome::Saved),
+            "Applied 3 mappings and saved them to memory."
+        );
+        assert_eq!(
+            applied_status_message(1, MemoryOutcome::NotRequested),
+            "Applied 1 mappings."
+        );
     }
 
     #[test]
     fn a_failed_memory_save_does_not_close_the_window_before_the_user_sees_it() {
-        assert!(!close_after_apply(&MemoryOutcome::Failed("disk full".into())));
+        assert!(!close_after_apply(&MemoryOutcome::Failed(
+            "disk full".into()
+        )));
         assert!(close_after_apply(&MemoryOutcome::Saved));
         assert!(close_after_apply(&MemoryOutcome::NotRequested));
     }

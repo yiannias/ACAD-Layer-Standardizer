@@ -1,7 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use acad_layer_core::{
-    HeuristicMatcher, LayerDictionaryDefinition, MatchResult, MatchSource, MemoryStore, PluginConfig,
+    HeuristicMatcher, LayerDictionaryDefinition, MatchResult, MatchSource, MemoryStore,
+    PluginConfig,
 };
 use acad_layer_ipc::{DrawingSnapshot, IpcResponse, TargetFilter};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
@@ -280,10 +281,12 @@ impl eframe::App for LayerStandardizerApp {
                             None if remembered => data::MemoryOutcome::Saved,
                             None => data::MemoryOutcome::NotRequested,
                             Some((sources, mapped)) => match &self.memory_store {
-                                Some(store) => match data::remember_mappings(store, &sources, &mapped) {
-                                    Ok(()) => data::MemoryOutcome::Saved,
-                                    Err(error) => data::MemoryOutcome::Failed(error),
-                                },
+                                Some(store) => {
+                                    match data::remember_mappings(store, &sources, &mapped) {
+                                        Ok(()) => data::MemoryOutcome::Saved,
+                                        Err(error) => data::MemoryOutcome::Failed(error),
+                                    }
+                                }
                                 None => data::MemoryOutcome::Failed(
                                     "no translation memory location is available".to_string(),
                                 ),
@@ -396,7 +399,9 @@ impl eframe::App for LayerStandardizerApp {
             self.apply_pending = true;
             self.status_message = "Applying mappings in AutoCAD…".to_string();
             std::thread::spawn(move || {
-                let result = acad_layer_ipc::apply_plan(request.0, request.1, request.2, request.3, request.4);
+                let result = acad_layer_ipc::apply_plan(
+                    request.0, request.1, request.2, request.3, request.4,
+                );
                 let _ = sender.send(result);
                 repaint.request_repaint();
             });
@@ -542,7 +547,8 @@ impl LayerStandardizerApp {
         }
         if let Some(config_path) = &self.config_path {
             if let Err(error) = self.plugin_config.save_to(config_path) {
-                self.error_message = Some(format!("Could not remember the chosen standard: {error}"));
+                self.error_message =
+                    Some(format!("Could not remember the chosen standard: {error}"));
             }
         }
     }
