@@ -122,6 +122,14 @@ fn backup_stamp(iso: &str) -> String {
     }
 }
 
+/// Outcome of importing another memory file: how many mappings it held and how many
+/// were new to the current memory.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportReport {
+    pub imported: usize,
+    pub added: usize,
+}
+
 pub struct MemoryStore {
     file_path: PathBuf,
 }
@@ -227,6 +235,52 @@ impl MemoryStore {
         for name in backups.into_iter().take(excess) {
             let _ = fs::remove_file(dir.join(name));
         }
+    }
+
+    /// Adds the mappings of another memory file that the current memory has no
+    /// (case-insensitive) match for; existing entries win. A corrupt source or a
+    /// corrupt current memory is an error and nothing is written. Writes (with the
+    /// usual backup) only when something was added.
+    pub fn import_from(&self, source: &Path) -> Result<ImportReport, MemoryError> {
+        if !source.exists() {
+            return Err(MemoryError::Io(format!("{} does not exist", source.display())));
+        }
+        let incoming = MemoryStore::new(source).load_checked()?;
+        let imported = incoming.mappings.len();
+
+        let same_file = match (fs::canonicalize(source), fs::canonicalize(&self.file_path)) {
+            (Ok(a), Ok(b)) => a == b,
+            _ => false,
+        };
+        if same_file {
+            return Ok(ImportReport { imported, added: 0 });
+        }
+
+        let mut current = self.load_checked()?;
+        let mut added = 0;
+        for (key, target) in &incoming.mappings {
+            if current.lookup(key).is_none() {
+                current.set_mapping(key, target);
+                added += 1;
+            }
+        }
+        if added > 0 {
+            self.save(&current).map_err(|e| MemoryError::Io(e.to_string()))?;
+        }
+        Ok(ImportReport { imported, added })
+    }
+
+    /// Writes a copy of the memory file to `destination` (creating parent folders).
+    pub fn export_to(&self, destination: &Path) -> Result<(), MemoryError> {
+        if !self.file_path.exists() {
+            return Err(MemoryError::Io(
+                "there is no translation memory to export yet".to_string(),
+            ));
+        }
+        let memory = self.load_checked()?;
+        MemoryStore::new(destination)
+            .save(&memory)
+            .map_err(|e| MemoryError::Io(e.to_string()))
     }
 
     pub fn merge(mut current: TranslationMemory, imported: TranslationMemory) -> TranslationMemory {
@@ -396,5 +450,108 @@ mod tests {
         memory.mappings.insert("A-Wall".into(), "X".into());
         memory.remove_mapping("a-WALL");
         assert!(memory.mappings.is_empty());
+    }
+
+    fn store_with(dir: &Path, file: &str, pairs: &[(&str, &str)]) -> MemoryStore {
+        let store = MemoryStore::new(dir.join(file));
+        let mut memory = TranslationMemory::default();
+        for (k, v) in pairs {
+            memory.mappings.insert((*k).into(), (*v).into());
+        }
+        store.save(&memory).unwrap();
+        store
+    }
+
+    #[test]
+    fn import_adds_only_new_mappings_and_existing_ones_win() {
+        let dir = temp_dir("memory_import_new");
+        let current = store_with(&dir, "cur.json", &[("A-WALL", "ARCH-WALL")]);
+        let source = store_with(&dir, "src.json", &[("A-WALL", "OTHER"), ("A-DOOR", "ARCH-DOOR")]);
+        let report = current.import_from(source.file_path()).unwrap();
+        assert_eq!(report, ImportReport { imported: 2, added: 1 });
+        let memory = current.load_checked().unwrap();
+        assert_eq!(memory.lookup("A-WALL"), Some("ARCH-WALL"));
+        assert_eq!(memory.lookup("A-DOOR"), Some("ARCH-DOOR"));
+    }
+
+    #[test]
+    fn import_ignores_case_when_deciding_what_is_new() {
+        let dir = temp_dir("memory_import_case");
+        let current = store_with(&dir, "cur.json", &[("A-Wall", "X")]);
+        let source = store_with(&dir, "src.json", &[("a-wall", "Y")]);
+        let report = current.import_from(source.file_path()).unwrap();
+        assert_eq!(report, ImportReport { imported: 1, added: 0 });
+        let memory = current.load_checked().unwrap();
+        assert_eq!(memory.mappings.len(), 1);
+        assert_eq!(memory.lookup("A-WALL"), Some("X"));
+    }
+
+    #[test]
+    fn importing_the_memory_file_into_itself_adds_nothing_and_writes_nothing() {
+        let dir = temp_dir("memory_import_self");
+        let store = store_with(&dir, "cur.json", &[("A", "B"), ("C", "D")]);
+        let before = std::fs::read(store.file_path()).unwrap();
+        let backups = backup_names(&dir);
+        let report = store.import_from(store.file_path()).unwrap();
+        assert_eq!(report, ImportReport { imported: 2, added: 0 });
+        assert_eq!(std::fs::read(store.file_path()).unwrap(), before);
+        assert_eq!(backup_names(&dir), backups);
+    }
+
+    #[test]
+    fn a_corrupt_import_source_is_an_error_and_changes_nothing() {
+        let dir = temp_dir("memory_import_corrupt_src");
+        let store = store_with(&dir, "cur.json", &[("A", "B")]);
+        let before = std::fs::read(store.file_path()).unwrap();
+        let source = dir.join("src.json");
+        std::fs::write(&source, "{ nope").unwrap();
+        assert!(matches!(store.import_from(&source), Err(MemoryError::Corrupt(_))));
+        assert_eq!(std::fs::read(store.file_path()).unwrap(), before);
+        assert!(backup_names(&dir).is_empty());
+        assert_eq!(std::fs::read_to_string(&source).unwrap(), "{ nope");
+    }
+
+    #[test]
+    fn a_corrupt_current_memory_is_an_error_and_is_not_overwritten() {
+        let dir = temp_dir("memory_import_corrupt_cur");
+        let source = store_with(&dir, "src.json", &[("A", "B")]);
+        let current = dir.join("cur.json");
+        std::fs::write(&current, "{ nope").unwrap();
+        let store = MemoryStore::new(&current);
+        assert!(matches!(store.import_from(source.file_path()), Err(MemoryError::Corrupt(_))));
+        assert_eq!(std::fs::read_to_string(&current).unwrap(), "{ nope");
+        assert!(backup_names(&dir).is_empty());
+    }
+
+    #[test]
+    fn import_into_a_missing_memory_file_creates_it() {
+        let dir = temp_dir("memory_import_missing");
+        let source = store_with(&dir, "src.json", &[("A", "B")]);
+        let store = MemoryStore::new(dir.join("new.json"));
+        let report = store.import_from(source.file_path()).unwrap();
+        assert_eq!(report, ImportReport { imported: 1, added: 1 });
+        assert_eq!(store.load_checked().unwrap().lookup("A"), Some("B"));
+    }
+
+    #[test]
+    fn export_writes_a_copy_with_the_same_mappings() {
+        let dir = temp_dir("memory_export");
+        let store = store_with(&dir, "cur.json", &[("A", "B"), ("C", "D")]);
+        let destination = dir.join("sub").join("copy.json");
+        store.export_to(&destination).unwrap();
+        let copy = MemoryStore::new(&destination).load_checked().unwrap();
+        assert_eq!(copy.mappings, store.load_checked().unwrap().mappings);
+    }
+
+    #[test]
+    fn export_without_a_memory_file_says_there_is_nothing_to_export() {
+        let dir = temp_dir("memory_export_none");
+        let store = MemoryStore::new(dir.join("missing.json"));
+        let destination = dir.join("copy.json");
+        assert_eq!(
+            store.export_to(&destination),
+            Err(MemoryError::Io("there is no translation memory to export yet".into()))
+        );
+        assert!(!destination.exists());
     }
 }
