@@ -6,21 +6,26 @@ namespace AcLayerStandardizer.Tests;
 public class ClassifyCloseTests
 {
     [Theory]
-    [InlineData("QUIT", CloseKind.Quit)]
-    [InlineData("quit", CloseKind.Quit)]
-    [InlineData("_QUIT", CloseKind.Quit)]
-    [InlineData(".QUIT", CloseKind.Quit)]
-    [InlineData("'quit", CloseKind.Quit)]
-    [InlineData(" Quit ", CloseKind.Quit)]
-    [InlineData("EXIT", CloseKind.Quit)]
-    [InlineData("CLOSE", CloseKind.Drawing)]
-    [InlineData("_CLOSE", CloseKind.Drawing)]
-    [InlineData("CLOSEALL", CloseKind.Drawing)]
-    [InlineData("", CloseKind.Drawing)]
-    [InlineData(null, CloseKind.Drawing)]
-    [InlineData("QUITXYZ", CloseKind.Drawing)]
-    public void classifies_the_command_in_progress(string? command, CloseKind expected)
+    [InlineData("QUIT", true)]
+    [InlineData("quit", true)]
+    [InlineData("_QUIT", true)]
+    [InlineData(".QUIT", true)]
+    [InlineData("'quit", true)]
+    [InlineData(" Quit ", true)]
+    [InlineData("EXIT", true)]
+    [InlineData("CLOSE", false)]
+    [InlineData("_CLOSE", false)]
+    [InlineData("CLOSEALL", false)]
+    [InlineData("", false)]
+    [InlineData("QUITXYZ", false)]
+    public void classifies_the_command_in_progress(string command, bool expectQuit)
     {
-        Assert.Equal(expected, CloseGuard.ClassifyClose(command));
+        Assert.Equal(expectQuit, CloseGuard.ClassifyClose(command) == CloseKind.Quit);
+    }
+
+    [Fact]
+    public void no_command_in_progress_is_a_drawing_close()
+    {
+        Assert.Equal(CloseKind.Drawing, CloseGuard.ClassifyClose(null));
     }
 }
