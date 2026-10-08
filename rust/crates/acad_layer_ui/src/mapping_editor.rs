@@ -370,6 +370,7 @@ impl MappingEditor {
                 self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
             if self.purge_confirmation_open {
                 egui::Window::new("Purge Empty Layers")
+                    .order(egui::Order::Foreground)
                     .collapsible(false)
                     .resizable(false)
                     .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
@@ -676,6 +677,7 @@ impl MappingEditor {
             self.draw_right_panel(ctx, target_filters, template_name) || target_name_clicked;
         if self.purge_confirmation_open {
             egui::Window::new("Purge Empty Layers")
+                .order(egui::Order::Foreground)
                 .collapsible(false)
                 .resizable(false)
                 .anchor(Align2::CENTER_CENTER, Vec2::ZERO)

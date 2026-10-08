@@ -768,9 +768,12 @@ impl LayerStandardizerApp {
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
                             ui.set_max_width(560.0);
-                            ui.label(
-                                egui::RichText::new(settings_panel::BETA_NOTICE)
-                                    .color(egui::Color32::from_rgb(230, 230, 230)),
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(settings_panel::BETA_NOTICE)
+                                        .color(egui::Color32::from_rgb(230, 230, 230)),
+                                )
+                                .wrap(),
                             );
                             if ui.small_button("x").on_hover_text("Dismiss").clicked() {
                                 self.notice_visible = false;
