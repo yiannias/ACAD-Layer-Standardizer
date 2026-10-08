@@ -9,7 +9,7 @@ public static class MappingsCommand
 {
     // The single handler for every entry point (ribbon/menu send LSR).
     [CommandMethod("LSTDR")]
-    [CommandMethod("LSR", CommandFlags.Modal)]
+    [CommandMethod("HERD", CommandFlags.Modal)]
     [CommandMethod("ACLAYERSTD", "STD_Mappings", CommandFlags.Modal)]
     [CommandMethod("ACLAYERSTD", "StandardizeLayers", CommandFlags.Modal)]
     [CommandMethod("LAYERSTANDARDIZER", CommandFlags.Modal)]

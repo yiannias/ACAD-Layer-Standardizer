@@ -3,7 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ACAD Layer Standardizer</title>
+<title>Layer Herder</title>
+<link rel="icon" type="image/png" href="assets/app-icon.png">
 <meta name="description" content="An AutoCAD plug-in that maps existing drawing layers onto a layer standard, with pattern-matching suggestions and a visual mapping editor.">
 <style>
   :root{
@@ -40,7 +41,7 @@
   }
   h1{font-size:2.6rem; margin:0 0 14px; letter-spacing:-.02em;}
   .hero-lockup{display:flex; align-items:center; gap:28px; margin:0 0 28px;}
-  .hero-logo{flex:none; display:block; width:150px; height:auto;}
+  .hero-logo{flex:none; display:block; width:170px; height:auto; border-radius:14px;}
   .tagline{font-size:1.15rem; color:var(--text-dim); max-width:500px; margin:0;}
   .cta-row{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;}
   .cta-primary{display:flex; flex-direction:column; align-items:flex-start; gap:8px;}
@@ -204,9 +205,9 @@
 <header class="hero">
   <div class="wrap">
     <div class="eyebrow">AutoCAD plug-in · Beta</div>
-    <h1>ACAD Layer Standardizer</h1>
+    <h1>Layer Herder</h1>
     <div class="hero-lockup">
-      <img class="hero-logo" src="assets/logo.png" alt="ACAD Layer Standardizer logo — a hammer breaking apart a stack of layers">
+      <img class="hero-logo" src="assets/logo.png" alt="Layer Herder logo: a border collie herding sheep made of stacked layers">
       <p class="tagline">
         A layer translator with a memory. Map messy, inconsistent drawing layers onto an
         established layer standard — and let it learn your conventions as you go.
@@ -214,10 +215,10 @@
     </div>
     <div class="cta-row">
       <div class="cta-primary">
-        <a class="btn primary" href="https://github.com/yiannias/ACAD-Layer-Standardizer/releases/latest/download/AcLayerStandardizer_BETA-1.3.0.exe">Download latest release</a>
-        <span class="release-meta">Version Beta-1.3.0 — Released 10/07/2026</span>
+        <a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/tag/v1.4.0-beta">Download latest release</a>
+        <span class="release-meta">Version Beta-1.4.0</span>
       </div>
-      <a class="btn ghost" href="https://github.com/yiannias/ACAD-Layer-Standardizer">View on GitHub</a>
+      <a class="btn ghost" href="https://github.com/yiannias/LayerHerder">View on GitHub</a>
     </div>
     <div class="badges">
       <span class="badge">AutoCAD 2021–2027</span>
@@ -231,7 +232,7 @@
   <div class="wrap">
     <div class="mockup">
       <a href="assets/screenshots/overview.jpg" class="lb-trigger" data-caption="Full mapping editor — source layers, target standard, and the live match graph in one view.">
-        <img src="assets/screenshots/overview.jpg" alt="ACAD Layer Standardizer mapping editor showing source drawing layers connected to standard target layers by color-coded match lines">
+        <img src="assets/screenshots/overview.jpg" alt="Layer Herder mapping editor showing source drawing layers connected to standard target layers by color-coded match lines">
       </a>
     </div>
     <p class="mock-note">Green = exact match, blue = memory match, amber (dashed) = heuristic suggestion, purple = manual match.</p>
@@ -284,21 +285,21 @@
       <h3 class="chapter-title">Getting started</h3>
       <div class="callout-row">
         <figure class="shot lb-trigger" data-full="assets/screenshots/launch-screen.jpg" data-caption="Launch screen: point it at your reference file and layer memory, then open the editor.">
-          <div class="frame"><img src="assets/screenshots/launch-screen.jpg" alt="Layer Standardizer launch dialog with reference file and memory file pickers"></div>
+          <div class="frame"><img src="assets/screenshots/launch-screen.jpg" alt="Layer Herder launch dialog with reference file and memory file pickers"></div>
         </figure>
         <div class="callout-box">Launch: set your reference standard and memory file</div>
       </div>
       <div class="callout-row">
         <figure class="shot lb-trigger" data-full="assets/screenshots/launch-menu-ribbon.jpg" data-caption="Docked to its own ribbon tab and Add-ins menu after install.">
-          <div class="frame"><img src="assets/screenshots/launch-menu-ribbon.jpg" alt="AutoCAD ribbon showing the Layer Standardizer add-in tab"></div>
+          <div class="frame"><img src="assets/screenshots/launch-menu-ribbon.jpg" alt="AutoCAD ribbon showing the Layer Herder add-in tab"></div>
         </figure>
         <div class="callout-box">Docks into the AutoCAD ribbon as its own add-in</div>
       </div>
       <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-cli.jpg" data-caption="Or launch it straight from the AutoCAD command line with LSR.">
-          <div class="frame"><img src="assets/screenshots/launch-cli.jpg" alt="AutoCAD command line with the LSR command typed"></div>
+        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-cli.jpg" data-caption="Or launch it straight from the AutoCAD command line with HERD.">
+          <div class="frame"><img src="assets/screenshots/launch-cli.jpg" alt="AutoCAD command line with the HERD command typed"></div>
         </figure>
-        <div class="callout-box">Or launch from the command line with <code class="cmd">LSR</code></div>
+        <div class="callout-box">Or launch from the command line with <code class="cmd">HERD</code></div>
       </div>
     </div>
 
@@ -427,7 +428,7 @@
       </li>
       <li>
         <h4>Open the drawing</h4>
-        <p>With the drawing open in AutoCAD, launch the Layer Standardizer from the ribbon or type its command to open the mapping editor.</p>
+        <p>With the drawing open in AutoCAD, launch Layer Herder from the ribbon or type its command to open the mapping editor.</p>
       </li>
       <li>
         <h4>Review suggested matches</h4>
@@ -481,7 +482,7 @@
     <p class="section-lead">
       If you try it and hit a bug, have an idea for a feature, or just want to say what did or
       didn't work for you, I'd genuinely like to hear about it.<br><br>
-      <a class="signature-link" href="mailto:yiannias@gmail.com?subject=Layer%20Standardizer%20feedback">yiannias@gmail.com</a>
+      <a class="signature-link" href="mailto:yiannias@gmail.com?subject=Layer%20Herder%20feedback">yiannias@gmail.com</a>
     </p>
   </div>
 </section>
@@ -489,7 +490,7 @@
 <footer>
   <div class="wrap">
     Built for AutoCAD layer cleanup. Source on
-    <a href="https://github.com/yiannias/ACAD-Layer-Standardizer">GitHub</a> ·
+    <a href="https://github.com/yiannias/LayerHerder">GitHub</a> ·
     Feedback: <a href="mailto:yiannias@gmail.com">yiannias@gmail.com</a> ·
     Currently in beta — expect rough edges.
   </div>

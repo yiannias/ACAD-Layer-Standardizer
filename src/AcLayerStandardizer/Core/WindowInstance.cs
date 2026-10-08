@@ -8,7 +8,7 @@ public enum LaunchDecision { Launch, FocusExisting }
 public static class WindowInstance
 {
     public const string AlreadyOpenMessage =
-        "The Layer Standardizer window is already open; it follows the active drawing.";
+        "The Layer Herder window is already open; it follows the active drawing.";
 
     public static LaunchDecision Decide(bool processAlive) =>
         processAlive ? LaunchDecision.FocusExisting : LaunchDecision.Launch;

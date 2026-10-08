@@ -28,7 +28,7 @@ internal static class RustUiLauncher
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not bring its window forward: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Layer Herder could not bring its window forward: {ex.Message}");
         }
         try { document.Editor.WriteMessage($"\n{WindowInstance.AlreadyOpenMessage}"); }
         catch (Exception) { /* the command line is unavailable: nothing else to do */ }

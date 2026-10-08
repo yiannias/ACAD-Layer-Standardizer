@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-ACAD Layer Standardizer is MIT-licensed (see [LICENSE](LICENSE)). Nodify is no
+Layer Herder is MIT-licensed (see [LICENSE](LICENSE)). Nodify is no
 longer included. The mapping-window program (`acad_layer_ui.exe`) is built from
 open-source Rust crates, listed in `rust/Cargo.lock`, whose licenses (MIT,
 Apache-2.0 and similar) will be reproduced here.

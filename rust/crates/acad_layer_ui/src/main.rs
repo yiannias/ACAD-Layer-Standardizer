@@ -598,7 +598,7 @@ impl eframe::App for LayerStandardizerApp {
         }
 
         if let Some(message) = self.error_message.clone() {
-            egui::Window::new("Layer Standardizer")
+            egui::Window::new("Layer Herder")
                 .collapsible(false)
                 .resizable(false)
                 .order(egui::Order::Tooltip)
@@ -1383,7 +1383,7 @@ impl LayerStandardizerApp {
         let apply_offered = close_dialog::can_apply(&reason, shown, count);
         let text = close_dialog::dialog_message(&reason, &name, count, &others, apply_offered);
         let mut choice = None;
-        egui::Window::new("Layer Standardizer")
+        egui::Window::new("Layer Herder")
             .id(egui::Id::new("close_dialog"))
             .collapsible(false)
             .resizable(false)
@@ -1524,6 +1524,17 @@ fn attach_native_window_to_owner(_frame: &eframe::Frame, _owner_hwnd: isize) -> 
     Err("AutoCAD window ownership is supported only on Windows".to_string())
 }
 
+/// Title-bar and taskbar icon. Raw 64x64 RGBA, generated with the other
+/// brand sizes by scripts/generate-brand-assets.py, so no image decoder is
+/// needed at runtime. The exe file's own icon is embedded by build.rs.
+fn app_icon() -> egui::IconData {
+    egui::IconData {
+        rgba: include_bytes!("../assets/app_icon_64.rgba").to_vec(),
+        width: 64,
+        height: 64,
+    }
+}
+
 fn main() -> eframe::Result<()> {
     let args = launch::parse_launch_args(std::env::args().skip(1));
     let owner_hwnd = args.owner_hwnd;
@@ -1538,7 +1549,8 @@ fn main() -> eframe::Result<()> {
                 user_preferences.mapping_editor_height,
             ])
             .with_maximized(user_preferences.mapping_editor_maximized)
-            .with_title("AutoCAD Layer Standardizer - Spatial Edition")
+            .with_title("Layer Herder")
+            .with_icon(app_icon())
             .with_visible(owner_hwnd.is_none()),
         persistence_path: storage_path,
         persist_window: false,
@@ -1548,7 +1560,7 @@ fn main() -> eframe::Result<()> {
     let (ipc_tx, ipc_results) = std::sync::mpsc::channel();
 
     eframe::run_native(
-        "AutoCAD Layer Standardizer",
+        "Layer Herder",
         options,
         Box::new(move |cc| {
             if owner_hwnd.is_some() {

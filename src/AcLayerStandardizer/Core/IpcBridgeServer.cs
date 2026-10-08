@@ -129,7 +129,7 @@ public static class IpcBridgeServer
             {
                 pipe?.Dispose();
                 Log($"Server error: {ex.GetType().Name}: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"Layer Standardizer IPC pipe error: {ex}");
+                System.Diagnostics.Debug.WriteLine($"Layer Herder IPC pipe error: {ex}");
                 logListening = true;
                 // Delay slightly before retrying loop on pipe error
                 try { await Task.Delay(500, ct).ConfigureAwait(false); } catch { break; }
@@ -176,7 +176,7 @@ public static class IpcBridgeServer
         catch (Exception ex)
         {
             Log($"Connection error: {ex.GetType().Name}: {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer IPC connection error: {ex}");
+            System.Diagnostics.Debug.WriteLine($"Layer Herder IPC connection error: {ex}");
         }
         finally
         {

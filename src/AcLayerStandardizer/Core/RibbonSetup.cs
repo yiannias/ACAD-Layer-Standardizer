@@ -20,13 +20,13 @@ internal static class RibbonSetup
 
             foreach (var panel in addinsTab.Panels)
             {
-                if (panel.Source?.Title == "Layer Standardizer")
+                if (panel.Source?.Title == "Layer Herder")
                     return true;
             }
 
             var panelSource = new RibbonPanelSource
             {
-                Title = "Layer Standardizer"
+                Title = "Layer Herder"
             };
             var newPanel = new RibbonPanel
             {
@@ -38,9 +38,9 @@ internal static class RibbonSetup
             var smallIcon = LoadIcon("ribbon16.png");
             var button = new RibbonButton
             {
-                Name = "Layer Standardizer",
-                Text = "Layer\nStandardizer",
-                ToolTip = "Open Layer Standardizer",
+                Name = "Layer Herder",
+                Text = "Layer\nHerder",
+                ToolTip = "Open Layer Herder",
                 CommandHandler = new LsrCommandHandler(),
                 Size = RibbonItemSize.Large,
                 Orientation = Orientation.Vertical,
