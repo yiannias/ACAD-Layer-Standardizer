@@ -2,16 +2,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using Autodesk.AutoCAD.ApplicationServices;
-using AcLayerStandardizer.Data;
 
 namespace AcLayerStandardizer.Core;
 
 internal static class RustUiLauncher
 {
-    // True when the Rust window is installed; callers can then skip work only the
-    // WPF fallback needs (reading the template, categorizing, loading memory).
-    public static bool IsAvailable() => FindUiExecutable() is not null;
-
     // The mapping window this AutoCAD session launched, if any. Only touched from
     // AutoCAD commands (one thread).
     private static Process? _window;
@@ -95,64 +90,84 @@ internal static class RustUiLauncher
         public static extern bool SetForegroundWindow(IntPtr hWnd);
     }
 
-    public static bool TryLaunchFromActiveAutoCad(
-        Document document,
-        string drawingName,
-        double heuristicThreshold,
-        IReadOnlyList<string> sourceLayers,
-        IReadOnlyList<string> standardLayers,
-        IEnumerable<string> emptyLayers,
-        IReadOnlyDictionary<string, LayerProperties> standardLayerProperties,
-        IReadOnlyDictionary<string, string> memoryMappings,
-        string memoryFilePath,
-        IEnumerable<(string Name, string SortGroup, IEnumerable<string> Layers)> targetFilters,
-        string templatePath,
-        IEnumerable<string> alwaysHiddenTargets)
-    {
-        var doc = Application.DocumentManager.MdiActiveDocument;
-        if (doc is null) return false;
+    // Set once a launch has started the window in this AutoCAD process, so only the
+    // first one passes the first-run notice.
+    private static bool _noticeShown;
 
-        var executable = FindUiExecutable();
-        if (executable is null) return false;
+    // A missing program file, AutoCAD not being ready, or a failed process start is
+    // reported through the outcome (and detail), not thrown; the caller prints
+    // LaunchGuard.DescribeFailure for it. IpcBridgeServer.Start and
+    // SetDrawingSnapshot run outside that guard and can still throw, as before.
+    public static LaunchOutcome TryLaunchFromActiveAutoCad(
+        Document document,
+        IEnumerable<string> sourceLayers,
+        IEnumerable<string> emptyLayers,
+        string templatePath,
+        out string? detail)
+    {
+        detail = null;
+        // The caller has already checked the document; this only guards a null.
+        if (document is null)
+        {
+            detail = "no drawing is open";
+            return LaunchOutcome.NotReady;
+        }
+
+        var executable = FindUiExecutable(out var searched);
+        if (executable is null)
+        {
+            detail = searched;
+            return LaunchOutcome.ExecutableNotFound;
+        }
 
         // One window only; its snapshot is not replaced under it.
-        if (TryFocusExistingWindow(doc)) return true;
+        if (TryFocusExistingWindow(document)) return LaunchOutcome.AlreadyOpen;
 
         // Initialize may have attempted to start the pipe before AutoCAD was
         // ready. Recheck it in the command context before launching the client.
         IpcBridgeServer.Start();
-        IpcBridgeServer.SetDrawingSnapshot(document, drawingName, heuristicThreshold, sourceLayers, standardLayers,
-            emptyLayers, standardLayerProperties, memoryMappings, memoryFilePath, targetFilters, templatePath,
-            alwaysHiddenTargets);
+        IpcBridgeServer.SetDrawingSnapshot(document, sourceLayers, emptyLayers, templatePath);
 
         var owner = Application.MainWindow.Handle;
-        if (owner == IntPtr.Zero) return false;
+        if (owner == IntPtr.Zero)
+        {
+            detail = "AutoCAD's main window was not found";
+            return LaunchOutcome.NotReady;
+        }
 
+        var passNotice = NoticePolicy.ShouldPassNotice(_noticeShown);
         var startInfo = new ProcessStartInfo(executable)
         {
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(executable)!,
-            Arguments = $"--owner-hwnd={owner.ToInt64()}"
+            Arguments = $"--owner-hwnd={owner.ToInt64()}" + (passNotice ? " " + NoticePolicy.Argument : string.Empty)
         };
 
         try
         {
             _window = Process.Start(startInfo);
-            return true;
+            if (passNotice) _noticeShown = true;
+            return LaunchOutcome.Launched;
         }
         catch (Exception ex)
         {
-            doc.Editor.WriteMessage($"\nCould not launch the Rust mappings UI: {ex.Message}");
+            detail = ex.Message;
+            return LaunchOutcome.StartFailed;
         }
-        return false;
     }
 
-    private static string? FindUiExecutable()
+    // Also describes, in one readable string, where it looked (for the failure message).
+    private static string? FindUiExecutable(out string searched)
     {
         // AutoCAD's AppContext.BaseDirectory points at acad.exe, not the
         // folder from which NETLOAD loaded this plugin.
         var assemblyDirectory = Path.GetDirectoryName(typeof(RustUiLauncher).Assembly.Location);
-        if (string.IsNullOrEmpty(assemblyDirectory)) return null;
+        if (string.IsNullOrEmpty(assemblyDirectory))
+        {
+            searched = "the plug-in's folder, which could not be determined";
+            return null;
+        }
+        searched = $"{assemblyDirectory} and the folders above it, plus rust\\target\\release and rust\\target\\debug under each";
 
         var directory = new DirectoryInfo(assemblyDirectory);
         while (directory is not null)

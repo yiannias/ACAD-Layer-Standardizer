@@ -637,7 +637,7 @@ begin
     end;
 
     { UI preferences (mapping-editor window size/zoom/pan): machine-specific,
-      so UserPreferences.cs writes it under LocalAppData rather than the
+      so the Rust mapping window writes it under LocalAppData rather than the
       Roaming ConfigDir used for config.json/standards_memory.json. }
     UiPrefsFile := LocalDir + '\ui_preferences.json';
     if FileExists(UiPrefsFile) then

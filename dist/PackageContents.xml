@@ -27,16 +27,11 @@
         Version="1.4.0"
         ModuleName="./Contents/R24/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
-        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
-        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
-        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
-        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
-        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
         <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
-        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="LAYERSTANDARDIZER" Global="LAYERSTANDARDIZER" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
       </Commands>
     </ComponentEntry>
@@ -54,16 +49,11 @@
         Version="1.4.0"
         ModuleName="./Contents/R25/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
-        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
-        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
-        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
-        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
-        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
         <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
-        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="LAYERSTANDARDIZER" Global="LAYERSTANDARDIZER" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
       </Commands>
     </ComponentEntry>
@@ -81,16 +71,11 @@
         Version="1.4.0"
         ModuleName="./Contents/R26/AcLayerStandardizer.dll">
       <Commands GroupName="ACLAYERSTD">
-        <Command Local="STD_SETTINGS" Global="STD_SETTINGS" />
-        <Command Local="STD_SETTEMPLATE" Global="STD_SETTEMPLATE" />
-        <Command Local="STD_SETMEMORYFILE" Global="STD_SETMEMORYFILE" />
-        <Command Local="STD_EXPORTMEMORY" Global="STD_EXPORTMEMORY" />
-        <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
         <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
-        <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
+        <Command Local="LAYERSTANDARDIZER" Global="LAYERSTANDARDIZER" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
       </Commands>
     </ComponentEntry>

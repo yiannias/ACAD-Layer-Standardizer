@@ -23,9 +23,11 @@ use std::{
 
 mod close_dialog;
 mod data;
+mod launch;
 mod live_sync;
 mod mapping_editor;
 mod sessions;
+mod settings_panel;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, rename_all = "PascalCase")]
@@ -76,6 +78,9 @@ enum AppMessage {
     Feed(FeedMessage),
     /// The answer to replaying a close or quit AutoCAD blocked.
     Replay(Result<IpcResponse, String>),
+    /// Whether the Standards File exists, checked off the UI thread for the
+    /// Settings panel.
+    StandardExists { path: String, exists: bool },
 }
 
 /// Asks which drawing is active, then reads its layers (the feed's resync path).
@@ -158,6 +163,11 @@ struct LayerStandardizerApp {
     apply_for_close: Option<close_dialog::CloseReason>,
     /// Close the window once the replay was queued (Apply from a blocked close).
     close_after_replay: bool,
+    settings: settings_panel::SettingsPanel,
+    /// Whether the Standards File exists; `None` while the check is running.
+    standard_file_exists: Option<bool>,
+    /// The beta notice banner (from `--first-run-notice`); never persisted.
+    notice_visible: bool,
 }
 
 impl LayerStandardizerApp {
@@ -166,6 +176,7 @@ impl LayerStandardizerApp {
         ipc_sender: Sender<AppMessage>,
         ipc_results: Receiver<AppMessage>,
         user_preferences: UserPreferences,
+        first_run_notice: bool,
     ) -> Self {
         let startup = data::load_startup();
         let min_confidence = startup.config.heuristic_threshold.clamp(0.6, 1.0);
@@ -222,6 +233,9 @@ impl LayerStandardizerApp {
             close_approved: false,
             apply_for_close: None,
             close_after_replay: false,
+            settings: settings_panel::SettingsPanel::default(),
+            standard_file_exists: None,
+            notice_visible: first_run_notice,
         }
     }
 
@@ -315,6 +329,13 @@ impl eframe::App for LayerStandardizerApp {
                     self.on_replay(ui.ctx(), result);
                     continue;
                 }
+                AppMessage::StandardExists { path, exists } => {
+                    // An answer for a standard that has since changed is stale.
+                    if path == self.plugin_config.template_dwg_path {
+                        self.standard_file_exists = Some(exists);
+                    }
+                    continue;
+                }
             };
             match result {
                 Ok(IpcResponse::DrawingSnapshot(snapshot)) => {
@@ -348,6 +369,9 @@ impl eframe::App for LayerStandardizerApp {
                         .eq_ignore_ascii_case(&self.plugin_config.template_dwg_path)
                     {
                         self.remember_template_path(info.template_path);
+                    }
+                    if self.settings.open {
+                        self.check_standard_file(ui.ctx());
                     }
                 }
                 Ok(IpcResponse::Applied {
@@ -558,16 +582,19 @@ impl eframe::App for LayerStandardizerApp {
         }
 
         if editor_event.choose_standard && !self.apply_pending {
-            let selected = frame.winit_window().and_then(|window| {
-                rfd::FileDialog::new()
-                    .set_title("Choose Standard Drawing")
-                    .add_filter("AutoCAD drawings", &STANDARD_FILE_EXTENSIONS)
-                    .set_parent(window)
-                    .pick_file()
-            });
-            if let Some(path) = selected {
-                self.request_standard(ui.ctx(), path.to_string_lossy().into_owned());
+            self.choose_standard_file(ui.ctx(), frame);
+        }
+
+        if editor_event.open_settings {
+            if !self.settings.open {
+                self.settings.status.clear();
             }
+            self.settings.open = true;
+            self.check_standard_file(ui.ctx());
+        }
+        self.show_notice_banner(ui.ctx());
+        if let Some(action) = self.show_settings_panel(ui.ctx()) {
+            self.handle_settings_action(ui.ctx(), frame, action);
         }
 
         if let Some(message) = self.error_message.clone() {
@@ -686,6 +713,283 @@ impl LayerStandardizerApp {
                     Some(format!("Could not remember the chosen standard: {error}"));
             }
         }
+    }
+
+    /// The Choose Standard flow (right panel, Target header and Settings panel).
+    fn choose_standard_file(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        let selected = frame.winit_window().and_then(|window| {
+            rfd::FileDialog::new()
+                .set_title("Choose Standard Drawing")
+                .add_filter("AutoCAD drawings", &STANDARD_FILE_EXTENSIONS)
+                .set_parent(window)
+                .pick_file()
+        });
+        if let Some(path) = selected {
+            self.request_standard(ctx, path.to_string_lossy().into_owned());
+        }
+    }
+}
+
+/// The Settings panel and the beta notice banner (wording lives in `settings_panel`).
+impl LayerStandardizerApp {
+    /// Checks whether the Standards File exists on a worker thread (it is often on
+    /// a slow network drive); the panel says "Checking..." until the answer arrives.
+    fn check_standard_file(&mut self, ctx: &egui::Context) {
+        self.standard_file_exists = None;
+        let path = self.plugin_config.template_dwg_path.clone();
+        if path.trim().is_empty() {
+            return;
+        }
+        let sender = self.ipc_sender.clone();
+        let repaint = ctx.clone();
+        std::thread::spawn(move || {
+            let exists = std::path::Path::new(&path).exists();
+            let _ = sender.send(AppMessage::StandardExists { path, exists });
+            repaint.request_repaint();
+        });
+    }
+
+    fn show_notice_banner(&mut self, ctx: &egui::Context) {
+        if !self.notice_visible {
+            return;
+        }
+        egui::Area::new(egui::Id::new("first_run_notice"))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 12.0))
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(egui::Color32::from_rgba_unmultiplied(31, 33, 37, 244))
+                    .stroke(egui::Stroke::new(
+                        1.0,
+                        egui::Color32::from_rgb(235, 176, 20),
+                    ))
+                    .corner_radius(8)
+                    .inner_margin(egui::Margin::symmetric(14, 8))
+                    .show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.set_max_width(560.0);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(settings_panel::BETA_NOTICE)
+                                        .color(egui::Color32::from_rgb(230, 230, 230)),
+                                )
+                                .wrap(),
+                            );
+                            if ui.small_button("x").on_hover_text("Dismiss").clicked() {
+                                self.notice_visible = false;
+                            }
+                        });
+                    });
+            });
+    }
+
+    /// Draws the Settings panel when open; returns the action the user picked.
+    fn show_settings_panel(
+        &mut self,
+        ctx: &egui::Context,
+    ) -> Option<settings_panel::SettingsAction> {
+        use settings_panel::SettingsAction;
+        if !self.settings.open {
+            return None;
+        }
+        let template_path = self.plugin_config.template_dwg_path.as_str();
+        let standard =
+            settings_panel::standards_file_display(template_path, self.standard_file_exists);
+        let memory_path = self
+            .memory_store
+            .as_ref()
+            .map(|store| store.file_path().display().to_string());
+        let enabled = settings_panel::settings_actions_enabled(self.apply_pending);
+        let about =
+            settings_panel::about_line(env!("CARGO_PKG_VERSION"), env!("ACAD_LAYER_UI_BUILD_ID"));
+        let status = self.settings.status.as_str();
+        let mut open = true;
+        let mut action = None;
+        let heading = |ui: &mut egui::Ui, text: &str| {
+            ui.label(
+                egui::RichText::new(text)
+                    .strong()
+                    .color(egui::Color32::from_rgb(230, 230, 230)),
+            );
+        };
+        egui::Window::new("Settings")
+            .id(egui::Id::new("settings_panel"))
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .order(egui::Order::Foreground)
+            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .show(ctx, |ui| {
+                ui.set_max_width(420.0);
+                heading(ui, "Standards File");
+                ui.horizontal(|ui| {
+                    let text = if standard.missing {
+                        egui::RichText::new(&standard.text)
+                            .color(egui::Color32::from_rgb(235, 176, 20))
+                    } else {
+                        egui::RichText::new(&standard.text)
+                    };
+                    let label = ui.add(egui::Label::new(text).truncate());
+                    if !template_path.trim().is_empty() {
+                        label.on_hover_text(template_path);
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .add_enabled(enabled, egui::Button::new("Change..."))
+                            .clicked()
+                        {
+                            action = Some(SettingsAction::ChangeStandard);
+                        }
+                    });
+                });
+                ui.add_space(8.0);
+                heading(ui, "Memory File");
+                match &memory_path {
+                    Some(path) => {
+                        ui.add(egui::Label::new(path.as_str()).truncate())
+                            .on_hover_text(path.as_str());
+                    }
+                    None => {
+                        ui.label(settings_panel::NO_MEMORY_LOCATION);
+                    }
+                }
+                ui.horizontal(|ui| {
+                    ui.add_enabled_ui(enabled, |ui| {
+                        if ui.button("Change...").clicked() {
+                            action = Some(SettingsAction::ChangeMemoryFile);
+                        }
+                        if ui.button("Import...").clicked() {
+                            action = Some(SettingsAction::ImportMemory);
+                        }
+                        if ui.button("Export...").clicked() {
+                            action = Some(SettingsAction::ExportMemory);
+                        }
+                    });
+                });
+                if !status.is_empty() {
+                    ui.add(egui::Label::new(status).wrap());
+                }
+                ui.add_space(8.0);
+                heading(ui, "About");
+                ui.label(about.as_str());
+                ui.add(egui::Label::new(settings_panel::BETA_NOTICE).wrap());
+            });
+        self.settings.open = open;
+        action
+    }
+
+    fn handle_settings_action(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &eframe::Frame,
+        action: settings_panel::SettingsAction,
+    ) {
+        use settings_panel::SettingsAction;
+        if !settings_panel::settings_actions_enabled(self.apply_pending) {
+            return;
+        }
+        match action {
+            SettingsAction::ChangeStandard => self.choose_standard_file(ctx, frame),
+            SettingsAction::ChangeMemoryFile => self.change_memory_file(frame),
+            SettingsAction::ImportMemory => self.import_memory(frame),
+            SettingsAction::ExportMemory => self.export_memory(frame),
+        }
+    }
+
+    fn change_memory_file(&mut self, frame: &eframe::Frame) {
+        let (Some(config_path), Some(config_dir)) = (
+            self.config_path.clone(),
+            self.config_path
+                .as_deref()
+                .and_then(std::path::Path::parent)
+                .map(std::path::Path::to_path_buf),
+        ) else {
+            self.settings.status =
+                "No settings folder is available, so the memory file cannot be changed."
+                    .to_string();
+            return;
+        };
+        let selected = frame.winit_window().and_then(|window| {
+            rfd::FileDialog::new()
+                .set_title("Choose Memory File")
+                .add_filter("JSON files", &["json"])
+                .set_file_name("standards_memory.json")
+                .set_parent(window)
+                .save_file()
+        });
+        let Some(path) = selected else {
+            return;
+        };
+        match data::switch_memory_file(&config_path, &config_dir, &path.to_string_lossy()) {
+            Ok(change) => {
+                self.settings.status =
+                    settings_panel::memory_changed_status(change.store.file_path());
+                self.plugin_config = change.config;
+                self.memory_store = Some(change.store);
+                self.memory_mappings = change.memory.mappings;
+                self.recalculate();
+            }
+            Err(message) => self.settings.status = message,
+        }
+    }
+
+    fn import_memory(&mut self, frame: &eframe::Frame) {
+        let Some(store) = &self.memory_store else {
+            self.settings.status = settings_panel::NO_MEMORY_LOCATION.to_string();
+            return;
+        };
+        let selected = frame.winit_window().and_then(|window| {
+            rfd::FileDialog::new()
+                .set_title("Import Memory")
+                .add_filter("JSON files", &["json"])
+                .set_parent(window)
+                .pick_file()
+        });
+        let Some(path) = selected else {
+            return;
+        };
+        let report = match store.import_from(&path) {
+            Ok(report) => report,
+            Err(error) => {
+                self.settings.status = format!("Import failed: {error}.");
+                return;
+            }
+        };
+        match store.load_checked() {
+            Ok(memory) => {
+                self.memory_mappings = memory.mappings;
+                self.recalculate();
+                self.settings.status = settings_panel::import_status(&report);
+            }
+            Err(error) => {
+                self.settings.status = format!(
+                    "{} But the memory could not be reloaded: {error}.",
+                    settings_panel::import_status(&report)
+                );
+            }
+        }
+    }
+
+    fn export_memory(&mut self, frame: &eframe::Frame) {
+        let Some(store) = &self.memory_store else {
+            self.settings.status = settings_panel::NO_MEMORY_LOCATION.to_string();
+            return;
+        };
+        let selected = frame.winit_window().and_then(|window| {
+            rfd::FileDialog::new()
+                .set_title("Export Memory")
+                .add_filter("JSON files", &["json"])
+                .set_file_name("standards_memory.json")
+                .set_parent(window)
+                .save_file()
+        });
+        let Some(path) = selected else {
+            return;
+        };
+        self.settings.status = match store.export_to(&path) {
+            Ok(()) => settings_panel::export_status(&path),
+            Err(error) => format!("Export failed: {error}."),
+        };
     }
 }
 
@@ -1232,13 +1536,9 @@ fn app_icon() -> egui::IconData {
 }
 
 fn main() -> eframe::Result<()> {
-    let owner_hwnd = std::env::args().skip(1).find_map(|arg| {
-        arg.strip_prefix("--owner-hwnd=").map(|value| {
-            value
-                .parse::<isize>()
-                .expect("--owner-hwnd must be a decimal HWND")
-        })
-    });
+    let args = launch::parse_launch_args(std::env::args().skip(1));
+    let owner_hwnd = args.owner_hwnd;
+    let first_run_notice = args.first_run_notice;
 
     let user_preferences = load_preferences();
     let storage_path = preferences_path().map(|path| path.with_file_name("rust_ui_state.ron"));
@@ -1277,6 +1577,7 @@ fn main() -> eframe::Result<()> {
                 ipc_tx,
                 ipc_results,
                 user_preferences,
+                first_run_notice,
             )))
         }),
     )

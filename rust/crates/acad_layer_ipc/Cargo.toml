@@ -5,6 +5,5 @@ edition = "2021"
 description = "IPC protocols and Named Pipe server/client for AutoCAD layer standardization"
 
 [dependencies]
-acad_layer_core = { path = "../acad_layer_core" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
