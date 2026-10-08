@@ -77,6 +77,8 @@ Define the slim IPC surface between the Rust app and the AutoCAD connector.
 
 ### Phase 4: Move the `LSR` flow to Rust and remove WPF
 
+**Status:** implemented on `main` as Beta 1.4.0, awaiting manual verification (see `docs/superpowers/plans/2026-10-07-phase4-manual-checklist.md`). Not yet released.
+
 - Move the `LSR` match-preview flow (`StandardizeCommand`, `PreviewDialog`) and its supporting dialogs to Rust, or fold them into the mapping window.
 - Remove the WPF mapping editor, its fallback path, `LayerEditorViewModel`, `NodeGraphWindow`, the other WPF dialogs, `Nodify`, and the unused `RustNativeBridge` P/Invoke wrapper unless a concrete need appears.
 - The `LSR` welcome notice may stay in .NET if that is still preferred (the earlier plan allowed it).
@@ -110,7 +112,6 @@ The three Phase 3 questions below are resolved (see `docs/superpowers/specs/2026
 
 ## Wanted, not yet scheduled
 
-- Import and export of the translation memory (and a choose-memory-file picker) from the mapping window with a file browser. Today these are typed commands (`STD_ExportMemory`, `STD_ImportMemory`, `STD_SetMemoryFile`) that prompt for a path at the AutoCAD command line.
 - Reuse the live-sync event feed (`EventFeed` / `PollEvents` in the connector, `acad_layer_ipc::feed` in Rust) for other plug-ins. It was built general on purpose (events carry a type and a payload and know nothing about layers); nothing else uses it yet.
 - **License notices for the Rust window.** Generate the per-crate license notices for the crates statically linked into `acad_layer_ui.exe` (for example with `cargo-about`), fill in `THIRD-PARTY-NOTICES.md` and ship them with the installer.
 
@@ -139,5 +140,4 @@ What is known to be open after Phase 4. Nothing here blocks a release; none of i
 
 ### Housekeeping that comes with Phase 4
 
-- With the WPF editor gone there is no fallback if the Rust program file is missing, so the installer must always include it and the launcher should say so plainly.
 - `docs/plan-1.3.md` line "closing the Standardizer … (Rust side only)" in Phase 3 predates the connector's close and quit protection; reword it when the plan is next edited.
