@@ -3,6 +3,9 @@
 use acad_layer_core::ImportReport;
 use std::path::Path;
 
+pub const PROJECT_WEBSITE_URL: &str = "https://yiannias.github.io/LayerHerder/";
+pub const PROJECT_REPO_URL: &str = "https://github.com/yiannias/LayerHerder";
+
 pub const BETA_NOTICE: &str = "Beta: please try this on a copy of your drawing first, and keep a backup before you apply changes.";
 
 #[derive(Default)]
@@ -169,6 +172,15 @@ mod tests {
             about_line("1.4.0", "abc123"),
             "Layer Standardizer Beta 1.4.0 - Build abc123"
         );
+    }
+
+    #[test]
+    fn project_links_point_at_the_project() {
+        assert_eq!(
+            PROJECT_WEBSITE_URL,
+            "https://yiannias.github.io/LayerHerder/"
+        );
+        assert_eq!(PROJECT_REPO_URL, "https://github.com/yiannias/LayerHerder");
     }
 
     #[test]

@@ -872,6 +872,12 @@ impl LayerStandardizerApp {
                 ui.add_space(8.0);
                 heading(ui, "About");
                 ui.label(about.as_str());
+                ui.horizontal(|ui| {
+                    // Opens in the default browser; the app itself makes no network calls.
+                    ui.hyperlink_to("Project website", settings_panel::PROJECT_WEBSITE_URL);
+                    ui.label("·");
+                    ui.hyperlink_to("GitHub", settings_panel::PROJECT_REPO_URL);
+                });
                 ui.add(egui::Label::new(settings_panel::BETA_NOTICE).wrap());
             });
         self.settings.open = open;
