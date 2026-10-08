@@ -10,7 +10,7 @@ public class InstallerScriptTests
     [Fact]
     public void Installer_installs_the_rust_window_for_every_autocad_generation()
     {
-        var script = Path.Combine(FindRepoRoot(), "installer", "ACADLayerStandardizer.iss");
+        var script = Path.Combine(FindRepoRoot(), "installer", "LayerHerder.iss");
         var uiSourceLines = File.ReadAllLines(script)
             .Select(line => line.Trim())
             .Where(line => line.StartsWith("Source:", StringComparison.OrdinalIgnoreCase))
@@ -38,10 +38,10 @@ public class InstallerScriptTests
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            if (File.Exists(Path.Combine(directory.FullName, "installer", "ACADLayerStandardizer.iss")))
+            if (File.Exists(Path.Combine(directory.FullName, "installer", "LayerHerder.iss")))
                 return directory.FullName;
             directory = directory.Parent;
         }
-        throw new InvalidOperationException("Could not find installer\\ACADLayerStandardizer.iss above " + AppContext.BaseDirectory);
+        throw new InvalidOperationException("Could not find installer\\LayerHerder.iss above " + AppContext.BaseDirectory);
     }
 }
