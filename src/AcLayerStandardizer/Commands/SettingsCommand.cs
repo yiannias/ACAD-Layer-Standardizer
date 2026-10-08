@@ -17,7 +17,7 @@ public static class SettingsCommand
 
         var config = PluginConfig.Load();
 
-        ed.WriteMessage($"\n--- AcLayerStandardizer Settings ---");
+        ed.WriteMessage($"\n--- Layer Herder Settings ---");
         ed.WriteMessage($"\n  Template DWG  : {(string.IsNullOrEmpty(config.TemplateDwgPath) ? "(not set)" : config.TemplateDwgPath)}");
         ed.WriteMessage($"\n  Memory File   : {(string.IsNullOrEmpty(config.MemoryFilePath) ? "(not set)" : config.MemoryFilePath)}");
         ed.WriteMessage($"\n  Heuristic Threshold: {config.HeuristicThreshold:P0}");

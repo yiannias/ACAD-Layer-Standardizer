@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ApplicationPackage SchemaVersion="1.0"
-    Name="ACAD Layer Standardizer"
+    Name="Layer Herder"
     Description="Analyzes DWG layers against a template DWG and maps them to a master standard layer set. Supports AutoCAD 2021 and newer."
     Author="Chris Yiannias"
+    Icon="./LayerHerder.ico"
     Version="1.3.0"
     ProductCode="{3D5C22DE-4114-415E-80CD-B7B435A796B2}"
     UpgradeCode="{E5B07CB1-B0A8-40B7-B225-3DAF58FCAF57}">
@@ -33,7 +34,7 @@
         <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
-        <Command Local="LSR" Global="LSR" />
+        <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
         <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
@@ -60,7 +61,7 @@
         <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
-        <Command Local="LSR" Global="LSR" />
+        <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
         <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />
@@ -87,7 +88,7 @@
         <Command Local="STD_IMPORTMEMORY" Global="STD_IMPORTMEMORY" />
         <Command Local="STD_MAPPINGS" Global="STD_MAPPINGS" />
         <Command Local="LSTDR" Global="LSTDR" />
-        <Command Local="LSR" Global="LSR" />
+        <Command Local="HERD" Global="HERD" />
         <Command Local="STANDARDIZELAYERS" Global="STANDARDIZELAYERS" />
         <Command Local="APPLYSTANDARDIZATION" Global="APPLYSTANDARDIZATION" />
         <Command Local="UNDOSTANDARDIZATION" Global="UNDOSTANDARDIZATION" />

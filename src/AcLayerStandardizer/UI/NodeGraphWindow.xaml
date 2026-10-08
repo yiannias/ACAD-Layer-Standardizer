@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:nodify="https://miroiu.github.io/nodify"
         xmlns:local="clr-namespace:AcLayerStandardizer.UI"
-        Title="Layer Standardizer: Layer Mapping Editor"
+        Title="Layer Herder: Layer Mapping Editor"
         Width="1200" Height="650"
         WindowStartupLocation="CenterScreen"
         FontFamily="Fira Sans" FontSize="12"

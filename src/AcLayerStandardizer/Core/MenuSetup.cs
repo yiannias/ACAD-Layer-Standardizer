@@ -4,20 +4,24 @@ namespace AcLayerStandardizer.Core;
 
 internal static class MenuSetup
 {
-    private const string MenuTitle = "Layer Standardizer";
-    private const string MenuItemLabel = "Layer Standardizer...";
+    private const string MenuTitle = "Layer Herder";
+    // Menu the ACAD Layer Standardizer releases added; taken off the menu
+    // bar so upgraded installs don't show both.
+    private const string LegacyMenuTitle = "Layer Standardizer";
+    private const string MenuItemLabel = "Layer Herder...";
     // COM menu macros take raw characters, not CUI caret notation: "^C^C"
     // set through AcadPopupMenuItem.Macro is sent literally (caret, C, ...)
     // and garbles the command. The classic COM/VBA convention is ASCII 3
     // (the cancel character) twice, then the command with a trailing space
     // acting as Enter.
-    private const string MenuItemMacro = "\x03\x03LSR ";
+    private const string MenuItemMacro = "\x03\x03HERD ";
 
     // COM access is late-bound (dynamic) rather than via the versioned
     // Autodesk.AutoCAD.Interop assemblies, so one body serves every
     // AutoCAD release we target without per-version interop references.
     public static bool Setup(PluginConfig config)
     {
+        RemoveLegacyMenu();
         if (!config.InstallMenu) return true;
 
         try
@@ -60,6 +64,28 @@ internal static class MenuSetup
         {
             System.Diagnostics.Debug.WriteLine($"AcLayerStandardizer menu setup failed: {ex}");
             return false;
+        }
+    }
+
+    // Best effort: a failure here must not stop the Layer Herder menu.
+    private static void RemoveLegacyMenu()
+    {
+        try
+        {
+            dynamic acadApp = Application.AcadApplication;
+            dynamic baseGroup = acadApp.MenuGroups.Item(0);
+            foreach (dynamic existing in baseGroup.Menus)
+            {
+                if (existing.Name == LegacyMenuTitle && existing.OnMenuBar)
+                {
+                    existing.RemoveFromMenuBar();
+                    break;
+                }
+            }
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"AcLayerStandardizer legacy menu removal failed: {ex}");
         }
     }
 }

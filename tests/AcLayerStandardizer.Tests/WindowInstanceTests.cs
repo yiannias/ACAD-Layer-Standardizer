@@ -21,7 +21,7 @@ public class WindowInstanceTests
     public void the_already_open_message_says_the_window_follows_the_active_drawing()
     {
         Assert.Equal(
-            "The Layer Standardizer window is already open; it follows the active drawing.",
+            "The Layer Herder window is already open; it follows the active drawing.",
             WindowInstance.AlreadyOpenMessage);
     }
 }

@@ -349,7 +349,7 @@ public class IpcBridgeServerTests
         Assert.Equal("Error", response.GetProperty("type").GetString());
         var message = response.GetProperty("payload").GetString()!;
         Assert.DoesNotContain("LSTDR", message);
-        Assert.Contains("Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.", message);
+        Assert.Contains("Switch to the drawing shown in the Layer Herder window in AutoCAD and try again.", message);
     }
 
     [Fact]

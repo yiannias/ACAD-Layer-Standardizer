@@ -1,7 +1,7 @@
-; ACAD Layer Standardizer - Inno Setup Script
-; Build with: ISCC.exe ACADLayerStandardizer.iss
+; Layer Herder - Inno Setup Script
+; Build with: ISCC.exe LayerHerder.iss
 
-#define MyAppName "ACAD Layer Standardizer"
+#define MyAppName "Layer Herder"
 #define MyAppPublisher "CGY"
 #define MyAppURL "https://github.com/yiannias/ACAD-Layer-Standardizer"
 #define MyAppVersion GetEnv('MYAPPVERSION')
@@ -23,18 +23,23 @@ AppPublisherURL={#MyAppURL}
 ; location is trusted by default for autoloading (SECURELOAD). Installing to
 ; AppData silently fails to autoload with no error shown. Requires admin
 ; elevation as a result; see memory.md for the investigation.
-DefaultDirName={commonpf64}\Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle
+DefaultDirName={commonpf64}\Autodesk\ApplicationPlugins\LayerHerder.bundle
 DefaultGroupName={#MyAppName}
+; Same AppId as the Layer Standardizer releases, so Inno would otherwise
+; reuse their AcLayerStandardizer.bundle folder and Start menu group. The
+; rename needs the new ones; RemoveLegacyStandardizer deletes the old ones.
+UsePreviousAppDir=no
+UsePreviousGroup=no
 OutputDir=..\dist
-OutputBaseFilename=AcLayerStandardizer_{#StringChange(MyAppVersion, "/", "-")}
-SetupIconFile=assets\LayerStandardizer.ico
-WizardSmallImageFile=assets\LayerStandardizer_header.png
-WizardImageFile=assets\LayerStandardizer_sidebar.png
+OutputBaseFilename=LayerHerder_{#StringChange(MyAppVersion, "/", "-")}
+SetupIconFile=assets\LayerHerder.ico
+WizardSmallImageFile=assets\LayerHerder_header.png
+WizardImageFile=assets\LayerHerder_sidebar.png
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=admin
 ArchitecturesInstallIn64BitMode=x64compatible
-UninstallDisplayIcon={app}\Contents\R25\AcLayerStandardizer.dll
+UninstallDisplayIcon={app}\LayerHerder.ico
 WizardStyle=modern dark
 
 [Languages]
@@ -54,6 +59,7 @@ Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R24
 Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R25"; Flags: ignoreversion
 Source: "..\rust\target\release\acad_layer_ui.exe"; DestDir: "{app}\Contents\R26"; Flags: ignoreversion
 Source: "..\dist\PackageContents.xml"; DestDir: "{app}"; Flags: ignoreversion
+Source: "assets\LayerHerder.ico"; DestDir: "{app}"; Flags: ignoreversion
 ; config.json: plain app settings (paths, thresholds, checkbox state), not a
 ; versioned content schema -- PluginConfig.Load() already tolerates missing
 ; fields via C# property defaults on deserialize, so there's nothing here
@@ -69,7 +75,7 @@ Source: "assets\config.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flag
 ; get asked (and only overwritten, after a .bak backup) when the bundled
 ; copy is actually newer than what's on disk.
 Source: "assets\layer_dictionary.json"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion; Check: ShouldInstallDictionary
-Source: "assets\LayerStandardizer.cuix"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion
+Source: "assets\LayerHerder.cuix"; DestDir: "{userappdata}\AcLayerStandardizer"; Flags: ignoreversion
 
 [Dirs]
 Name: "{userappdata}\AcLayerStandardizer"; Flags: uninsalwaysuninstall
@@ -78,8 +84,8 @@ Name: "{userappdata}\AcLayerStandardizer"; Flags: uninsalwaysuninstall
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Registry]
-Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\AcLayerStandardizer"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\LayerHerder"; ValueType: string; ValueName: "Version"; ValueData: "{#MyAppVersion}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\LayerHerder"; ValueType: string; ValueName: "InstallPath"; ValueData: "{app}"; Flags: uninsdeletekey
 
 [Code]
 // PrivilegesRequired=admin means every launch goes through UAC elevation,
@@ -198,16 +204,16 @@ var
   InfoPageID: Integer;
   RibbonCheck: TNewCheckBox;
   MenuCheck: TNewCheckBox;
-  ForceCleanReinstall: Boolean;
+  ForceCleanUpgrade: Boolean;
 
 { Shows a 4-button choice when an existing installation is detected.
-  Returns mrYes (Update), mrNo (Reinstall), mrCancel (Uninstall), or
+  Returns mrYes (Update), mrNo (Upgrade), mrCancel (Uninstall), or
   mrAbort (cancel setup entirely / dialog closed). }
-function ShowUpdateChoiceDialog(const CurrentVersion: String): Integer;
+function ShowUpdateChoiceDialog(const CurrentVersion: String; IsLegacy: Boolean): Integer;
 var
   Form: TSetupForm;
   Lbl: TNewStaticText;
-  BtnUpdate, BtnReinstall, BtnUninstall, BtnCancel: TNewButton;
+  BtnUpdate, BtnUpgrade, BtnUninstall, BtnCancel: TNewButton;
   ButtonTop, ButtonWidth, ButtonHeight, Gap: Integer;
 begin
   { CreateCustomForm is Inno's own factory for script-created dialogs.
@@ -216,9 +222,9 @@ begin
     form resource that script forms don't have. This Inno version's
     signature (read from ISCmplr.dll) is (ClientWidth, ClientHeight,
     KeepSizeX, KeepSizeY) -- KeepSize=True since the size is pre-scaled. }
-  Form := CreateCustomForm(ScaleX(460), ScaleY(150), True, True);
+  Form := CreateCustomForm(ScaleX(460), ScaleY(190), True, True);
   try
-    Form.Caption := 'ACAD Layer Standardizer - Existing Installation Detected';
+    Form.Caption := 'Layer Herder - Existing Installation Detected';
     Form.Position := poScreenCenter;
     Form.BorderStyle := bsDialog;
 
@@ -229,8 +235,15 @@ begin
     Lbl.Width := Form.ClientWidth - ScaleX(32);
     Lbl.WordWrap := True;
     Lbl.AutoSize := True;
-    Lbl.Caption := 'An existing installation (version ' + CurrentVersion + ') was found.' + #13#10 +
-      'What would you like to do?';
+    if IsLegacy then
+      Lbl.Caption := 'ACAD Layer Standardizer (version ' + CurrentVersion + ') is installed. ' +
+        'Layer Herder replaces it.' + #13#10#13#10
+    else
+      Lbl.Caption := 'An existing installation (version ' + CurrentVersion + ') was found.' + #13#10#13#10;
+    Lbl.Caption := Lbl.Caption +
+      'Update installs over the current files. Upgrade does a clean install and ' +
+      'removes everything left from ACAD Layer Standardizer. Either way your ' +
+      'settings and layer mapping memory are kept.';
 
     ButtonWidth := ScaleX(96);
     ButtonHeight := ScaleY(23);
@@ -246,21 +259,21 @@ begin
     BtnUpdate.Top := ButtonTop;
     BtnUpdate.ModalResult := mrYes;
 
-    BtnReinstall := TNewButton.Create(Form);
-    BtnReinstall.Parent := Form;
-    BtnReinstall.Caption := '&Reinstall';
-    BtnReinstall.Width := ButtonWidth;
-    BtnReinstall.Height := ButtonHeight;
-    BtnReinstall.Left := BtnUpdate.Left + ButtonWidth + Gap;
-    BtnReinstall.Top := ButtonTop;
-    BtnReinstall.ModalResult := mrNo;
+    BtnUpgrade := TNewButton.Create(Form);
+    BtnUpgrade.Parent := Form;
+    BtnUpgrade.Caption := 'Up&grade';
+    BtnUpgrade.Width := ButtonWidth;
+    BtnUpgrade.Height := ButtonHeight;
+    BtnUpgrade.Left := BtnUpdate.Left + ButtonWidth + Gap;
+    BtnUpgrade.Top := ButtonTop;
+    BtnUpgrade.ModalResult := mrNo;
 
     BtnUninstall := TNewButton.Create(Form);
     BtnUninstall.Parent := Form;
     BtnUninstall.Caption := '&Uninstall';
     BtnUninstall.Width := ButtonWidth;
     BtnUninstall.Height := ButtonHeight;
-    BtnUninstall.Left := BtnReinstall.Left + ButtonWidth + Gap;
+    BtnUninstall.Left := BtnUpgrade.Left + ButtonWidth + Gap;
     BtnUninstall.Top := ButtonTop;
     BtnUninstall.ModalResult := mrCancel;
 
@@ -274,7 +287,11 @@ begin
     BtnCancel.ModalResult := mrAbort;
     BtnCancel.Cancel := True;
 
-    Form.ActiveControl := BtnUpdate;
+    { A Standardizer install defaults to Upgrade, the clean path. }
+    if IsLegacy then
+      Form.ActiveControl := BtnUpgrade
+    else
+      Form.ActiveControl := BtnUpdate;
     ForceWindowToFront(Form.Handle);
     Result := Form.ShowModal;
   finally
@@ -282,33 +299,55 @@ begin
   end;
 end;
 
+{ Finds an existing install: Layer Herder's own key (written by [Registry])
+  first, then Software\AcLayerStandardizer, written by the ACAD Layer
+  Standardizer releases. Keys are inlined literals, not consts: Inno's Pascal
+  Script parser rejected a multi-entry const block before. }
+function FindExistingInstall(var Version, InstallPath: String; var IsLegacy: Boolean): Boolean;
+begin
+  IsLegacy := False;
+  Result := RegQueryStringValue(HKLM, 'Software\LayerHerder', 'Version', Version);
+  if Result then
+    RegQueryStringValue(HKLM, 'Software\LayerHerder', 'InstallPath', InstallPath)
+  else
+  begin
+    Result := RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'Version', Version);
+    if Result then
+    begin
+      IsLegacy := True;
+      RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'InstallPath', InstallPath);
+    end;
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 var
   ExistingVersion, InstallPath, UninstallExe: String;
+  IsLegacy: Boolean;
   Choice, ResultCode: Integer;
 begin
   Result := True;
-  ForceCleanReinstall := False;
+  ForceCleanUpgrade := False;
 
-  if RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'Version', ExistingVersion) then
+  if FindExistingInstall(ExistingVersion, InstallPath, IsLegacy) then
   begin
-    Choice := ShowUpdateChoiceDialog(ExistingVersion);
+    Choice := ShowUpdateChoiceDialog(ExistingVersion, IsLegacy);
     case Choice of
       mrYes:
         { Update: proceed with normal install, existing config/memory files
           are left alone (config.json is only scaffolded if missing). };
       mrNo:
         begin
-          { Reinstall: same as Update, but force a clean copy of the plugin
+          { Upgrade: same as Update, but force a clean copy of the plugin
             binaries first (see PrepareToInstall). User config/memory in the
             AppData config folder is untouched either way. }
-          ForceCleanReinstall := True;
+          ForceCleanUpgrade := True;
         end;
       mrCancel:
         begin
           { Uninstall: hand off to the existing uninstaller, then abort this
             setup run entirely. }
-          if RegQueryStringValue(HKLM, 'Software\AcLayerStandardizer', 'InstallPath', InstallPath) then
+          if InstallPath <> '' then
           begin
             UninstallExe := InstallPath + '\unins000.exe';
             if FileExists(UninstallExe) then
@@ -323,10 +362,44 @@ begin
   end;
 end;
 
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+{ Removes what the ACAD Layer Standardizer releases installed. Runs on every
+  install, not only Upgrade: its bundle folder in particular must go, or
+  AutoCAD's Autoloader loads both bundles and registers every command twice.
+  Each step is a no-op when the piece is already gone. Kept on purpose: the
+  %APPDATA%\AcLayerStandardizer folder, which still holds the user's
+  config, layer mapping memory and dictionary (Layer Herder reads it from
+  there). The old "Layer Standardizer" AutoCAD menu is removed by the plug-in
+  itself on its first load (MenuSetup.cs). Returns an error message when the
+  old bundle can't be deleted. }
+function RemoveLegacyStandardizer(): String;
+var
+  LegacyBundle: String;
 begin
   Result := '';
-  if ForceCleanReinstall then
+
+  LegacyBundle := ExpandConstant('{commonpf64}\Autodesk\ApplicationPlugins\AcLayerStandardizer.bundle');
+  if DirExists(LegacyBundle) then
+  begin
+    DelTree(LegacyBundle, True, True, True);
+    if DirExists(LegacyBundle) then
+    begin
+      Result := 'The old ACAD Layer Standardizer files could not be removed from' + #13#10 +
+        LegacyBundle + #13#10#13#10 +
+        'Close AutoCAD and run setup again.';
+      Exit;
+    end;
+  end;
+
+  DelTree(ExpandConstant('{commonprograms}\ACAD Layer Standardizer'), True, True, True);
+  DeleteFile(ExpandConstant('{userappdata}\AcLayerStandardizer\LayerStandardizer.cuix'));
+  RegDeleteKeyIncludingSubkeys(HKLM, 'Software\AcLayerStandardizer');
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  Result := RemoveLegacyStandardizer();
+  if Result <> '' then Exit;
+  if ForceCleanUpgrade then
     DelTree(ExpandConstant('{app}\Contents'), True, True, True);
 end;
 
@@ -366,7 +439,7 @@ begin
   WizardForm.WizardSmallBitmapImage.Visible := False;
 
   InfoPage := CreateCustomPage(wpWelcome,
-    'About ACAD Layer Standardizer',
+    'About Layer Herder',
     'This application is free to use, open source, and MIT licensed.');
   InfoPageID := InfoPage.ID;
 
@@ -378,7 +451,7 @@ begin
   InfoLbl.WordWrap := True;
   InfoLbl.AutoSize := True;
   InfoLbl.Font.Size := 10;
-  InfoLbl.Caption := 'ACAD Layer Standardizer analyzes DWG layers against a template and maps them to a master standard layer set.' + #13#10#13#10 +
+  InfoLbl.Caption := 'Layer Herder analyzes DWG layers against a template and maps them to a master standard layer set.' + #13#10#13#10 +
     'Supports AutoCAD 2021 and newer (including verticals such as Civil 3D). AutoCAD 2020 and older are not supported.';
 
   GitHubLink := TNewStaticText.Create(InfoPage);
@@ -427,7 +500,7 @@ begin
 
   CustomizationPage := CreateCustomPage(wpSelectDir,
     'UI Customization',
-    'Select which UI customizations to install. The LSR command is always available from the AutoCAD command line.');
+    'Select which UI customizations to install. The HERD command is always available from the AutoCAD command line.');
   CustomizationPageID := CustomizationPage.ID;
 
   RibbonCheck := TNewCheckBox.Create(CustomizationPage);
@@ -445,7 +518,7 @@ begin
   MenuCheck.Top := 36;
   MenuCheck.Width := 350;
   MenuCheck.Height := 20;
-  MenuCheck.Caption := 'Install menu item (Custom Apps > Layer Standardizer)';
+  MenuCheck.Caption := 'Install menu item (Custom Apps > Layer Herder)';
   MenuCheck.Checked := True;
 
   WizardForm.BringToFront;
@@ -499,7 +572,7 @@ begin
           MsgBox('Heads up: the AutoCAD profile "' + ProfileKeys[k] + '" (' +
             SeriesKeys[i] + ') has plugin auto-loading disabled ' +
             '(APPAUTOLOAD = 0).' + #13#10#13#10 +
-            'ACAD Layer Standardizer installed correctly, but AutoCAD will ' +
+            'Layer Herder installed correctly, but AutoCAD will ' +
             'not load it at startup until auto-loading is re-enabled. ' +
             'In AutoCAD, type APPAUTOLOAD and set it back to 14 (the default).',
             mbInformation, MB_OK);
@@ -575,7 +648,7 @@ begin
         DeleteFile(UiPrefsFile);
     end;
 
-    CuiFile := ConfigDir + '\LayerStandardizer.cuix';
+    CuiFile := ConfigDir + '\LayerHerder.cuix';
     if FileExists(CuiFile) then
       DeleteFile(CuiFile);
 

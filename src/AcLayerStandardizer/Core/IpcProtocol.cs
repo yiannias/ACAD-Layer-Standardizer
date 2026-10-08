@@ -22,7 +22,7 @@ public static class IpcProtocol
             : string.Equals(requestDrawingId, snapshotDrawingId, StringComparison.Ordinal);
         return matches
             ? null
-            : "AutoCAD is working on a different drawing than the Layer Standardizer window. "
+            : "AutoCAD is working on a different drawing than the Layer Herder window. "
                 + SwitchAndTryAgain(requestDrawingName);
     }
 
@@ -31,7 +31,7 @@ public static class IpcProtocol
     // would only bring the same window forward).
     public static string SwitchAndTryAgain(string? drawingName) =>
         string.IsNullOrWhiteSpace(drawingName)
-            ? "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again."
+            ? "Switch to the drawing shown in the Layer Herder window in AutoCAD and try again."
             : $"Switch to {drawingName} in AutoCAD and try again.";
 
     // Reads the window's "pending" report from a request payload. Never throws:

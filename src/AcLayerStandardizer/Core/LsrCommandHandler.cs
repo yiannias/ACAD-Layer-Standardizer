@@ -12,7 +12,7 @@ internal class LsrCommandHandler : ICommand
     // Must go through AutoCAD's command engine (SendStringToExecute), not
     // call Commands.WelcomeCommand.ShowWelcome() directly. AutoCAD acquires
     // the document lock automatically when it dispatches a registered
-    // [CommandMethod] (e.g. typing "LSR" at the command line); calling the
+    // [CommandMethod] (e.g. typing "HERD" at the command line); calling the
     // C# method straight from this ribbon-button click handler runs on the
     // UI thread with no lock at all, so the first database Transaction
     // deep inside (StandardizeCommand.EnsureNotCurrentLayer) throws
@@ -20,6 +20,6 @@ internal class LsrCommandHandler : ICommand
     public void Execute(object? parameter)
     {
         var doc = Application.DocumentManager.MdiActiveDocument;
-        doc?.SendStringToExecute("LSR ", true, false, false);
+        doc?.SendStringToExecute("HERD ", true, false, false);
     }
 }

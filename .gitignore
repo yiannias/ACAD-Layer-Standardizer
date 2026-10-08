@@ -43,6 +43,8 @@ bld/
 ## Build artifacts / Release
 AcLayerStandardizer.bundle/
 AcLayerStandardizer_*.zip
+LayerHerder.bundle/
+LayerHerder_*.zip
 dist/*.exe
 dist/*.msi
 

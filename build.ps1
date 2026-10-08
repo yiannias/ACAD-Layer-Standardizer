@@ -18,11 +18,11 @@ $ErrorActionPreference = "Stop"
 $SolutionRoot = Split-Path -Parent $PSCommandPath
 $ProjectDir = Join-Path $SolutionRoot "src\AcLayerStandardizer"
 $DistDir = Join-Path $SolutionRoot "dist"
-$BundleName = "AcLayerStandardizer.bundle"
+$BundleName = "LayerHerder.bundle"
 $BundleDir = Join-Path $SolutionRoot $BundleName
 
 # Single source of truth for the app version -- keep in sync with the
-# installer's #define MyAppVersion (installer/ACADLayerStandardizer.iss),
+# installer's #define MyAppVersion (installer/LayerHerder.iss),
 # which reads this same string via the MYAPPVERSION env var below.
 $AppVersion = "BETA/1.3.0"
 $AppVersionSafe = $AppVersion -replace "/", "-"
@@ -37,7 +37,7 @@ $Eras = @(
     @{ Folder = "R26"; Tfm = "net10.0-windows"; Acad = "AutoCAD 2027" }
 )
 
-Write-Host "=== ACAD Layer Standardizer - Build & Package ===" -ForegroundColor Cyan
+Write-Host "=== Layer Herder - Build & Package ===" -ForegroundColor Cyan
 Write-Host "  Version:       $AppVersion"
 Write-Host "  Configuration: $Configuration"
 foreach ($Era in $Eras)
@@ -119,12 +119,12 @@ if ($CreateInstaller)
         $DictJsonPath = Join-Path $SolutionRoot "installer\assets\layer_dictionary.json"
         $env:MYDICTSCHEMAVERSION = (Get-Content $DictJsonPath -Raw | ConvertFrom-Json).schemaVersion
 
-        $IssScript = Join-Path $SolutionRoot "installer\ACADLayerStandardizer.iss"
+        $IssScript = Join-Path $SolutionRoot "installer\LayerHerder.iss"
         & $IsccPath $IssScript
         if ($LASTEXITCODE -ne 0) { exit 1 }
 
         $InstallerBuilt = $true
-        $InstallerDest = Join-Path $DistDir "AcLayerStandardizer_$AppVersionSafe.exe"
+        $InstallerDest = Join-Path $DistDir "LayerHerder_$AppVersionSafe.exe"
         Write-Host "  Installer: $InstallerDest" -ForegroundColor Green
     }
 }
@@ -157,19 +157,20 @@ foreach ($Era in $Eras)
     Copy-Item -LiteralPath $RustUi -Destination (Join-Path $TargetDir "acad_layer_ui.exe")
 }
 
-# Copy manifest
+# Copy manifest and the bundle icon it references
 Copy-Item -Path (Join-Path $DistDir "PackageContents.xml") -Destination $BundleDir
+Copy-Item -Path (Join-Path $SolutionRoot "installer\assets\LayerHerder.ico") -Destination $BundleDir
 
 Write-Host ""
 Write-Host "=== Done ===" -ForegroundColor Green
 Write-Host "  Bundle:  $BundleDir"
 if ($InstallerBuilt)
 {
-    Write-Host "  Installer: $DistDir\AcLayerStandardizer_$AppVersionSafe.exe" -ForegroundColor Green
+    Write-Host "  Installer: $DistDir\LayerHerder_$AppVersionSafe.exe" -ForegroundColor Green
 }
 Write-Host ""
 Write-Host "Installation:" -ForegroundColor Cyan
-Write-Host "  Option 1: Run the installer (AcLayerStandardizer_$AppVersionSafe.exe)"
+Write-Host "  Option 1: Run the installer (LayerHerder_$AppVersionSafe.exe)"
 Write-Host "  Option 2: Copy '$BundleName' folder to:"
 Write-Host "     %APPDATA%\Autodesk\ApplicationPlugins\"
 Write-Host "  Restart AutoCAD (2021 or newer)"

@@ -14,7 +14,7 @@ namespace AcLayerStandardizer.Commands;
 
 public static class StandardizeCommand
 {
-    [CommandMethod("LSR", CommandFlags.Modal)]
+    [CommandMethod("HERD", CommandFlags.Modal)]
     [CommandMethod("ACLAYERSTD", "StandardizeLayers", CommandFlags.Modal)]
     public static void StandardizeLayers()
     {
@@ -85,7 +85,7 @@ public static class StandardizeCommand
 
         SaveNewMappings(newMappings, ctx.Memory, ctx.Store, ed);
 
-        ed.WriteMessage($"\nAcLayerStandardizer: Standardization complete.");
+        ed.WriteMessage($"\nLayer Herder: Standardization complete.");
         ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
     }
 
@@ -181,7 +181,7 @@ public static class StandardizeCommand
         ed.WriteMessage($"\n  Renames restored: {restoredRenames}");
         ed.WriteMessage($"\n  Erased layers restored: {restoredErased}");
         ed.WriteMessage($"\n  Note: Entity transfers may not fully revert if entities were modified since.");
-        ed.WriteMessage($"\nAcLayerStandardizer: Undo complete.");
+        ed.WriteMessage($"\nLayer Herder: Undo complete.");
     }
 
     public sealed record ApplyMappingsResult(int Renamed, int Synced);
@@ -346,7 +346,7 @@ public static class StandardizeCommand
 
         var memPath = config.GetEffectiveMemoryPath();
 
-        ed.WriteMessage("\nAcLayerStandardizer: Loading standard layers from template...");
+        ed.WriteMessage("\nLayer Herder: Loading standard layers from template...");
 
         IReadOnlyDictionary<string, LayerProperties> standardLayers;
         try

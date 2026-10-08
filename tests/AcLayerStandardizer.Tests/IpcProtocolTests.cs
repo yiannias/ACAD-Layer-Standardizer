@@ -88,7 +88,7 @@ public class IpcProtocolTests
     public void A_wrong_target_without_a_name_points_at_the_drawing_the_window_shows()
     {
         var message = IpcProtocol.CheckDrawingTarget("doc-1", "A.dwg", "doc-2", "")!;
-        Assert.Contains("Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.", message);
+        Assert.Contains("Switch to the drawing shown in the Layer Herder window in AutoCAD and try again.", message);
     }
 
     [Fact]
@@ -96,10 +96,10 @@ public class IpcProtocolTests
     {
         Assert.Equal("Switch to Beds.dwg in AutoCAD and try again.", IpcProtocol.SwitchAndTryAgain("Beds.dwg"));
         Assert.Equal(
-            "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.",
+            "Switch to the drawing shown in the Layer Herder window in AutoCAD and try again.",
             IpcProtocol.SwitchAndTryAgain(null));
         Assert.Equal(
-            "Switch to the drawing shown in the Layer Standardizer window in AutoCAD and try again.",
+            "Switch to the drawing shown in the Layer Herder window in AutoCAD and try again.",
             IpcProtocol.SwitchAndTryAgain("  "));
     }
 

@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-ACAD Layer Standardizer is MIT-licensed (see [LICENSE](LICENSE)). It ships one
+Layer Herder is MIT-licensed (see [LICENSE](LICENSE)). It ships one
 compiled third-party binary as part of its AutoCAD bundle: `Nodify.dll`, the
 node-graph editor control used by the Layer Mapping Editor. Nodify is also
 MIT-licensed; its notice is reproduced below per that license's terms.

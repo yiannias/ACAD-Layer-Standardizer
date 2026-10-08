@@ -228,7 +228,7 @@ public static class MappingsCommand
                 doc.Database, resultMappings, dialog.StandardLayerProperties, dialog.PropertySettings);
             ed.WriteMessage($"\n  Renamed/merged: {result.Renamed}");
             ed.WriteMessage($"\n  Properties synced: {result.Synced}");
-            ed.WriteMessage("\nAcLayerStandardizer: Standardization complete.");
+            ed.WriteMessage("\nLayer Herder: Standardization complete.");
             ed.WriteMessage("\n  Snapshot saved (use ACLAYERSTD.UNDOSTANDARDIZATION to revert).");
         }
     }

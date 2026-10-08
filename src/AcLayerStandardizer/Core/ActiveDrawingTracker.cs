@@ -91,14 +91,14 @@ public static class ActiveDrawingTracker
         try { Unwatch(e.Document); }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not unwatch the closing drawing: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Layer Herder could not unwatch the closing drawing: {ex.Message}");
         }
 
         string? closedId = null;
         try { closedId = GetDrawingId(e.Document); }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not identify the closing drawing: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Layer Herder could not identify the closing drawing: {ex.Message}");
         }
 
         if (closedId is not null)
@@ -205,7 +205,7 @@ public static class ActiveDrawingTracker
         }
         catch (System.Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Layer Standardizer could not refresh the active drawing: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Layer Herder could not refresh the active drawing: {ex.Message}");
         }
     }
 

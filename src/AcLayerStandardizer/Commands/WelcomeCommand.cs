@@ -7,8 +7,8 @@ namespace AcLayerStandardizer.Commands;
 
 public static class WelcomeCommand
 {
-    [CommandMethod("LAYERSTANDARDIZER", CommandFlags.Modal)]
-    [CommandMethod("ACLAYERSTD", "LAYERSTANDARDIZER", CommandFlags.Modal)]
+    [CommandMethod("LAYERHERDER", CommandFlags.Modal)]
+    [CommandMethod("ACLAYERSTD", "LAYERHERDER", CommandFlags.Modal)]
     public static void ShowWelcome()
     {
         var dialog = new WelcomeDialog();
