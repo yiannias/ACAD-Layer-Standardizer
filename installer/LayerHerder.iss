@@ -3,7 +3,7 @@
 
 #define MyAppName "Layer Herder"
 #define MyAppPublisher "CGY"
-#define MyAppURL "https://github.com/yiannias/ACAD-Layer-Standardizer"
+#define MyAppURL "https://github.com/yiannias/LayerHerder"
 #define MyAppVersion GetEnv('MYAPPVERSION')
 ; schemaVersion of the bundled assets\layer_dictionary.json, read by
 ; build.ps1 (PowerShell has a real JSON parser; Pascal Script doesn't) --
@@ -407,7 +407,7 @@ procedure GitHubLinkClick(Sender: TObject);
 var
   ErrorCode: Integer;
 begin
-  ShellExec('open', 'https://github.com/yiannias/ACAD-Layer-Standardizer', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
+  ShellExec('open', 'https://github.com/yiannias/LayerHerder', '', '', SW_SHOWNORMAL, ewNoWait, ErrorCode);
 end;
 
 procedure EmailLinkClick(Sender: TObject);
@@ -460,7 +460,7 @@ begin
   GitHubLink.Top := InfoLbl.Top + InfoLbl.Height + ScaleY(16);
   GitHubLink.Width := InfoLbl.Width;
   GitHubLink.Height := 20;
-  GitHubLink.Caption := 'GitHub: https://github.com/yiannias/ACAD-Layer-Standardizer';
+  GitHubLink.Caption := 'GitHub: https://github.com/yiannias/LayerHerder';
   GitHubLink.Font.Color := clBlue;
   GitHubLink.Font.Style := [fsUnderline];
   GitHubLink.Cursor := crHand;

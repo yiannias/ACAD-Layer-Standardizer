@@ -5,7 +5,7 @@ An AutoCAD plug-in that herds drawing layers onto your layer standard. Formerly 
 
 Type `HERD` in AutoCAD, or use the Layer Herder button on the Add-ins ribbon tab.
 
-### 🌐 [Visit the project website](https://yiannias.github.io/ACAD-Layer-Standardizer/) for screenshots, a full walkthrough, and the download link.
+### 🌐 [Visit the project website](https://yiannias.github.io/LayerHerder/) for screenshots, a full walkthrough, and the download link.
 
 This is a tool to read and map existing layers within an AutoCAD file to an established layer standard. 
 

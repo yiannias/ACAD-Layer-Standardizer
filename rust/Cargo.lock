@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "acad_layer_ui"
-version = "1.3.0"
+version = "1.4.0"
 dependencies = [
  "acad_layer_core",
  "acad_layer_ipc",
