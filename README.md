@@ -22,3 +22,19 @@ In other words a "layer translator" but one with a running memory of previous ma
 | 2027 | .NET 10 |
 
 **AutoCAD 2020 and older are not supported.**
+
+## Code signing policy
+
+Free code signing provided by SignPath.io, certificate by SignPath Foundation.
+
+Team roles: Author and approver: Chris Yiannias (GitHub: yiannias). Reviewer: none (single maintainer).
+
+Only release binaries built from the tagged source in this repository are signed. Each signing request is approved by the maintainer before the certificate is applied.
+
+## Privacy
+
+Layer Herder is fully offline. It makes no network connections, does not check for updates, and collects no data. Settings and translation memory are stored only on your computer, in your user profile (`%APPDATA%\AcLayerStandardizer`). The only outbound action is the Settings link to the project website, which opens in your own browser when you click it.
+
+## Code of conduct
+
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
