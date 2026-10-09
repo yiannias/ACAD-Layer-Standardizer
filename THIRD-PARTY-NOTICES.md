@@ -16,93 +16,63 @@ before a signed release.
 
 ## Rust crates (acad_layer_ui.exe)
 
+Every crate below is linked into `acad_layer_ui.exe` (verified against the release build artifacts). Crates are grouped under the direct dependency that first brings them in; each crate is listed once. Crates used only at compile time (proc-macros such as `serde_derive`, and their helpers `syn`, `quote`, `proc-macro2`) are not listed because they are not in the shipped binary.
+
+### acad_layer_core 0.1.0 (our crate) (6 crates)
+
+| Crate | Version | License | Repository |
+|---|---|---|---|
+| itoa | 1.0.18 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
+| memchr | 2.8.3 | Unlicense OR MIT | https://github.com/BurntSushi/memchr |
+| serde | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
+| serde_core | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
+| serde_json | 1.0.151 | MIT OR Apache-2.0 | https://github.com/serde-rs/json |
+| zmij | 1.0.23 | MIT | https://github.com/dtolnay/zmij |
+
+### acad_layer_ipc 0.1.0 (our crate) (no new crates; all covered above)
+
+### eframe 0.35.0 (154 crates)
+
 | Crate | Version | License | Repository |
 |---|---|---|---|
 | accesskit | 0.24.1 | MIT OR Apache-2.0 | https://github.com/AccessKit/accesskit |
 | adler2 | 2.0.1 | 0BSD OR MIT OR Apache-2.0 | https://github.com/oyvindln/adler2 |
 | ahash | 0.8.12 | MIT OR Apache-2.0 | https://github.com/tkaitchuck/ahash |
 | allocator-api2 | 0.2.21 | MIT OR Apache-2.0 | https://github.com/zakarumych/allocator-api2 |
-| android-activity | 0.6.1 | MIT OR Apache-2.0 | https://github.com/rust-mobile/android-activity |
-| android-properties | 0.2.2 | MIT | https://github.com/miklelappo/android-properties |
-| android_system_properties | 0.1.6 | MIT OR Apache-2.0 | https://github.com/nical/android_system_properties |
 | arboard | 3.6.1 | MIT OR Apache-2.0 | https://github.com/1Password/arboard |
 | arrayvec | 0.7.8 | MIT OR Apache-2.0 | https://github.com/bluss/arrayvec |
 | ash | 0.38.0+1.3.281 | MIT OR Apache-2.0 | https://github.com/ash-rs/ash |
-| atomic-waker | 1.1.2 | Apache-2.0 OR MIT | https://github.com/smol-rs/atomic-waker |
-| autocfg | 1.5.1 | Apache-2.0 OR MIT | https://github.com/cuviper/autocfg |
 | bit-set | 0.9.1 | Apache-2.0 OR MIT | https://github.com/contain-rs/bit-set |
 | bit-vec | 0.9.1 | Apache-2.0 OR MIT | https://github.com/contain-rs/bit-vec |
-| bitflags | 1.3.2 | MIT/Apache-2.0 | https://github.com/bitflags/bitflags |
 | bitflags | 2.13.2 | MIT OR Apache-2.0 | https://github.com/bitflags/bitflags |
-| block2 | 0.5.1 | MIT | https://github.com/madsmtm/objc2 |
-| block2 | 0.6.2 | MIT | https://github.com/madsmtm/objc2 |
-| bumpalo | 3.20.3 | MIT OR Apache-2.0 | https://github.com/fitzgen/bumpalo |
 | bytemuck | 1.25.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/Lokathor/bytemuck |
-| bytemuck_derive | 1.12.1 | Zlib OR Apache-2.0 OR MIT | https://github.com/Lokathor/bytemuck |
 | byteorder-lite | 0.1.0 | Unlicense OR MIT | https://github.com/image-rs/byteorder-lite |
-| bytes | 1.12.1 | MIT | https://github.com/tokio-rs/bytes |
-| calloop | 0.13.0 | MIT | https://github.com/Smithay/calloop |
-| calloop | 0.14.4 | MIT | https://github.com/Smithay/calloop |
-| calloop-wayland-source | 0.4.1 | MIT | https://github.com/smithay/calloop-wayland-source |
-| cc | 1.5.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | cfg-if | 1.0.5 | MIT OR Apache-2.0 | https://github.com/rust-lang/cfg-if |
-| cfg_aliases | 0.2.2 | MIT | https://github.com/katharostech/cfg_aliases |
 | clipboard-win | 5.4.1 | BSL-1.0 | https://github.com/DoumanAsh/clipboard-win |
 | codespan-reporting | 0.13.1 | Apache-2.0 | https://github.com/brendanzab/codespan |
 | color | 0.3.3 | Apache-2.0 OR MIT | https://github.com/linebender/color |
-| combine | 4.6.8 | MIT | https://github.com/Marwes/combine |
-| concurrent-queue | 2.5.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/concurrent-queue |
-| core-foundation | 0.9.4 | MIT OR Apache-2.0 | https://github.com/servo/core-foundation-rs |
-| core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | https://github.com/servo/core-foundation-rs |
-| core-graphics | 0.23.2 | MIT OR Apache-2.0 | https://github.com/servo/core-foundation-rs |
-| core-graphics-types | 0.1.3 | MIT OR Apache-2.0 | https://github.com/servo/core-foundation-rs |
 | crc32fast | 1.5.2 | MIT OR Apache-2.0 | https://github.com/srijs/rust-crc32fast |
-| crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | https://github.com/crossbeam-rs/crossbeam |
-| crunchy | 0.2.4 | MIT | https://github.com/eira-fransham/crunchy |
 | cursor-icon | 1.2.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/cursor-icon |
-| diff | 0.1.13 | MIT OR Apache-2.0 | https://github.com/utkarshkukreti/diff.rs |
-| dispatch | 0.2.0 | MIT | http://github.com/SSheldon/rust-dispatch |
-| dispatch2 | 0.3.1 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| displaydoc | 0.2.7 | MIT OR Apache-2.0 | https://github.com/yaahc/displaydoc |
-| dlib | 0.5.3 | MIT | https://github.com/elinorbgr/dlib |
-| document-features | 0.2.12 | MIT OR Apache-2.0 | https://github.com/slint-ui/document-features |
-| downcast-rs | 1.2.1 | MIT/Apache-2.0 | https://github.com/marcianx/downcast-rs |
 | dpi | 0.1.2 | Apache-2.0 AND MIT | https://github.com/rust-windowing/winit |
-| duplicate | 2.0.1 | MIT OR Apache-2.0 |  |
 | ecolor | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
 | eframe | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/eframe |
 | egui | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui |
 | egui-wgpu | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-wgpu |
 | egui-winit | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/egui-winit |
-| egui_dock | 0.20.1 | MIT |  |
 | either | 1.18.0 | MIT OR Apache-2.0 | https://github.com/rayon-rs/either |
 | emath | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/emath |
-| enumn | 0.1.14 | MIT OR Apache-2.0 | https://github.com/dtolnay/enumn |
 | epaint | 0.35.0 | MIT OR Apache-2.0 | https://github.com/emilk/egui/tree/main/crates/epaint |
 | epaint_default_fonts | 0.35.0 | (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0 | https://github.com/emilk/egui/tree/main/crates/epaint_default_fonts |
 | equivalent | 1.0.2 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/equivalent |
-| errno | 0.3.14 | MIT OR Apache-2.0 | https://github.com/lambda-fairy/rust-errno |
 | error-code | 3.4.0 | BSL-1.0 | https://github.com/DoumanAsh/error-code |
 | euclid | 0.22.14 | MIT OR Apache-2.0 | https://github.com/servo/euclid |
-| fax | 0.2.7 | MIT | https://github.com/pdf-rs/fax |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | https://github.com/image-rs/fdeflate |
 | fearless_simd | 0.4.1 | Apache-2.0 OR MIT | https://github.com/linebender/fearless_simd |
-| find-msvc-tools | 0.1.14 | MIT OR Apache-2.0 | https://github.com/rust-lang/cc-rs |
 | flate2 | 1.1.10 | MIT OR Apache-2.0 | https://github.com/rust-lang/flate2-rs |
 | foldhash | 0.1.5 | Zlib | https://github.com/orlp/foldhash |
 | foldhash | 0.2.0 | Zlib | https://github.com/orlp/foldhash |
 | font-types | 0.11.3 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
-| foreign-types | 0.5.0 | MIT/Apache-2.0 | https://github.com/sfackler/foreign-types |
-| foreign-types-macros | 0.2.4 | MIT/Apache-2.0 | https://github.com/sfackler/foreign-types |
-| foreign-types-shared | 0.3.1 | MIT/Apache-2.0 | https://github.com/sfackler/foreign-types |
 | form_urlencoded | 1.2.2 | MIT OR Apache-2.0 | https://github.com/servo/rust-url |
-| futures-core | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
-| futures-task | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
-| futures-util | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/futures-rs |
-| gethostname | 1.1.0 | Apache-2.0 | https://codeberg.org/swsnr/gethostname.rs.git |
-| getrandom | 0.4.3 | MIT OR Apache-2.0 | https://github.com/rust-random/getrandom |
-| gl_generator | 0.14.0 | Apache-2.0 | https://github.com/brendanzab/gl-rs/ |
-| glifo | 0.1.1 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
 | glow | 0.17.0 | MIT OR Apache-2.0 OR Zlib | https://github.com/grovesNL/glow |
 | glutin_wgl_sys | 0.6.1 | Apache-2.0 | https://github.com/rust-windowing/glutin |
 | gpu-allocator | 0.28.0 | MIT OR Apache-2.0 | https://github.com/Traverse-Research/gpu-allocator |
@@ -114,8 +84,6 @@ before a signed release.
 | hashbrown | 0.15.5 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | hashbrown | 0.16.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
 | hashbrown | 0.17.1 | MIT OR Apache-2.0 | https://github.com/rust-lang/hashbrown |
-| heck | 0.5.0 | MIT OR Apache-2.0 |  |
-| hermit-abi | 0.5.3 | MIT OR Apache-2.0 | https://github.com/hermit-os/hermit-rs |
 | hexf-parse | 0.2.1 | CC0-1.0 | https://github.com/lifthrasiir/hexf |
 | home | 0.5.12 | MIT OR Apache-2.0 | https://github.com/rust-lang/cargo |
 | icu_collections | 2.3.0 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
@@ -130,151 +98,53 @@ before a signed release.
 | image | 0.25.10 | MIT OR Apache-2.0 | https://github.com/image-rs/image |
 | indexmap | 2.14.2 | Apache-2.0 OR MIT | https://github.com/indexmap-rs/indexmap |
 | itertools | 0.14.0 | MIT OR Apache-2.0 | https://github.com/rust-itertools/itertools |
-| itoa | 1.0.18 | MIT OR Apache-2.0 | https://github.com/dtolnay/itoa |
-| jni | 0.22.4 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-rs |
-| jni-macros | 0.22.4 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-rs |
-| jni-sys | 0.3.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
-| jni-sys | 0.4.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
-| jni-sys-macros | 0.4.1 | MIT OR Apache-2.0 | https://github.com/jni-rs/jni-sys |
-| jobserver | 0.1.35 | MIT OR Apache-2.0 | https://github.com/rust-lang/jobserver-rs |
-| js-sys | 0.3.106 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/js-sys |
 | khronos-egl | 6.0.0 | MIT/Apache-2.0 | https://github.com/timothee-haudebourg/khronos-egl |
-| khronos_api | 3.1.0 | Apache-2.0 | https://github.com/brendanzab/gl-rs/ |
 | kurbo | 0.13.1 | Apache-2.0 OR MIT | https://github.com/linebender/kurbo |
 | libc | 0.2.189 | MIT OR Apache-2.0 | https://github.com/rust-lang/libc |
 | libloading | 0.8.9 | ISC | https://github.com/nagisa/rust_libloading/ |
 | libm | 0.2.16 | MIT | https://github.com/rust-lang/compiler-builtins |
-| libredox | 0.1.25 | MIT | https://gitlab.redox-os.org/redox-os/libredox.git |
 | linebender_resource_handle | 0.1.1 | Apache-2.0 OR MIT | https://github.com/linebender/raw_resource_handle |
-| linux-raw-sys | 0.12.1 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/sunfishcode/linux-raw-sys |
-| linux-raw-sys | 0.4.15 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/sunfishcode/linux-raw-sys |
 | litemap | 0.8.3 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| litrs | 1.0.0 | MIT OR Apache-2.0 | https://github.com/LukasKalbertodt/litrs |
 | lock_api | 0.4.14 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
 | log | 0.4.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/log |
-| memchr | 2.8.3 | Unlicense OR MIT | https://github.com/BurntSushi/memchr |
-| memmap2 | 0.9.11 | MIT OR Apache-2.0 | https://github.com/RazrFalcon/memmap2-rs |
 | miniz_oxide | 0.8.9 | MIT OR Zlib OR Apache-2.0 | https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide |
 | miniz_oxide | 0.9.1 | MIT OR Zlib OR Apache-2.0 | https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide |
 | moxcms | 0.8.1 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/moxcms.git |
 | naga | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
-| ndk | 0.9.0 | MIT OR Apache-2.0 | https://github.com/rust-mobile/ndk |
-| ndk-context | 0.1.1 | MIT OR Apache-2.0 | https://github.com/rust-windowing/android-ndk-rs |
-| ndk-sys | 0.6.0+11769913 | MIT OR Apache-2.0 | https://github.com/rust-mobile/ndk |
 | nohash-hasher | 0.2.0 | Apache-2.0 OR MIT | https://github.com/paritytech/nohash-hasher |
 | num-traits | 0.2.19 | MIT OR Apache-2.0 | https://github.com/rust-num/num-traits |
-| num_enum | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
-| num_enum_derive | 0.7.6 | BSD-3-Clause OR MIT OR Apache-2.0 | https://github.com/illicitonion/num_enum |
-| objc-sys | 0.3.5 | MIT | https://github.com/madsmtm/objc2 |
-| objc2 | 0.5.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2 | 0.6.4 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-app-kit | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-app-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-cloud-kit | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-contacts | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-core-data | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-core-foundation | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-core-graphics | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-core-image | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-core-location | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-encode | 4.1.0 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-foundation | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-foundation | 0.3.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-io-surface | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-link-presentation | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-metal | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-metal | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-quartz-core | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-quartz-core | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-symbols | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-ui-kit | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-ui-kit | 0.3.2 | Zlib OR Apache-2.0 OR MIT | https://github.com/madsmtm/objc2 |
-| objc2-uniform-type-identifiers | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
-| objc2-user-notifications | 0.2.2 | MIT | https://github.com/madsmtm/objc2 |
 | once_cell | 1.21.4 | MIT OR Apache-2.0 | https://github.com/matklad/once_cell |
-| orbclient | 0.3.55 | MIT | https://gitlab.redox-os.org/redox-os/orbclient |
 | ordered-float | 5.5.0 | MIT | https://github.com/reem/rust-ordered-float |
 | parking_lot | 0.12.5 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
 | parking_lot_core | 0.9.12 | MIT OR Apache-2.0 | https://github.com/Amanieu/parking_lot |
-| paste | 1.0.15 | MIT OR Apache-2.0 |  |
 | peniko | 0.6.1 | Apache-2.0 OR MIT | https://github.com/linebender/peniko |
 | percent-encoding | 2.3.2 | MIT OR Apache-2.0 | https://github.com/servo/rust-url/ |
-| pin-project | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
-| pin-project-internal | 1.1.13 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project |
 | pin-project-lite | 0.2.17 | Apache-2.0 OR MIT | https://github.com/taiki-e/pin-project-lite |
-| pkg-config | 0.3.34 | MIT OR Apache-2.0 | https://github.com/rust-lang/pkg-config-rs |
-| plain | 0.2.3 | MIT/Apache-2.0 | https://github.com/randomites/plain |
 | png | 0.18.1 | MIT OR Apache-2.0 | https://github.com/image-rs/image-png |
-| polling | 3.11.0 | Apache-2.0 OR MIT | https://github.com/smol-rs/polling |
 | pollster | 0.4.0 | Apache-2.0/MIT | https://github.com/zesterer/pollster |
 | polycool | 0.4.0 | MIT OR Apache-2.0 | https://github.com/linebender/kurbo |
-| portable-atomic | 1.15.0 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic |
-| portable-atomic-util | 0.2.8 | Apache-2.0 OR MIT | https://github.com/taiki-e/portable-atomic-util |
 | potential_utf | 0.1.6 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | presser | 0.3.1 | MIT OR Apache-2.0 | https://github.com/EmbarkStudios/presser |
-| pretty_assertions | 1.4.1 | MIT OR Apache-2.0 | https://github.com/rust-pretty-assertions/rust-pretty-assertions |
-| proc-macro-crate | 3.5.0 | MIT OR Apache-2.0 | https://github.com/bkchr/proc-macro-crate |
-| proc-macro2 | 1.0.107 | MIT OR Apache-2.0 | https://github.com/dtolnay/proc-macro2 |
-| proc-macro2-diagnostics | 0.10.1 | MIT/Apache-2.0 |  |
 | profiling | 1.0.18 | MIT OR Apache-2.0 | https://github.com/aclysma/profiling |
 | pxfm | 0.1.30 | BSD-3-Clause OR Apache-2.0 | https://github.com/awxkee/pxfm |
-| quick-error | 2.0.1 | MIT/Apache-2.0 | http://github.com/tailhook/quick-error |
-| quick-xml | 0.41.0 | MIT | https://github.com/tafia/quick-xml |
-| quote | 1.0.47 | MIT OR Apache-2.0 | https://github.com/dtolnay/quote |
-| r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | https://github.com/r-efi/r-efi |
 | range-alloc | 0.1.5 | MIT OR Apache-2.0 | https://github.com/gfx-rs/range-alloc |
 | raw-window-handle | 0.6.2 | MIT OR Apache-2.0 OR Zlib | https://github.com/rust-windowing/raw-window-handle |
-| raw-window-metal | 1.1.0 | MIT OR Apache-2.0 | https://github.com/rust-windowing/raw-window-metal |
 | read-fonts | 0.39.2 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
-| redox_syscall | 0.4.1 | MIT | https://gitlab.redox-os.org/redox-os/syscall |
-| redox_syscall | 0.5.18 | MIT | https://gitlab.redox-os.org/redox-os/syscall |
-| redox_syscall | 0.9.4 | MIT | https://gitlab.redox-os.org/redox-os/kernel |
 | renderdoc-sys | 1.1.0 | MIT OR Apache-2.0 | https://github.com/ebkalderon/renderdoc-rs |
-| rfd | 0.17.2 | MIT | https://github.com/PolyMeilex/rfd |
 | ron | 0.12.2 | MIT OR Apache-2.0 | https://github.com/ron-rs/ron |
 | rustc-hash | 1.1.0 | Apache-2.0/MIT | https://github.com/rust-lang-nursery/rustc-hash |
 | rustc-hash | 2.1.3 | Apache-2.0 OR MIT | https://github.com/rust-lang/rustc-hash |
-| rustc_version | 0.4.1 | MIT OR Apache-2.0 | https://github.com/djc/rustc-version-rs |
-| rustix | 0.38.44 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/rustix |
-| rustix | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | https://github.com/bytecodealliance/rustix |
-| rustversion | 1.0.23 | MIT OR Apache-2.0 | https://github.com/dtolnay/rustversion |
-| same-file | 1.0.6 | Unlicense/MIT | https://github.com/BurntSushi/same-file |
-| scoped-tls | 1.0.1 | MIT/Apache-2.0 | https://github.com/alexcrichton/scoped-tls |
 | scopeguard | 1.2.0 | MIT OR Apache-2.0 | https://github.com/bluss/scopeguard |
 | self_cell | 1.3.0 | Apache-2.0 OR GPL-2.0-only | https://github.com/Voultapher/self_cell |
-| semver | 1.0.28 | MIT OR Apache-2.0 | https://github.com/dtolnay/semver |
-| serde | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
-| serde_core | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
-| serde_derive | 1.0.229 | MIT OR Apache-2.0 | https://github.com/serde-rs/serde |
-| serde_json | 1.0.151 | MIT OR Apache-2.0 | https://github.com/serde-rs/json |
-| shlex | 2.0.1 | MIT OR Apache-2.0 | https://github.com/comex/rust-shlex |
 | simd-adler32 | 0.3.10 | MIT | https://github.com/mcountryman/simd-adler32 |
-| simd_cesu8 | 1.2.0 | Apache-2.0 OR MIT | https://github.com/seancroach/simd_cesu8 |
-| simdutf8 | 0.1.5 | MIT OR Apache-2.0 | https://github.com/rusticstuff/simdutf8 |
 | skrifa | 0.42.1 | MIT OR Apache-2.0 | https://github.com/googlefonts/fontations |
-| slab | 0.4.12 | MIT | https://github.com/tokio-rs/slab |
-| slotmap | 1.1.1 | Zlib | https://github.com/orlp/slotmap |
 | smallvec | 1.16.2 | MIT OR Apache-2.0 | https://github.com/servo/rust-smallvec |
-| smithay-client-toolkit | 0.20.0 | MIT | https://github.com/smithay/client-toolkit |
-| smithay-clipboard | 0.7.3 | MIT | https://github.com/smithay/smithay-clipboard |
 | smol_str | 0.2.2 | MIT OR Apache-2.0 | https://github.com/rust-analyzer/smol_str |
 | spirv | 0.4.0+sdk-1.4.341.0 | Apache-2.0 | https://github.com/gfx-rs/rspirv |
 | stable_deref_trait | 1.2.1 | MIT OR Apache-2.0 | https://github.com/storyyeller/stable_deref_trait |
 | static_assertions | 1.1.0 | MIT OR Apache-2.0 | https://github.com/nvzqz/static-assertions-rs |
-| syn | 2.0.119 | MIT OR Apache-2.0 | https://github.com/dtolnay/syn |
-| syn | 3.0.6 | MIT OR Apache-2.0 | https://github.com/dtolnay/syn |
-| synstructure | 0.14.0 | MIT | https://github.com/mystor/synstructure |
-| termcolor | 1.4.1 | Unlicense OR MIT | https://github.com/BurntSushi/termcolor |
-| thiserror | 1.0.69 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
 | thiserror | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
-| thiserror-impl | 1.0.69 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
-| thiserror-impl | 2.0.21 | MIT OR Apache-2.0 | https://github.com/dtolnay/thiserror |
-| tiff | 0.11.3 | MIT | https://github.com/image-rs/image-tiff |
 | tinystr | 0.8.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| tokio | 1.53.1 | MIT | https://github.com/tokio-rs/tokio |
-| toml_datetime | 1.1.1+spec-1.1.0 | MIT OR Apache-2.0 |  |
-| toml_edit | 0.25.15+spec-1.1.0 | MIT OR Apache-2.0 | https://github.com/toml-rs/toml |
-| toml_parser | 1.1.3+spec-1.1.0 | MIT OR Apache-2.0 |  |
 | tracing | 0.1.44 | MIT | https://github.com/tokio-rs/tracing |
 | tracing-core | 0.1.36 | MIT | https://github.com/tokio-rs/tracing |
 | type-map | 0.5.1 | MIT/Apache-2.0 | https://github.com/kardeiz/type-map |
@@ -288,93 +158,261 @@ before a signed release.
 | uuid | 1.26.1 | Apache-2.0 OR MIT | https://github.com/uuid-rs/uuid |
 | vello_common | 0.0.9 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
 | vello_cpu | 0.0.9 | Apache-2.0 OR MIT | https://github.com/linebender/vello |
-| version_check | 0.9.5 | MIT/Apache-2.0 | https://github.com/SergioBenitez/version_check |
-| walkdir | 2.5.0 | Unlicense/MIT | https://github.com/BurntSushi/walkdir |
-| wasm-bindgen | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen |
-| wasm-bindgen-futures | 0.4.79 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/futures |
-| wasm-bindgen-macro | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/macro |
-| wasm-bindgen-macro-support | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/main/crates/macro-support |
-| wasm-bindgen-shared | 0.2.129 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/shared |
-| wayland-backend | 0.3.17 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-client | 0.31.15 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-csd-frame | 0.3.0 | MIT | https://github.com/rust-windowing/wayland-csd-frame |
-| wayland-cursor | 0.31.14 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-protocols | 0.32.13 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-protocols-experimental | 20250721.0.1 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-protocols-misc | 0.3.12 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-protocols-wlr | 0.3.12 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-scanner | 0.31.11 | MIT | https://github.com/smithay/wayland-rs |
-| wayland-sys | 0.31.11 | MIT | https://github.com/smithay/wayland-rs |
-| web-sys | 0.3.106 | MIT OR Apache-2.0 | https://github.com/wasm-bindgen/wasm-bindgen/tree/master/crates/web-sys |
 | web-time | 1.1.0 | MIT OR Apache-2.0 | https://github.com/daxpedda/web-time |
 | webbrowser | 1.2.4 | MIT OR Apache-2.0 | https://github.com/amodm/webbrowser-rs |
-| weezl | 0.1.12 | MIT OR Apache-2.0 | https://github.com/image-rs/weezl |
 | wgpu | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-core | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
-| wgpu-core-deps-apple | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
-| wgpu-core-deps-emscripten | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
-| wgpu-core-deps-wasm | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-core-deps-windows-linux-android | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-hal | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-naga-bridge | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
 | wgpu-types | 29.0.4 | MIT OR Apache-2.0 | https://github.com/gfx-rs/wgpu |
-| winapi-util | 0.1.11 | Unlicense OR MIT | https://github.com/BurntSushi/winapi-util |
 | windows | 0.62.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
+| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
+| windows_x86_64_msvc | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-collections | 0.3.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-core | 0.62.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-future | 0.3.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows-implement | 0.60.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows-interface | 0.59.3 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-link | 0.2.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-numerics | 0.3.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-result | 0.4.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-strings | 0.5.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-sys | 0.52.0 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows-sys | 0.59.0 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-sys | 0.60.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-sys | 0.61.2 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-targets | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-targets | 0.53.5 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | windows-threading | 0.2.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_aarch64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_aarch64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_aarch64_msvc | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_aarch64_msvc | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_gnu | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_gnu | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_gnullvm | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_gnullvm | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_msvc | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_i686_msvc | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_gnu | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_gnu | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_gnullvm | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_gnullvm | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_msvc | 0.52.6 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
-| windows_x86_64_msvc | 0.53.1 | MIT OR Apache-2.0 | https://github.com/microsoft/windows-rs |
 | winit | 0.30.13 | Apache-2.0 | https://github.com/rust-windowing/winit |
-| winnow | 1.0.4 | MIT | https://github.com/winnow-rs/winnow |
 | writeable | 0.6.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| x11rb | 0.13.2 | MIT OR Apache-2.0 | https://github.com/psychon/x11rb |
-| x11rb-protocol | 0.13.2 | MIT OR Apache-2.0 | https://github.com/psychon/x11rb |
-| xcursor | 0.3.11 | MIT | https://github.com/esposm03/xcursor-rs |
-| xkbcommon-dl | 0.4.2 | MIT | https://github.com/rust-windowing/xkbcommon-dl |
-| xkeysym | 0.2.1 | MIT OR Apache-2.0 OR Zlib | https://github.com/notgull/xkeysym |
-| xml-rs | 0.8.29 | MIT | https://github.com/kornelski/xml-rs |
-| yansi | 1.0.1 | MIT OR Apache-2.0 | https://github.com/SergioBenitez/yansi |
 | yoke | 0.8.3 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| yoke-derive | 0.8.4 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | zerocopy | 0.8.59 | BSD-2-Clause OR Apache-2.0 OR MIT | https://github.com/google/zerocopy |
-| zerocopy-derive | 0.8.59 | BSD-2-Clause OR Apache-2.0 OR MIT | https://github.com/google/zerocopy |
 | zerofrom | 0.1.8 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| zerofrom-derive | 0.1.8 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | zerotrie | 0.2.5 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
 | zerovec | 0.11.8 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| zerovec-derive | 0.11.6 | Unicode-3.0 | https://github.com/unicode-org/icu4x |
-| zlib-rs | 0.6.8 | Zlib | https://github.com/trifectatechfoundation/zlib-rs |
-| zmij | 1.0.23 | MIT | https://github.com/dtolnay/zmij |
-| zune-core | 0.5.3 | MIT OR Apache-2.0 OR Zlib | https://github.com/etemesi254/zune-image |
-| zune-jpeg | 0.5.15 | MIT OR Apache-2.0 OR Zlib | https://github.com/etemesi254/zune-image/tree/dev/crates/zune-jpeg |
+
+### egui 0.35.0 (no new crates; all covered above)
+
+### raw-window-handle 0.6.2 (no new crates; all covered above)
+
+### rfd 0.17.2 (1 crate)
+
+| Crate | Version | License | Repository |
+|---|---|---|---|
+| rfd | 0.17.2 | MIT | https://github.com/PolyMeilex/rfd |
+
+### serde 1.0.229 (no new crates; all covered above)
+
+### serde_json 1.0.151 (no new crates; all covered above)
+
+### spatial-ui-kit 0.1.0 (SpatialUiKit repo, sibling folder) (1 crate)
+
+| Crate | Version | License | Repository |
+|---|---|---|---|
+| egui_dock | 0.20.1 | MIT | https://github.com/Adanos020/egui_dock |
+
+### windows-sys 0.61.2 (no new crates; all covered above)
+
+### Index (alphabetical)
+
+- accesskit 0.24.1 — eframe 0.35.0
+- adler2 2.0.1 — eframe 0.35.0
+- ahash 0.8.12 — eframe 0.35.0
+- allocator-api2 0.2.21 — eframe 0.35.0
+- arboard 3.6.1 — eframe 0.35.0
+- arrayvec 0.7.8 — eframe 0.35.0
+- ash 0.38.0+1.3.281 — eframe 0.35.0
+- bit-set 0.9.1 — eframe 0.35.0
+- bit-vec 0.9.1 — eframe 0.35.0
+- bitflags 2.13.2 — eframe 0.35.0
+- bytemuck 1.25.2 — eframe 0.35.0
+- byteorder-lite 0.1.0 — eframe 0.35.0
+- cfg-if 1.0.5 — eframe 0.35.0
+- clipboard-win 5.4.1 — eframe 0.35.0
+- codespan-reporting 0.13.1 — eframe 0.35.0
+- color 0.3.3 — eframe 0.35.0
+- crc32fast 1.5.2 — eframe 0.35.0
+- cursor-icon 1.2.0 — eframe 0.35.0
+- dpi 0.1.2 — eframe 0.35.0
+- ecolor 0.35.0 — eframe 0.35.0
+- eframe 0.35.0 — eframe 0.35.0
+- egui 0.35.0 — eframe 0.35.0
+- egui_dock 0.20.1 — spatial-ui-kit 0.1.0 (SpatialUiKit repo, sibling folder)
+- egui-wgpu 0.35.0 — eframe 0.35.0
+- egui-winit 0.35.0 — eframe 0.35.0
+- either 1.18.0 — eframe 0.35.0
+- emath 0.35.0 — eframe 0.35.0
+- epaint 0.35.0 — eframe 0.35.0
+- epaint_default_fonts 0.35.0 — eframe 0.35.0
+- equivalent 1.0.2 — eframe 0.35.0
+- error-code 3.4.0 — eframe 0.35.0
+- euclid 0.22.14 — eframe 0.35.0
+- fdeflate 0.3.7 — eframe 0.35.0
+- fearless_simd 0.4.1 — eframe 0.35.0
+- flate2 1.1.10 — eframe 0.35.0
+- foldhash 0.1.5 — eframe 0.35.0
+- foldhash 0.2.0 — eframe 0.35.0
+- font-types 0.11.3 — eframe 0.35.0
+- form_urlencoded 1.2.2 — eframe 0.35.0
+- glow 0.17.0 — eframe 0.35.0
+- glutin_wgl_sys 0.6.1 — eframe 0.35.0
+- gpu-allocator 0.28.0 — eframe 0.35.0
+- gpu-descriptor 0.3.2 — eframe 0.35.0
+- gpu-descriptor-types 0.2.0 — eframe 0.35.0
+- guillotiere 0.7.0 — eframe 0.35.0
+- half 2.7.1 — eframe 0.35.0
+- harfrust 0.7.0 — eframe 0.35.0
+- hashbrown 0.15.5 — eframe 0.35.0
+- hashbrown 0.16.1 — eframe 0.35.0
+- hashbrown 0.17.1 — eframe 0.35.0
+- hexf-parse 0.2.1 — eframe 0.35.0
+- home 0.5.12 — eframe 0.35.0
+- icu_collections 2.3.0 — eframe 0.35.0
+- icu_locale_core 2.3.0 — eframe 0.35.0
+- icu_normalizer 2.3.0 — eframe 0.35.0
+- icu_normalizer_data 2.3.0 — eframe 0.35.0
+- icu_properties 2.3.0 — eframe 0.35.0
+- icu_properties_data 2.3.0 — eframe 0.35.0
+- icu_provider 2.3.1 — eframe 0.35.0
+- idna 1.1.0 — eframe 0.35.0
+- idna_adapter 1.2.2 — eframe 0.35.0
+- image 0.25.10 — eframe 0.35.0
+- indexmap 2.14.2 — eframe 0.35.0
+- itertools 0.14.0 — eframe 0.35.0
+- itoa 1.0.18 — acad_layer_core 0.1.0 (our crate)
+- khronos-egl 6.0.0 — eframe 0.35.0
+- kurbo 0.13.1 — eframe 0.35.0
+- libc 0.2.189 — eframe 0.35.0
+- libloading 0.8.9 — eframe 0.35.0
+- libm 0.2.16 — eframe 0.35.0
+- linebender_resource_handle 0.1.1 — eframe 0.35.0
+- litemap 0.8.3 — eframe 0.35.0
+- lock_api 0.4.14 — eframe 0.35.0
+- log 0.4.34 — eframe 0.35.0
+- memchr 2.8.3 — acad_layer_core 0.1.0 (our crate)
+- miniz_oxide 0.8.9 — eframe 0.35.0
+- miniz_oxide 0.9.1 — eframe 0.35.0
+- moxcms 0.8.1 — eframe 0.35.0
+- naga 29.0.4 — eframe 0.35.0
+- nohash-hasher 0.2.0 — eframe 0.35.0
+- num-traits 0.2.19 — eframe 0.35.0
+- once_cell 1.21.4 — eframe 0.35.0
+- ordered-float 5.5.0 — eframe 0.35.0
+- parking_lot 0.12.5 — eframe 0.35.0
+- parking_lot_core 0.9.12 — eframe 0.35.0
+- peniko 0.6.1 — eframe 0.35.0
+- percent-encoding 2.3.2 — eframe 0.35.0
+- pin-project-lite 0.2.17 — eframe 0.35.0
+- png 0.18.1 — eframe 0.35.0
+- pollster 0.4.0 — eframe 0.35.0
+- polycool 0.4.0 — eframe 0.35.0
+- potential_utf 0.1.6 — eframe 0.35.0
+- presser 0.3.1 — eframe 0.35.0
+- profiling 1.0.18 — eframe 0.35.0
+- pxfm 0.1.30 — eframe 0.35.0
+- range-alloc 0.1.5 — eframe 0.35.0
+- raw-window-handle 0.6.2 — eframe 0.35.0
+- read-fonts 0.39.2 — eframe 0.35.0
+- renderdoc-sys 1.1.0 — eframe 0.35.0
+- rfd 0.17.2 — rfd 0.17.2
+- ron 0.12.2 — eframe 0.35.0
+- rustc-hash 1.1.0 — eframe 0.35.0
+- rustc-hash 2.1.3 — eframe 0.35.0
+- scopeguard 1.2.0 — eframe 0.35.0
+- self_cell 1.3.0 — eframe 0.35.0
+- serde 1.0.229 — acad_layer_core 0.1.0 (our crate)
+- serde_core 1.0.229 — acad_layer_core 0.1.0 (our crate)
+- serde_json 1.0.151 — acad_layer_core 0.1.0 (our crate)
+- simd-adler32 0.3.10 — eframe 0.35.0
+- skrifa 0.42.1 — eframe 0.35.0
+- smallvec 1.16.2 — eframe 0.35.0
+- smol_str 0.2.2 — eframe 0.35.0
+- spirv 0.4.0+sdk-1.4.341.0 — eframe 0.35.0
+- stable_deref_trait 1.2.1 — eframe 0.35.0
+- static_assertions 1.1.0 — eframe 0.35.0
+- thiserror 2.0.21 — eframe 0.35.0
+- tinystr 0.8.4 — eframe 0.35.0
+- tracing 0.1.44 — eframe 0.35.0
+- tracing-core 0.1.36 — eframe 0.35.0
+- type-map 0.5.1 — eframe 0.35.0
+- typeid 1.0.3 — eframe 0.35.0
+- unicode-general-category 1.1.0 — eframe 0.35.0
+- unicode-ident 1.0.26 — eframe 0.35.0
+- unicode-segmentation 1.13.3 — eframe 0.35.0
+- unicode-width 0.2.2 — eframe 0.35.0
+- url 2.5.8 — eframe 0.35.0
+- utf8_iter 1.0.4 — eframe 0.35.0
+- uuid 1.26.1 — eframe 0.35.0
+- vello_common 0.0.9 — eframe 0.35.0
+- vello_cpu 0.0.9 — eframe 0.35.0
+- web-time 1.1.0 — eframe 0.35.0
+- webbrowser 1.2.4 — eframe 0.35.0
+- wgpu 29.0.4 — eframe 0.35.0
+- wgpu-core 29.0.4 — eframe 0.35.0
+- wgpu-core-deps-windows-linux-android 29.0.4 — eframe 0.35.0
+- wgpu-hal 29.0.4 — eframe 0.35.0
+- wgpu-naga-bridge 29.0.4 — eframe 0.35.0
+- wgpu-types 29.0.4 — eframe 0.35.0
+- windows 0.62.2 — eframe 0.35.0
+- windows_x86_64_msvc 0.52.6 — eframe 0.35.0
+- windows_x86_64_msvc 0.53.1 — eframe 0.35.0
+- windows-collections 0.3.2 — eframe 0.35.0
+- windows-core 0.62.2 — eframe 0.35.0
+- windows-future 0.3.2 — eframe 0.35.0
+- windows-link 0.2.1 — eframe 0.35.0
+- windows-numerics 0.3.1 — eframe 0.35.0
+- windows-result 0.4.1 — eframe 0.35.0
+- windows-strings 0.5.1 — eframe 0.35.0
+- windows-sys 0.52.0 — eframe 0.35.0
+- windows-sys 0.60.2 — eframe 0.35.0
+- windows-sys 0.61.2 — eframe 0.35.0
+- windows-targets 0.52.6 — eframe 0.35.0
+- windows-targets 0.53.5 — eframe 0.35.0
+- windows-threading 0.2.1 — eframe 0.35.0
+- winit 0.30.13 — eframe 0.35.0
+- writeable 0.6.4 — eframe 0.35.0
+- yoke 0.8.3 — eframe 0.35.0
+- zerocopy 0.8.59 — eframe 0.35.0
+- zerofrom 0.1.8 — eframe 0.35.0
+- zerotrie 0.2.5 — eframe 0.35.0
+- zerovec 0.11.8 — eframe 0.35.0
+- zmij 1.0.23 — acad_layer_core 0.1.0 (our crate)
+
+Total: 162 crates.
+
+## NuGet packages (AcLayerStandardizer.dll, net48 build)
+
+Nine packages are copied beside `AcLayerStandardizer.dll` in the net48 (AutoCAD 2021-2024)
+payload. The net8.0 and net10.0 payloads ship only `AcLayerStandardizer.dll`; they use the
+.NET runtime's own copies. PolySharp is a compile-time package: its polyfill types are
+compiled into `AcLayerStandardizer.dll` for net48 and no separate file is shipped.
+
+| Package | Version | License | Repository |
+|---|---|---|---|
+| Microsoft.Bcl.AsyncInterfaces | 8.0.0 | MIT | https://github.com/dotnet/runtime |
+| PolySharp | 1.15.0 | MIT | https://github.com/Sergio0694/PolySharp |
+| System.Buffers | 4.5.1 | MIT | https://github.com/dotnet/corefx |
+| System.Memory | 4.5.5 | MIT | https://github.com/dotnet/corefx |
+| System.Numerics.Vectors | 4.5.0 | MIT | https://github.com/dotnet/corefx |
+| System.Runtime.CompilerServices.Unsafe | 6.0.0 | MIT | https://github.com/dotnet/runtime |
+| System.Text.Encodings.Web | 8.0.0 | MIT | https://github.com/dotnet/runtime |
+| System.Text.Json | 8.0.5 | MIT | https://github.com/dotnet/runtime |
+| System.Threading.Tasks.Extensions | 4.5.4 | MIT | https://github.com/dotnet/corefx |
+| System.ValueTuple | 4.5.0 | MIT | https://github.com/dotnet/corefx |
+
+## Bundled fonts (inside acad_layer_ui.exe)
+
+The Rust mapping window uses egui's default fonts, which eframe's `default_fonts` feature
+compiles into the executable (from the `epaint_default_fonts` crate, version 0.35.0).
+
+| Font | License | Notes |
+|---|---|---|
+| Ubuntu-Light | Ubuntu Font Licence 1.0 | Text font |
+| NotoEmoji-Regular | SIL Open Font License 1.1 | Emoji glyphs |
+| Hack-Regular | MIT (Source Foundry Authors) | Monospace font |
+| emoji-icon-font | MIT (John Slegers) | Icon glyphs |
+
+The SpatialUiKit repository also contains Inter (SIL Open Font License 1.1). It is not
+compiled into the shipped executable, so it is not listed here.
 
 ## AutoCAD SDK assemblies (not redistributed)
 

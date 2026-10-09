@@ -65,6 +65,18 @@ pub fn standards_file_display(path: &str, exists: Option<bool>) -> StandardsFile
     }
 }
 
+/// Shortens a path to its root and file name, e.g. `C:\Standards\Office\STANDARD TEMPLATE.dws`
+/// becomes `C:\…\STANDARD TEMPLATE.dws`. Paths with no folders are returned unchanged.
+pub fn shorten_path_for_display(path: &str) -> String {
+    let sep = if path.contains('\\') { '\\' } else { '/' };
+    let parts: Vec<&str> = path.split(['\\', '/']).filter(|p| !p.is_empty()).collect();
+    if parts.len() <= 2 {
+        return path.to_string();
+    }
+    let lead = if path.starts_with(['\\', '/']) { sep.to_string() } else { String::new() };
+    format!("{lead}{}{sep}…{sep}{}", parts[0], parts[parts.len() - 1])
+}
+
 pub const NO_MEMORY_LOCATION: &str = "No memory file location is available.";
 
 pub fn memory_changed_status(path: &Path) -> String {
@@ -93,8 +105,8 @@ pub fn export_status(path: &Path) -> String {
     format!("Exported your memory to {}.", path.display())
 }
 
-pub fn about_line(version: &str, build: &str) -> String {
-    format!("Layer Standardizer Beta {version} - Build {build}")
+pub fn about_line(version: &str) -> String {
+    format!("Layer Herder Beta {version}")
 }
 
 /// False while an Apply/Purge/Load Standard is in flight.
@@ -143,6 +155,19 @@ mod tests {
     }
 
     #[test]
+    fn shorten_path_keeps_the_root_and_file_name() {
+        assert_eq!(
+            shorten_path_for_display(r"C:\Standards\Office\STANDARD TEMPLATE.dws"),
+            "C:\\…\\STANDARD TEMPLATE.dws"
+        );
+        assert_eq!(
+            shorten_path_for_display("/srv/standards/office.dws"),
+            "/srv/…/office.dws"
+        );
+        assert_eq!(shorten_path_for_display(r"C:\office.dws"), r"C:\office.dws");
+    }
+
+    #[test]
     fn memory_changed_status_names_the_new_file() {
         assert_eq!(
             memory_changed_status(Path::new("C:/shared/team_memory.json")),
@@ -167,11 +192,8 @@ mod tests {
     }
 
     #[test]
-    fn about_line_has_the_version_and_build() {
-        assert_eq!(
-            about_line("1.4.0", "abc123"),
-            "Layer Standardizer Beta 1.4.0 - Build abc123"
-        );
+    fn about_line_names_the_app_and_version() {
+        assert_eq!(about_line("1.4.1"), "Layer Herder Beta 1.4.1");
     }
 
     #[test]

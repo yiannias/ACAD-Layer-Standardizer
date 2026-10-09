@@ -800,8 +800,7 @@ impl LayerStandardizerApp {
             .as_ref()
             .map(|store| store.file_path().display().to_string());
         let enabled = settings_panel::settings_actions_enabled(self.apply_pending);
-        let about =
-            settings_panel::about_line(env!("CARGO_PKG_VERSION"), env!("ACAD_LAYER_UI_BUILD_ID"));
+        let about = settings_panel::about_line(env!("CARGO_PKG_VERSION"));
         let status = self.settings.status.as_str();
         let mut open = true;
         let mut action = None;
@@ -809,76 +808,122 @@ impl LayerStandardizerApp {
             ui.label(
                 egui::RichText::new(text)
                     .strong()
+                    .size(15.0)
                     .color(egui::Color32::from_rgb(230, 230, 230)),
             );
+            ui.add_space(6.0);
         };
+        let divider = |ui: &mut egui::Ui| {
+            ui.add_space(12.0);
+            ui.separator();
+            ui.add_space(12.0);
+        };
+        // Free-floating: no anchor, so the user can drag it anywhere and resize it.
+        // default_pos only applies the first time the window is shown.
+        let width = 440.0;
+        let default_pos = ctx.content_rect().center() - egui::vec2(width / 2.0, 220.0);
         egui::Window::new("Settings")
             .id(egui::Id::new("settings_panel"))
             .open(&mut open)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
+            .movable(true)
             .order(egui::Order::Foreground)
-            .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::ZERO)
+            .default_pos(default_pos)
+            .default_width(width)
+            .min_width(360.0)
             .show(ctx, |ui| {
-                ui.set_max_width(420.0);
-                heading(ui, "Standards File");
-                ui.horizontal(|ui| {
-                    let text = if standard.missing {
-                        egui::RichText::new(&standard.text)
-                            .color(egui::Color32::from_rgb(235, 176, 20))
-                    } else {
-                        egui::RichText::new(&standard.text)
-                    };
-                    let label = ui.add(egui::Label::new(text).truncate());
-                    if !template_path.trim().is_empty() {
-                        label.on_hover_text(template_path);
-                    }
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .add_enabled(enabled, egui::Button::new("Change..."))
-                            .clicked()
+                egui::Frame::new()
+                    .inner_margin(egui::Margin::same(18))
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                        heading(ui, "Standards File");
+                        // Show the shortened path (C:\…\file.dws) while the file is known to
+                        // exist; keep the status text for "Checking...", "Unavailable" and empty.
+                        let shown = if standard.missing
+                            || template_path.trim().is_empty()
+                            || standard.text == "Checking..."
                         {
-                            action = Some(SettingsAction::ChangeStandard);
+                            standard.text.clone()
+                        } else {
+                            settings_panel::shorten_path_for_display(template_path)
+                        };
+                        let text = if standard.missing {
+                            egui::RichText::new(shown).color(egui::Color32::from_rgb(235, 176, 20))
+                        } else {
+                            egui::RichText::new(shown)
+                        };
+                        let label = ui.add(egui::Label::new(text).truncate());
+                        if !template_path.trim().is_empty() {
+                            label.on_hover_text(template_path);
                         }
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            if ui
+                                .add_enabled(enabled, egui::Button::new("Change..."))
+                                .clicked()
+                            {
+                                action = Some(SettingsAction::ChangeStandard);
+                            }
+                        });
+
+                        divider(ui);
+
+                        heading(ui, "Memory File");
+                        match &memory_path {
+                            Some(path) => {
+                                ui.add(egui::Label::new(path.as_str()).truncate())
+                                    .on_hover_text(path.as_str());
+                            }
+                            None => {
+                                ui.label(settings_panel::NO_MEMORY_LOCATION);
+                            }
+                        }
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.add_enabled_ui(enabled, |ui| {
+                                if ui.button("Change...").clicked() {
+                                    action = Some(SettingsAction::ChangeMemoryFile);
+                                }
+                                if ui.button("Import...").clicked() {
+                                    action = Some(SettingsAction::ImportMemory);
+                                }
+                                if ui.button("Export...").clicked() {
+                                    action = Some(SettingsAction::ExportMemory);
+                                }
+                            });
+                        });
+                        if !status.is_empty() {
+                            ui.add_space(4.0);
+                            ui.add(
+                                egui::Label::new(
+                                    egui::RichText::new(status)
+                                        .color(egui::Color32::from_rgb(190, 190, 190)),
+                                )
+                                .wrap(),
+                            );
+                        }
+
+                        divider(ui);
+
+                        heading(ui, "About");
+                        ui.label(egui::RichText::new(about.as_str()).size(13.0));
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            // Opens in the default browser; the app itself makes no network calls.
+                            ui.hyperlink_to("Project website", settings_panel::PROJECT_WEBSITE_URL);
+                            ui.label("·");
+                            ui.hyperlink_to("GitHub", settings_panel::PROJECT_REPO_URL);
+                        });
+                        ui.add_space(4.0);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(settings_panel::BETA_NOTICE)
+                                    .color(egui::Color32::from_rgb(190, 190, 190)),
+                            )
+                            .wrap(),
+                        );
                     });
-                });
-                ui.add_space(8.0);
-                heading(ui, "Memory File");
-                match &memory_path {
-                    Some(path) => {
-                        ui.add(egui::Label::new(path.as_str()).truncate())
-                            .on_hover_text(path.as_str());
-                    }
-                    None => {
-                        ui.label(settings_panel::NO_MEMORY_LOCATION);
-                    }
-                }
-                ui.horizontal(|ui| {
-                    ui.add_enabled_ui(enabled, |ui| {
-                        if ui.button("Change...").clicked() {
-                            action = Some(SettingsAction::ChangeMemoryFile);
-                        }
-                        if ui.button("Import...").clicked() {
-                            action = Some(SettingsAction::ImportMemory);
-                        }
-                        if ui.button("Export...").clicked() {
-                            action = Some(SettingsAction::ExportMemory);
-                        }
-                    });
-                });
-                if !status.is_empty() {
-                    ui.add(egui::Label::new(status).wrap());
-                }
-                ui.add_space(8.0);
-                heading(ui, "About");
-                ui.label(about.as_str());
-                ui.horizontal(|ui| {
-                    // Opens in the default browser; the app itself makes no network calls.
-                    ui.hyperlink_to("Project website", settings_panel::PROJECT_WEBSITE_URL);
-                    ui.label("·");
-                    ui.hyperlink_to("GitHub", settings_panel::PROJECT_REPO_URL);
-                });
-                ui.add(egui::Label::new(settings_panel::BETA_NOTICE).wrap());
             });
         self.settings.open = open;
         action
