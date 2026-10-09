@@ -1,0 +1,54 @@
+# Release build. Runs only on manual trigger or v* tag.
+# Step 1 (now): unsigned build on GitHub-hosted Windows runner.
+# Step 2 (after SignPath approval): add the signing steps marked SIGNING.
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      # Restores NuGet (AutoCAD.NET refs), runs dotnet test, cargo build --release, ISCC.
+      # Needs SpatialUiKit as a git dependency (not yet switched; see SignPath notes).
+      - name: Build, test, package
+        shell: pwsh
+        run: ./build.ps1
+
+      # SIGNING (after approval): submit the unsigned files to SignPath, replace them with signed output.
+      # - uses: SignPath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+      #     organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+      #     project-slug: LayerHerder
+      #     signing-policy-slug: release-signing
+      #     artifact-configuration-slug: <from SignPath>
+      #     input-artifact-path: unsigned-bin.zip
+      #     output-artifact-path: signed-bin/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: layer-herder-unsigned
+          path: |
+            dist/LayerHerder_*.exe
+            LayerHerder.bundle/**
+          if-no-files-found: error
