@@ -96,6 +96,9 @@
     font-weight:700; font-size:.85rem; display:flex; align-items:center; justify-content:center;
   }
   .steps p{margin:0; color:var(--text-dim); font-size:.95rem;}
+  .steps li.has-cta{padding-right:220px;}
+  .steps .step-cta{position:absolute; right:16px; top:50%; transform:translateY(-50%); margin:0;}
+  @media(max-width:700px){.steps li.has-cta{padding-right:16px;} .steps .step-cta{position:static; transform:none; margin-top:12px;}}
 
   /* features */
   .feature-list{list-style:none; margin:0; padding:0; display:grid; gap:20px 36px; grid-template-columns:1fr;}
@@ -333,10 +336,10 @@
   <div class="wrap">
     <h2>Get started</h2>
     <ol class="steps">
-      <li>
+      <li class="has-cta">
         <h3>Download and run the installer</h3>
         <p>It detects your AutoCAD versions and installs the matching build for each.</p>
-        <p><a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/download/v1.4.1-beta/LayerHerder_BETA-1.4.1.exe">Download installer</a></p>
+        <p class="step-cta"><a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/download/v1.4.1-beta/LayerHerder_BETA-1.4.1.exe">Download installer</a></p>
       </li>
       <li>
         <h3>Open a drawing and type <code class="cmd">HERD</code></h3>
