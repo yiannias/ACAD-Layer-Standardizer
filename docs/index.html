@@ -117,6 +117,10 @@
   /* screenshot placeholders (replace with real captures) */
   .shot{margin:28px 0 0;}
   .shot img{display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:10px;}
+  .shot.small-shot img{max-width:420px;}
+  .shot-pair{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin:28px 0 0;}
+  .shot-pair .shot{margin:0;}
+  @media(max-width:700px){.shot-pair{grid-template-columns:1fr;}}
   .shot figcaption{font-size:.85rem; color:var(--text-dim); margin-top:8px;}
   .placeholder{
     border:2px dashed var(--warn); border-radius:10px; padding:28px 18px; text-align:center;
@@ -154,7 +158,7 @@
       </div>
     </div>
     <div class="cta-row">
-      <a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/tag/v1.4.1-beta">Download latest release</a>
+      <a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/download/v1.4.1-beta/LayerHerder_BETA-1.4.1.exe">Download installer</a>
       <a class="btn ghost" href="https://github.com/yiannias/LayerHerder">View on GitHub</a>
       <span class="release-meta">Version Beta 1.4.1</span>
     </div>
@@ -287,7 +291,18 @@
       </li>
     </ul>
 
-    <figure class="shot">
+    <div class="shot-pair">
+      <figure class="shot">
+        <img src="images/node-mode.png" alt="Node view: source and standard layers as boxes joined by curved match lines, with the Node/Column switch and a column-count slider at the bottom." loading="lazy">
+        <figcaption>Node view. Drag from a source layer to a standard layer. The slider sets how many columns of standard layers to show.</figcaption>
+      </figure>
+      <figure class="shot">
+        <img src="images/column-mode.png" alt="Column view: source and standard layers as scrollable lists, with the Node/Column switch at the bottom right set to Column." loading="lazy">
+        <figcaption>Column view. Both sides are scrollable lists; drag a source row onto a standard row. Flip between views with the Node/Column switch at the bottom.</figcaption>
+      </figure>
+    </div>
+
+    <figure class="shot small-shot">
       <img src="images/settings-panel.png" alt="The Settings panel showing the Standards File and Memory File sections." loading="lazy">
       <figcaption>Settings: choose your standard file and manage the memory file.</figcaption>
     </figure>
@@ -317,11 +332,11 @@
 <section class="alt">
   <div class="wrap">
     <h2>Get started</h2>
-    <p><a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/tag/v1.4.1-beta">Download</a></p>
     <ol class="steps">
       <li>
         <h3>Download and run the installer</h3>
         <p>It detects your AutoCAD versions and installs the matching build for each.</p>
+        <p><a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/download/v1.4.1-beta/LayerHerder_BETA-1.4.1.exe">Download installer</a></p>
       </li>
       <li>
         <h3>Open a drawing and type <code class="cmd">HERD</code></h3>
