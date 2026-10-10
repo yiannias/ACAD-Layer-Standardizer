@@ -5,21 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Layer Herder</title>
 <link rel="icon" type="image/png" href="assets/app-icon.png">
-<meta name="description" content="An AutoCAD plug-in that maps existing drawing layers onto a layer standard, with pattern-matching suggestions and a visual mapping editor.">
+<meta name="description" content="Free, offline AutoCAD plug-in that herds drawing layers into your standard. Windows.">
 <style>
   :root{
     --bg:#0e1116; --bg-alt:#151a22; --panel:#1a2029; --border:#2a3140;
     --text:#e6e9ef; --text-dim:#9aa4b2; --accent:#5b9dff; --accent-2:#7ee0a8;
-    --warn:#f2b84b; --danger:#ef6a6a; --mono:'Cascadia Code',ui-monospace,Consolas,monospace;
+    --warn:#f2b84b; --mono:'Cascadia Code',ui-monospace,Consolas,monospace;
   }
   @media (prefers-color-scheme: light){
     :root{ --bg:#f5f6f8; --bg-alt:#ffffff; --panel:#ffffff; --border:#dde1e8;
-      --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; }
+      --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; --warn:#9a6700; }
   }
   :root[data-theme="dark"]{ --bg:#0e1116; --bg-alt:#151a22; --panel:#1a2029; --border:#2a3140;
-    --text:#e6e9ef; --text-dim:#9aa4b2; --accent:#5b9dff; --accent-2:#7ee0a8; }
+    --text:#e6e9ef; --text-dim:#9aa4b2; --accent:#5b9dff; --accent-2:#7ee0a8; --warn:#f2b84b; }
   :root[data-theme="light"]{ --bg:#f5f6f8; --bg-alt:#ffffff; --panel:#ffffff; --border:#dde1e8;
-    --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; }
+    --text:#1b1f27; --text-dim:#5b6472; --accent:#2563eb; --accent-2:#0f9d58; --warn:#9a6700; }
 
   *{box-sizing:border-box;}
   body{
@@ -27,157 +27,67 @@
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     line-height:1.55;
   }
-  .wrap{max-width:1040px; margin:0 auto; padding:0 24px;}
+  .wrap{max-width:960px; margin:0 auto; padding:0 16px;}
+  @media (min-width:700px){ .wrap{padding:0 24px;} }
   a{color:var(--accent);}
-  .signature-link{display:inline-block; font-size:1.1rem; text-decoration:none;}
+  code{font-family:var(--mono); background:var(--bg-alt); padding:1px 6px; border-radius:4px; font-size:.88em;}
+  code.cmd{color:var(--text); font-weight:700; border:1px solid var(--border);}
 
   header.hero{
-    padding:72px 0 56px; border-bottom:1px solid var(--border);
+    padding:56px 0 48px; border-bottom:1px solid var(--border);
     background:linear-gradient(180deg, var(--bg-alt), var(--bg));
   }
   .eyebrow{
-    font-size:.8rem; letter-spacing:.08em; text-transform:uppercase;
-    color:var(--accent); font-weight:600; margin-bottom:14px;
+    font-size:.78rem; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--accent); font-weight:600; margin:0 0 12px;
   }
-  h1{font-size:2.6rem; margin:0 0 14px; letter-spacing:-.02em;}
-  .hero-lockup{display:flex; align-items:center; gap:28px; margin:0 0 28px;}
-  .hero-logo{flex:none; display:block; width:170px; height:auto; border-radius:14px;}
-  .tagline{font-size:1.15rem; color:var(--text-dim); max-width:500px; margin:0;}
-  .cta-row{display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap;}
-  .cta-primary{display:flex; flex-direction:column; align-items:flex-start; gap:8px;}
-  .release-meta{color:var(--text-dim); font-size:.85rem;}
+  .hero-lockup{display:flex; align-items:center; gap:24px; flex-wrap:wrap;}
+  .hero-logo{flex:none; display:block; width:140px; height:auto; border-radius:14px;}
+  h1{font-size:2.5rem; margin:0 0 10px; letter-spacing:-.02em; line-height:1.1;}
+  .tagline{font-size:1.25rem; font-weight:600; margin:0 0 10px;}
+  .lede{color:var(--text-dim); margin:0; max-width:560px; font-size:1.02rem;}
+  .cta-row{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:28px;}
   .btn{
-    display:inline-flex; align-items:center; gap:8px; padding:10px 18px;
+    display:inline-flex; align-items:center; padding:10px 18px;
     border-radius:8px; font-weight:600; font-size:.95rem; text-decoration:none;
-    border:1px solid var(--border); transition:transform .12s ease, border-color .12s ease;
+    border:1px solid var(--border);
   }
-  .btn:hover{transform:translateY(-1px); border-color:var(--accent);}
   .btn.primary{background:var(--accent); color:#fff; border-color:var(--accent);}
-  .btn.primary:hover{color:#fff;}
   .btn.ghost{color:var(--text); background:transparent;}
+  .release-meta{color:var(--text-dim); font-size:.85rem; width:100%;}
   .badges{margin-top:22px; display:flex; gap:8px; flex-wrap:wrap;}
   .badge{
     font-size:.75rem; padding:4px 10px; border-radius:999px; border:1px solid var(--border);
     color:var(--text-dim); font-family:var(--mono);
   }
 
-  section{padding:56px 0;}
-  section.alt{background:var(--bg-alt); border-top:1px solid var(--border); border-bottom:1px solid var(--border);}
-  h2{font-size:1.6rem; margin:0 0 8px;}
-  .section-lead{color:var(--text-dim); max-width:640px; margin:0 0 32px;}
+  section{padding:52px 0; border-bottom:1px solid var(--border);}
+  section.alt{background:var(--bg-alt);}
+  section:last-of-type{border-bottom:none;}
+  h2{font-size:1.5rem; margin:0 0 8px;}
+  h3{font-size:1.02rem; margin:0 0 4px;}
+  .lead{color:var(--text-dim); max-width:640px; margin:0 0 28px;}
+  .small{color:var(--text-dim); font-size:.9rem;}
 
-  .feature-list{
-    list-style:none; margin:0; padding:0; display:grid; gap:18px 40px; grid-template-columns:1fr;
+  /* before / after */
+  .compare{display:grid; gap:16px; grid-template-columns:1fr;}
+  @media (min-width:640px){ .compare{grid-template-columns:1fr auto 1fr; align-items:stretch;} }
+  .compare .box{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px;
   }
-  @media (min-width:700px){ .feature-list{grid-template-columns:1fr 1fr;} }
-  .feature-list li{
-    padding-left:24px; position:relative; border-bottom:1px solid var(--border); padding-bottom:18px;
-  }
-  .feature-list li:last-child{border-bottom:none; padding-bottom:0;}
-  @media (min-width:700px){
-    .feature-list li:nth-last-child(-n+2){border-bottom:none; padding-bottom:0;}
-  }
-  .feature-list li::before{
-    content:'—'; position:absolute; left:0; top:0; color:var(--accent); font-weight:700;
-  }
-  .feature-list h3{margin:0 0 4px; font-size:1.02rem;}
-  .feature-list p{margin:0; color:var(--text-dim); font-size:.92rem;}
+  .compare .box h3{font-size:.8rem; text-transform:uppercase; letter-spacing:.06em; margin-bottom:12px;}
+  .compare .box.before h3{color:var(--warn);}
+  .compare .box.after h3{color:var(--accent-2);}
+  .compare ul{list-style:none; margin:0; padding:0; font-family:var(--mono); font-size:.92rem;}
+  .compare li{padding:6px 0; border-bottom:1px solid var(--border);}
+  .compare li:last-child{border-bottom:none;}
+  .arrow{align-self:center; text-align:center; color:var(--accent); font-size:1.6rem; font-weight:700;}
+  .example-note{font-size:.82rem; color:var(--text-dim); margin:12px 0 0;}
 
-  /* --- screenshot frame + gallery --- */
-  .mock-note{
-    font-size:.78rem; color:var(--text-dim); text-align:center; margin:10px 0 0;
-  }
-  .mockup{
-    border:1px solid var(--border); border-radius:12px; overflow:hidden;
-    background:#12161d; box-shadow:0 10px 30px -12px rgba(0,0,0,.4);
-  }
-  .mockup .titlebar{
-    background:#1c212b; padding:8px 12px; display:flex; align-items:center; gap:8px;
-    border-bottom:1px solid var(--border); font-size:.78rem; color:#8b93a3; font-family:var(--mono);
-  }
-  .dot{width:9px; height:9px; border-radius:50%; background:#3b4250;}
-  .dot.r{background:#e0605a;} .dot.y{background:#e0b24a;} .dot.g{background:#4ac07a;}
-  .mockup img{display:block; width:100%; height:auto;}
-
-  .chapter{margin-bottom:44px;}
-  .chapter:last-child{margin-bottom:0;}
-  .chapter-title{
-    font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; font-weight:700;
-    color:var(--accent); margin:0 0 16px; display:flex; align-items:center; gap:8px;
-  }
-
-  .gallery{
-    column-count:1; column-gap:32px;
-  }
-  @media (min-width:640px){ .gallery{column-count:2;} }
-  @media (min-width:980px){ .gallery{column-count:3;} }
-  .gallery.paired{
-    column-count:1; display:grid; grid-template-columns:1fr; gap:32px;
-  }
-  @media (min-width:640px){ .gallery.paired{grid-template-columns:1fr 1fr;} }
-  .gallery.paired .shot{margin:0;}
-
-  .doc-section{margin:0 0 40px;}
-  .doc-section:last-child{margin-bottom:0;}
-  .subsection-title{font-size:1.05rem; font-weight:700; margin:0 0 8px; color:var(--text);}
-  .subsection-lead{color:var(--text-dim); font-size:.92rem; max-width:640px; margin:0 0 24px;}
-  .doc-row{display:grid; grid-template-columns:1fr; gap:28px; margin:0 0 24px; align-items:start;}
-  @media (min-width:640px){ .doc-row.split{grid-template-columns:1fr 1fr;} }
-  .doc-figure{margin:0; cursor:zoom-in;}
-  .doc-figure img{display:block; max-width:100%; width:auto; height:auto;}
-  .doc-figure figcaption{margin-top:10px; font-size:.9rem; color:var(--text-dim); max-width:320px;}
-  .doc-figure.centered{text-align:center;}
-  .doc-figure.centered img{margin:0 auto;}
-  .doc-figure.centered figcaption{margin-left:auto; margin-right:auto;}
-  .doc-figure.narrow{max-width:380px; margin:0 auto;}
-  .doc-figure.narrow figcaption{max-width:none; white-space:nowrap;}
-  .doc-divider{border:none; border-top:1px solid var(--border); margin:40px 0;}
-
-  .callout-row{display:flex; align-items:center; gap:24px; margin-bottom:28px; flex-wrap:wrap;}
-  .callout-row:last-child{margin-bottom:0;}
-  .callout-row .shot{flex:0 0 auto; width:280px; margin:0;}
-  .callout-box{
-    color:var(--text); font-size:.95rem; line-height:1.5; flex:1 1 240px; max-width:420px;
-  }
-  .callout-stack{display:flex; flex-direction:column; gap:12px; flex:1 1 240px; max-width:420px;}
-  .callout-stack .callout-box{flex:0 0 auto;}
-  .callout-stack .shot{width:220px; margin:0;}
-  .shot{
-    background:var(--panel); border:1px solid var(--border); border-radius:10px;
-    overflow:hidden; cursor:zoom-in; text-align:left; padding:0; font:inherit; color:inherit;
-    display:flex; flex-direction:column; align-items:stretch; width:100%; margin:0 0 32px;
-    break-inside:avoid; position:relative;
-  }
-  .shot .frame{
-    width:100%; padding:16px; display:flex; align-items:center; justify-content:center;
-    background:#0c0f14;
-  }
-  .shot img{display:block; max-width:100%; width:auto; height:auto; border-radius:6px;}
-  .shot figcaption{padding:12px 14px 16px; font-size:.82rem; color:var(--text-dim);}
-  .shot:hover{border-color:var(--accent);}
-
-  .lightbox{
-    position:fixed; inset:0; background:rgba(6,8,12,.9); display:none;
-    align-items:center; justify-content:center; padding:5vh 4vw; z-index:100;
-  }
-  .lightbox.open{display:flex;}
-  .lightbox figure{margin:0; max-width:min(1100px,92vw); max-height:90vh; display:flex; flex-direction:column; align-items:center; gap:10px;}
-  .lightbox img{max-width:100%; max-height:78vh; width:auto; height:auto; object-fit:contain; border-radius:8px; border:1px solid var(--border);}
-  .lightbox figcaption{color:#dfe3ea; font-size:.9rem; text-align:center;}
-  .lightbox .lb-close{
-    position:absolute; top:18px; right:24px; background:transparent; border:none; color:#fff;
-    font-size:1.6rem; cursor:pointer; line-height:1;
-  }
-  .lightbox .lb-nav{
-    position:absolute; top:50%; transform:translateY(-50%); background:rgba(255,255,255,.08);
-    border:1px solid rgba(255,255,255,.2); color:#fff; width:40px; height:40px; border-radius:50%;
-    font-size:1.2rem; cursor:pointer;
-  }
-  .lightbox .lb-prev{left:18px;} .lightbox .lb-next{right:18px;}
-
-  .steps{counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:16px;}
+  /* steps */
+  .steps{counter-reset:step; list-style:none; margin:0; padding:0; display:grid; gap:14px;}
   .steps li{
-    counter-increment:step; position:relative; padding:16px 16px 16px 56px;
+    counter-increment:step; position:relative; padding:16px 16px 16px 58px;
     background:var(--panel); border:1px solid var(--border); border-radius:10px;
   }
   .steps li::before{
@@ -185,18 +95,45 @@
     width:26px; height:26px; border-radius:50%; background:var(--accent); color:#fff;
     font-weight:700; font-size:.85rem; display:flex; align-items:center; justify-content:center;
   }
-  .steps h4{margin:0 0 4px; font-size:.98rem;}
-  .steps p{margin:0; color:var(--text-dim); font-size:.9rem;}
+  .steps p{margin:0; color:var(--text-dim); font-size:.95rem;}
 
-  table.versions{width:100%; border-collapse:collapse; font-size:.9rem;}
-  table.versions th, table.versions td{
-    text-align:left; padding:9px 12px; border-bottom:1px solid var(--border);
+  /* features */
+  .feature-list{list-style:none; margin:0; padding:0; display:grid; gap:20px 36px; grid-template-columns:1fr;}
+  @media (min-width:640px){ .feature-list{grid-template-columns:1fr 1fr;} }
+  .feature-list li{padding-left:22px; position:relative;}
+  .feature-list li::before{content:'—'; position:absolute; left:0; top:0; color:var(--accent); font-weight:700;}
+  .feature-list p{margin:0; color:var(--text-dim); font-size:.95rem;}
+
+  /* match legend */
+  .legend{display:grid; gap:10px; grid-template-columns:1fr; margin:0 0 4px; padding:0; list-style:none;}
+  @media (min-width:640px){ .legend{grid-template-columns:repeat(2,1fr);} }
+  .legend li{display:flex; gap:10px; align-items:flex-start; color:var(--text-dim); font-size:.95rem;}
+  .swatch{flex:none; width:28px; height:0; border-top:3px solid; margin-top:11px;}
+  .swatch.exact{border-color:#3fb571;}
+  .swatch.memory{border-color:#4a8cff;}
+  .swatch.heur{border-color:#e0a030; border-top-style:dashed;}
+  .swatch.manual{border-color:#a06ee0;}
+
+  /* screenshot placeholders (replace with real captures) */
+  .shot{margin:28px 0 0;}
+  .shot img{display:block; width:100%; height:auto; border:1px solid var(--border); border-radius:10px;}
+  .shot figcaption{font-size:.85rem; color:var(--text-dim); margin-top:8px;}
+  .placeholder{
+    border:2px dashed var(--warn); border-radius:10px; padding:28px 18px; text-align:center;
+    background:var(--panel); color:var(--text-dim); font-size:.9rem;
   }
-  table.versions th{color:var(--text-dim); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em;}
-  code{font-family:var(--mono); background:var(--bg-alt); padding:1px 6px; border-radius:4px; font-size:.88em;}
-  code.cmd{color:#fff; font-weight:700;}
+  .placeholder strong{display:block; color:var(--warn); font-family:var(--mono); font-size:.92rem; margin-bottom:6px; word-break:break-all;}
 
-  footer{padding:36px 0 60px; color:var(--text-dim); font-size:.85rem; text-align:center;}
+  table.versions{width:100%; border-collapse:collapse; font-size:.95rem; max-width:560px;}
+  table.versions th, table.versions td{text-align:left; padding:9px 12px; border-bottom:1px solid var(--border);}
+  table.versions th{color:var(--text-dim); font-weight:600; font-size:.78rem; text-transform:uppercase; letter-spacing:.04em;}
+
+  .notice{
+    border-left:3px solid var(--warn); background:var(--panel); padding:14px 16px; border-radius:6px;
+    color:var(--text-dim); font-size:.95rem; max-width:640px; margin:24px 0 0;
+  }
+
+  footer{padding:32px 0 56px; color:var(--text-dim); font-size:.85rem; text-align:center;}
   footer a{color:var(--text-dim);}
 </style>
 </head>
@@ -204,299 +141,230 @@
 
 <header class="hero">
   <div class="wrap">
-    <div class="eyebrow">AutoCAD plug-in · Beta</div>
-    <h1>Layer Herder</h1>
+    <p class="eyebrow">Free AutoCAD plug-in · Beta</p>
     <div class="hero-lockup">
       <img class="hero-logo" src="assets/logo.png" alt="Layer Herder logo: a border collie herding sheep made of stacked layers">
-      <p class="tagline">
-        A layer translator with a memory. Map messy, inconsistent drawing layers onto an
-        established layer standard — and let it learn your conventions as you go.
-      </p>
+      <div>
+        <h1>Layer Herder</h1>
+        <p class="tagline">Tidy your drawings. Herd your layers into shape.</p>
+        <p class="lede">
+          Every drawing names its layers differently. Layer Herder maps them onto your standard
+          and applies the changes in one pass, with undo.
+        </p>
+      </div>
     </div>
     <div class="cta-row">
-      <div class="cta-primary">
-        <a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/tag/v1.4.1-beta">Download latest release</a>
-        <span class="release-meta">Version Beta-1.4.1</span>
-      </div>
+      <a class="btn primary" href="https://github.com/yiannias/LayerHerder/releases/tag/v1.4.1-beta">Download latest release</a>
       <a class="btn ghost" href="https://github.com/yiannias/LayerHerder">View on GitHub</a>
+      <span class="release-meta">Version Beta 1.4.1</span>
     </div>
     <div class="badges">
       <span class="badge">AutoCAD 2021–2027</span>
-      <span class="badge">BETA</span>
-      <span class="badge">Free &amp; Open Source</span>
+      <span class="badge">Windows</span>
+      <span class="badge">Offline</span>
+      <span class="badge">Free · MIT</span>
     </div>
   </div>
 </header>
 
+<section>
+  <div class="wrap">
+    <h2>The problem</h2>
+    <p class="lede">
+      Three drawings can name the same wall layer three ways: <code>WALL</code>, <code>A WALLS</code> and <code>wall-exist</code>.
+      None of them match your standard. Fixing that by hand means
+      renaming, merging and re-coloring layer by layer, drawing after drawing.
+    </p>
+    <div class="compare">
+      <div class="box before">
+        <h3>Before: drawing layers</h3>
+        <ul>
+          <li>WALL</li>
+          <li>A WALLS</li>
+          <li>wall-exist</li>
+          <li>TXT</li>
+          <li>Dim_Arch</li>
+        </ul>
+      </div>
+      <div class="arrow" aria-hidden="true">→</div>
+      <div class="box after">
+        <h3>After: your standard</h3>
+        <ul>
+          <li>A-WALL</li>
+          <li>A-WALL</li>
+          <li>A-WALL-EXST</li>
+          <li>A-ANNO-TEXT</li>
+          <li>A-ANNO-DIMS</li>
+        </ul>
+      </div>
+    </div>
+    <p class="example-note">Illustrative names only. Layer Herder works from the standard file you point it at.</p>
+  </div>
+</section>
+
 <section class="alt">
   <div class="wrap">
-    <div class="mockup">
-      <a href="assets/screenshots/overview.jpg" class="lb-trigger" data-caption="Full mapping editor — source layers, target standard, and the live match graph in one view.">
-        <img src="assets/screenshots/overview.jpg" alt="Layer Herder mapping editor showing source drawing layers connected to standard target layers by color-coded match lines">
-      </a>
-    </div>
-    <p class="mock-note">Green = exact match, blue = memory match, amber (dashed) = heuristic suggestion, purple = manual match.</p>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <h2>What it does</h2>
-    <p class="section-lead">
-      Point it at a drawing and it reads every layer in use, then helps you map each one to your
-      standard naming scheme — remembering past decisions and suggesting matches for layers it has
-      never seen before, based on pattern matching against layers it has.
-    </p>
-    <ul class="feature-list">
-      <li>
-        <h3>Suggests matches it's never seen</h3>
-        <p>If "TEXT" is favored over "TXT" elsewhere in your standard, it suggests that mapping automatically, with a confidence score you control.</p>
-      </li>
-      <li>
-        <h3>Remembers your decisions</h3>
-        <p>Once you confirm a mapping, it's saved. The next drawing you clean up gets smarter suggestions automatically.</p>
-      </li>
-      <li>
-        <h3>Visual mapping editor</h3>
-        <p>Source and target layers side by side, connected by lines you can draw, review, or remove — with search and filtering to focus on what's left.</p>
-      </li>
-      <li>
-        <h3>Undo / redo</h3>
-        <p>Full Ctrl+Z / Ctrl+Y support while mapping, so you can experiment freely without losing your place.</p>
-      </li>
-      <li>
-        <h3>Handles external references correctly</h3>
-        <p>Hides xref layers from the mapping view and matches bound-layer names the way you'd expect.</p>
-      </li>
-      <li>
-        <h3>Bulk actions</h3>
-        <p>Select multiple layers at once to un-match, re-map, or clear them in bulk instead of one at a time.</p>
-      </li>
-    </ul>
-  </div>
-</section>
-
-<section>
-  <div class="wrap">
-    <h2>App Details</h2>
-    <p class="section-lead" style="max-width:none; white-space:nowrap;">A walkthrough of the workflow, straight from the current build. Click any image to zoom in.</p>
-
-    <div class="chapter">
-      <h3 class="chapter-title">Getting started</h3>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-screen.jpg" data-caption="Launch screen: point it at your reference file and layer memory, then open the editor.">
-          <div class="frame"><img src="assets/screenshots/launch-screen.jpg" alt="Layer Herder launch dialog with reference file and memory file pickers"></div>
-        </figure>
-        <div class="callout-box">Launch: set your reference standard and memory file</div>
-      </div>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-menu-ribbon.jpg" data-caption="Docked to its own ribbon tab and Add-ins menu after install.">
-          <div class="frame"><img src="assets/screenshots/launch-menu-ribbon.jpg" alt="AutoCAD ribbon showing the Layer Herder add-in tab"></div>
-        </figure>
-        <div class="callout-box">Docks into the AutoCAD ribbon as its own add-in</div>
-      </div>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/launch-cli.jpg" data-caption="Or launch it straight from the AutoCAD command line with HERD.">
-          <div class="frame"><img src="assets/screenshots/launch-cli.jpg" alt="AutoCAD command line with the HERD command typed"></div>
-        </figure>
-        <div class="callout-box">Or launch from the command line with <code class="cmd">HERD</code></div>
-      </div>
-    </div>
-
-    <div class="chapter">
-      <h3 class="chapter-title">How matches are made</h3>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/exact-match.jpg" data-caption="Exact matches (green) are wired up automatically — no name normalization needed.">
-          <div class="frame"><img src="assets/screenshots/exact-match-crop.jpg" alt="Editor view showing green exact-match connections between identically named layers"></div>
-        </figure>
-        <div class="callout-box">Exact matches connect automatically</div>
-      </div>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-overview.jpg" data-caption="Memory matches (blue) recall mappings you've confirmed on past drawings.">
-          <div class="frame"><img src="assets/screenshots/memory-match-crop.jpg" alt="Editor view showing blue memory-match connections recalled from prior sessions"></div>
-        </figure>
-        <div class="callout-box">Memory matches recall past mapping decisions</div>
-      </div>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-confidence.jpg" data-caption="Heuristic matches (amber, dashed) are suggested by tokenized name similarity, gated by a confidence slider.">
-          <div class="frame"><img src="assets/screenshots/heuristic-match-crop.jpg" alt="Editor view showing amber dashed heuristic-match suggestions"></div>
-        </figure>
-        <div class="callout-stack">
-          <div class="callout-box">Heuristic suggestions, gated by a confidence slider</div>
-          <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-confidence.jpg" data-caption="The confidence slider controls how aggressive heuristic suggestions are.">
-            <div class="frame"><img src="assets/screenshots/heuristic-slider-crop.jpg" alt="Heuristic Match toggle with an 84% confidence slider"></div>
-          </figure>
-        </div>
-      </div>
-      <div class="callout-row">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/heuristic-match-unlink.jpg" data-caption="Any connection can be unlinked by clicking on the link, right clicking, and with undo/redo (Ctrl-Z, Ctrl-Y).">
-          <div class="frame"><img src="assets/screenshots/heuristic-match-unlink.jpg" alt="Delete Connection tooltip shown when clicking a match line"></div>
-        </figure>
-        <div class="callout-box">Any connection can be unlinked by clicking on the link, right clicking, and with undo/redo (Ctrl-Z, Ctrl-Y)</div>
-      </div>
-    </div>
-
-    <div class="chapter">
-      <h3 class="chapter-title">Teaching it your standard</h3>
-      <div class="gallery">
-        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-manual-heuristic.jpg" data-caption="A first manual/heuristic pass — filtering &quot;txt&quot; on both sides to connect the odd ones out by hand.">
-          <div class="frame"><img src="assets/screenshots/memory-match-manual-heuristic.jpg" alt="Filtered view narrowed to layers containing txt, with manual connections being drawn"></div>
-          <figcaption>Filter both sides and connect the odd ones by hand</figcaption>
-        </figure>
-        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-apply-remember.jpg" data-caption="&quot;Apply &amp; Remember&quot; commits the mapping and writes it to memory for next time.">
-          <div class="frame"><img src="assets/screenshots/memory-match-apply-remember.jpg" alt="Apply and Apply and Remember buttons in the mapping editor"></div>
-          <figcaption>"Apply &amp; Remember" commits and saves to memory</figcaption>
-        </figure>
-        <figure class="shot lb-trigger" data-full="assets/screenshots/memory-match-remembered.jpg" data-caption="Next time, the same layers resolve automatically as memory matches.">
-          <div class="frame"><img src="assets/screenshots/memory-match-remembered.jpg" alt="Previously manual connections now shown as automatic blue memory matches"></div>
-          <figcaption>Next drawing, the same layers resolve automatically</figcaption>
-        </figure>
-      </div>
-    </div>
-
-    <div class="chapter">
-      <h3 class="chapter-title">Filtering &amp; cleanup</h3>
-
-      <div class="doc-section">
-        <h4 class="subsection-title">Filtering Layers</h4>
-        <p class="subsection-lead">Navigating the app with hundreds of visible layers can be a pain, so there are several ways to filter the list to just what you're looking for.</p>
-
-        <div class="doc-row split">
-          <figure class="doc-figure centered lb-trigger" data-full="assets/screenshots/source-match-filter.jpg" data-caption="The Source side lets you choose which kind of match you want to review.">
-            <img src="assets/screenshots/source-match-filter-crop.jpg" alt="Source Drawing panel with visibility toggles for Exact, Memory, Heuristic, Manual, and Unmatched layers">
-            <figcaption>The "Source" side lets you choose which kind of match you want to review</figcaption>
-          </figure>
-          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/target-filters.jpg" data-caption="The Target side lets you filter to specific layer groups and types.">
-            <img src="assets/screenshots/target-filters-crop.jpg" alt="Target Filter panel with discipline and category visibility toggles">
-            <figcaption>The "Target" side lets you filter to specific layer groups and types</figcaption>
-          </figure>
-        </div>
-
-        <div class="doc-row">
-          <figure class="doc-figure centered narrow lb-trigger" data-full="assets/screenshots/filter-search-source.jpg" data-caption="You can also type in partial names to get even more specific.">
-            <img src="assets/screenshots/filter-search-source-crop.jpg" alt="Source search box filtered to the text 'text'">
-            <figcaption>You can also filter by typing partial names</figcaption>
-          </figure>
-        </div>
-      </div>
-
-      <hr class="doc-divider">
-
-      <div class="doc-section">
-        <h4 class="subsection-title">Cleaning Up</h4>
-        <div class="doc-row">
-          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/empty-layers-panel.jpg" data-caption="Identifying and purging out empty layers is easy.">
-            <img src="assets/screenshots/empty-layers-panel.jpg" alt="Empty Layers panel with Highlight and Purge buttons">
-            <figcaption>Identifying and purging out empty layers is easy</figcaption>
-          </figure>
-        </div>
-      </div>
-
-      <hr class="doc-divider">
-
-      <div class="doc-section">
-        <h4 class="subsection-title">Layer Standard Application</h4>
-        <div class="doc-row">
-          <figure class="doc-figure lb-trigger" data-full="assets/screenshots/layer-property-matching.jpg" data-caption="You can choose to just correct layer names or apply standards more deeply.">
-            <img src="assets/screenshots/layer-property-matching.jpg" alt="Layer Property Matching panel with Match Color, Match Linetype, Match Lineweight, and Make Elements ByLayer toggles">
-            <figcaption>You can choose to just correct layer names or apply standards more deeply</figcaption>
-          </figure>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="lightbox" id="lightbox">
-  <button class="lb-close" id="lbClose" aria-label="Close">&times;</button>
-  <button class="lb-nav lb-prev" id="lbPrev" aria-label="Previous">&#8249;</button>
-  <button class="lb-nav lb-next" id="lbNext" aria-label="Next">&#8250;</button>
-  <figure>
-    <img id="lbImg" src="" alt="">
-    <figcaption id="lbCaption"></figcaption>
-  </figure>
-</div>
-
-<section>
-  <div class="wrap">
-    <h2>Basic usage</h2>
-    <p class="section-lead">A first pass at cleaning up a drawing's layers looks like this:</p>
+    <h2>How it works</h2>
+    <p class="lede">Three steps, inside AutoCAD.</p>
     <ol class="steps">
       <li>
-        <h4>Install</h4>
-        <p>Run the installer — it detects your AutoCAD version(s) and deploys the matching build automatically via the Autoloader.</p>
+        <h3>Type <code class="cmd">HERD</code></h3>
+        <p>The mapping editor opens with the drawing's layers on one side and your standard on the other. Layer Herder can also be opened from its ribbon tab.</p>
       </li>
       <li>
-        <h4>Open the drawing</h4>
-        <p>With the drawing open in AutoCAD, launch Layer Herder from the ribbon or type its command to open the mapping editor.</p>
+        <h3>Connect the layers</h3>
+        <p>Exact matches connect automatically. Layers it has mapped before connect from memory, and close names are suggested. Connect anything left by hand.</p>
       </li>
       <li>
-        <h4>Review suggested matches</h4>
-        <p>The tool compares existing layers against your standard and pre-fills high-confidence matches, flagged with a confidence score.</p>
-      </li>
-      <li>
-        <h4>Map the rest</h4>
-        <p>Connect any remaining layers by hand in the node graph, or use the filter panel to focus on unmapped layers only.</p>
-      </li>
-      <li>
-        <h4>Standardize</h4>
-        <p>Run the standardize command to apply the mapping — renaming and consolidating layers to match your standard.</p>
-      </li>
-      <li>
-        <h4>Reuse the memory</h4>
-        <p>The mapping decisions you made are remembered, so the next drawing you clean up gets smarter suggestions automatically.</p>
+        <h3>Apply</h3>
+        <p>Layers are renamed or merged to match in one pass. <strong>Apply &amp; Remember</strong> also saves your decisions for the next drawing. Changed your mind? Run <code class="cmd">UNDOSTANDARDIZATION</code>.</p>
       </li>
     </ol>
+
+    <figure class="shot">
+      <div class="placeholder">
+        <strong>docs/images/editor-overview.png</strong>
+        Screenshot pending. Show the full mapping editor after HERD: drawing layers on the left, standard layers on the right, and match lines between them in all four colors.
+      </div>
+      <figcaption>The mapping editor. Lines show how each drawing layer maps to the standard.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Match types</h2>
+    <p class="lead">Each connection line is colored by how it was made.</p>
+    <ul class="legend">
+      <li><span class="swatch exact"></span><span><strong>Exact</strong>: the names are identical. Connected automatically.</span></li>
+      <li><span class="swatch memory"></span><span><strong>Memory</strong>: you mapped this layer on an earlier drawing.</span></li>
+      <li><span class="swatch heur"></span><span><strong>Suggested</strong>: a close name match, gated by a confidence slider you control.</span></li>
+      <li><span class="swatch manual"></span><span><strong>Manual</strong>: a connection you drew yourself.</span></li>
+    </ul>
+    <figure class="shot">
+      <div class="placeholder">
+        <strong>docs/images/match-types-closeup.png</strong>
+        Screenshot pending. Crop of the editor showing one line of each type: exact (green), memory (blue), suggested (amber, dashed), manual (purple).
+      </div>
+      <figcaption>Close-up of the four match types.</figcaption>
+    </figure>
   </div>
 </section>
 
 <section class="alt">
   <div class="wrap">
-    <h2>Supported AutoCAD versions</h2>
-    <p class="section-lead">
-      One installer covers all supported releases — it ships a build for each AutoCAD .NET
-      compatibility era and AutoCAD automatically loads the right one.
-    </p>
+    <h2>What it does</h2>
+    <p class="lead">Everything runs inside AutoCAD on your machine.</p>
+    <ul class="feature-list">
+      <li>
+        <h3>Learns across drawings</h3>
+        <p>Decisions saved with Apply &amp; Remember are reused automatically on the next drawing. You can import and export the memory file from Settings.</p>
+      </li>
+      <li>
+        <h3>Suggests matches for new names</h3>
+        <p>If your standard uses <code>TEXT</code> and a drawing uses <code>TXT</code>, it suggests the link even if you have never mapped it.</p>
+      </li>
+      <li>
+        <h3>Filters and search</h3>
+        <p>Filter each side by match type, discipline or category, or type part of a name to narrow the list.</p>
+      </li>
+      <li>
+        <h3>Undo and redo in the editor</h3>
+        <p>Ctrl+Z and Ctrl+Y undo and redo your connections while you work. Right-click any connection and choose Delete Connection.</p>
+      </li>
+      <li>
+        <h3>Purges empty layers</h3>
+        <p>Highlight layers with no entities and purge them, after a confirmation.</p>
+      </li>
+      <li>
+        <h3>Matches properties, not just names</h3>
+        <p>Optionally sync color, linetype and lineweight to the standard, and set elements to ByLayer.</p>
+      </li>
+      <li>
+        <h3>Leaves xrefs alone</h3>
+        <p>Layers from externally referenced files are excluded, because they cannot be edited from the drawing.</p>
+      </li>
+      <li>
+        <h3>Reverts the last apply</h3>
+        <p><code class="cmd">UNDOSTANDARDIZATION</code> restores the layers changed by the most recent apply.</p>
+      </li>
+    </ul>
+
+    <figure class="shot">
+      <div class="placeholder">
+        <strong>docs/images/settings-panel.png</strong>
+        Screenshot pending. Show the Settings panel with the Standards File and Memory File sections visible.
+      </div>
+      <figcaption>Settings: choose your standard file and manage the memory file.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Requirements</h2>
+    <p class="lead">One installer covers every supported release, including verticals such as Civil 3D, Map 3D and Plant 3D.</p>
     <table class="versions">
-      <thead><tr><th>AutoCAD release</th><th>Runtime</th></tr></thead>
+      <thead><tr><th>AutoCAD</th><th>Runtime</th></tr></thead>
       <tbody>
         <tr><td>2021 – 2024</td><td><code>.NET Framework 4.8</code></td></tr>
         <tr><td>2025 – 2026</td><td><code>.NET 8</code></td></tr>
         <tr><td>2027</td><td><code>.NET 10</code></td></tr>
       </tbody>
     </table>
-    <p class="section-lead" style="margin-top:16px;">
-      Includes AutoCAD verticals (Civil 3D, Map 3D, Plant 3D). AutoCAD 2020 and older are not supported.
-    </p>
+    <p class="small" style="margin-top:16px;">Windows only. AutoCAD 2020 and older are not supported.</p>
+
+    <div class="notice">
+      <strong>Beta.</strong> Try it on a copy of your drawing first, and keep a backup before you apply changes.
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2>Get started</h2>
+    <ol class="steps">
+      <li>
+        <h3>Download and run the installer</h3>
+        <p>It detects your AutoCAD versions and installs the matching build for each.</p>
+      </li>
+      <li>
+        <h3>Open a drawing and type <code class="cmd">HERD</code></h3>
+        <p>Pick your standard file in Settings the first time you run it.</p>
+      </li>
+      <li>
+        <h3>Connect, apply, and let memory do the rest</h3>
+        <p>The more drawings you clean up, the fewer connections you need to draw.</p>
+      </li>
+    </ol>
   </div>
 </section>
 
 <section>
   <div class="wrap">
     <h2>Why this exists</h2>
-    <p class="section-lead">
-      This is a personal project — I built it to solve my own layer-cleanup headaches, not as a
-      commercial product. It's free to use, and I'm happy to share it with any other AutoCAD user
-      who's dealt with the same problem.
+    <p class="lead">
+      This is a personal project. I built it to solve my own layer-cleanup headaches, not as a commercial
+      product. It is free, and I am happy to share it with any AutoCAD user who has the same problem.
     </p>
-    <p class="section-lead">
-      If you try it and hit a bug, have an idea for a feature, or just want to say what did or
-      didn't work for you, I'd genuinely like to hear about it.<br><br>
-      <a class="signature-link" href="mailto:yiannias@gmail.com?subject=Layer%20Herder%20feedback">yiannias@gmail.com</a>
+    <p class="lead">
+      If you hit a bug, have an idea, or want to say what did or did not work, I would like to hear it.
+      <br><br>
+      <a href="mailto:yiannias@gmail.com?subject=Layer%20Herder%20feedback">yiannias@gmail.com</a>
     </p>
   </div>
 </section>
 
-<section id="code-signing-policy">
+<section id="code-signing-policy" class="alt">
   <div class="wrap">
     <h2>Code signing policy</h2>
-    <p class="section-lead">
+    <p class="lead">
       Free code signing provided by SignPath.io, certificate by SignPath Foundation.
     </p>
-    <p class="section-lead">
+    <p class="lead">
       <strong>Team roles:</strong> Author and approver: Chris Yiannias (GitHub: yiannias). Reviewer: none (single maintainer).
     </p>
-    <p class="section-lead">
+    <p class="lead">
       Only release binaries built from the tagged source in this repository are signed. Each signing request is
       approved by the maintainer before the certificate is applied. Signed files are the Windows installer and the
       AutoCAD plug-in and mapping-editor binaries it contains.
@@ -504,15 +372,15 @@
   </div>
 </section>
 
-<section id="privacy" class="alt">
+<section id="privacy">
   <div class="wrap">
     <h2>Privacy</h2>
-    <p class="section-lead">
+    <p class="lead">
       Layer Herder is fully offline. It makes no network connections, does not check for updates, and collects no
       data. Settings and translation memory are stored only on your computer, in your user profile
       (<code>%APPDATA%\AcLayerStandardizer</code>).
     </p>
-    <p class="section-lead">
+    <p class="lead">
       The only outbound action is the Settings link to this website, which opens in your own browser when you click it.
     </p>
   </div>
@@ -520,66 +388,10 @@
 
 <footer>
   <div class="wrap">
-    Built for AutoCAD layer cleanup. Source on
-    <a href="https://github.com/yiannias/LayerHerder">GitHub</a> ·
-    <a href="code-signing-policy.html">Code signing policy</a> ·
-    <a href="privacy.html">Privacy</a> ·
-    <a href="https://github.com/yiannias/LayerHerder/blob/main/CODE_OF_CONDUCT.md">Code of conduct</a> ·
-    Feedback: <a href="mailto:yiannias@gmail.com">yiannias@gmail.com</a> ·
-    Currently in beta — expect rough edges.
+    Layer Herder · MIT License · <a href="https://github.com/yiannias/LayerHerder">GitHub</a> ·
+    <a href="privacy.html">Privacy</a> · <a href="code-signing-policy.html">Code signing policy</a>
   </div>
 </footer>
 
-<script>
-(function(){
-  var triggers = Array.prototype.slice.call(document.querySelectorAll('.lb-trigger'));
-  var items = triggers.map(function(el){
-    return {
-      src: el.getAttribute('data-full') || el.getAttribute('href') || el.querySelector('img').src,
-      caption: el.getAttribute('data-caption') || ''
-    };
-  });
-  var lightbox = document.getElementById('lightbox');
-  var lbImg = document.getElementById('lbImg');
-  var lbCaption = document.getElementById('lbCaption');
-  var current = 0;
-
-  function show(i){
-    current = (i + items.length) % items.length;
-    lbImg.src = items[current].src;
-    lbImg.alt = items[current].caption;
-    lbCaption.textContent = items[current].caption;
-  }
-  function open(i){
-    show(i);
-    lightbox.classList.add('open');
-    document.body.style.overflow = 'hidden';
-  }
-  function close(){
-    lightbox.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-
-  triggers.forEach(function(el, i){
-    el.addEventListener('click', function(e){
-      e.preventDefault();
-      open(i);
-    });
-  });
-
-  document.getElementById('lbClose').addEventListener('click', close);
-  document.getElementById('lbPrev').addEventListener('click', function(){ show(current - 1); });
-  document.getElementById('lbNext').addEventListener('click', function(){ show(current + 1); });
-  lightbox.addEventListener('click', function(e){
-    if (e.target === lightbox) close();
-  });
-  document.addEventListener('keydown', function(e){
-    if (!lightbox.classList.contains('open')) return;
-    if (e.key === 'Escape') close();
-    if (e.key === 'ArrowLeft') show(current - 1);
-    if (e.key === 'ArrowRight') show(current + 1);
-  });
-})();
-</script>
 </body>
 </html>

@@ -1,7 +1,9 @@
 <img src="docs/assets/logo.png" alt="Layer Herder" width="240">
 
 # Layer Herder
-An AutoCAD plug-in that herds drawing layers onto your layer standard. Formerly ACAD Layer Standardizer.
+Tidy your drawings. Herd your layers into shape.
+
+Free, offline AutoCAD plug-in that herds drawing layers into your standard. Windows. Formerly ACAD Layer Standardizer.
 
 Type `HERD` in AutoCAD, or use the Layer Herder button on the Add-ins ribbon tab.
 
